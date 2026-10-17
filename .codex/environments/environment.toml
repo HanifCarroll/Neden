@@ -1,0 +1,15 @@
+version = 1
+name = "Neden desktop comparison"
+
+[setup]
+script = ""
+
+[[actions]]
+name = "Run"
+icon = "run"
+command = "./script/build_and_run.sh qt"
+
+[[actions]]
+name = "Run Flutter"
+icon = "run"
+command = "./script/build_and_run.sh flutter"
