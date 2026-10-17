@@ -650,6 +650,178 @@ test('a reused IINA player restores track choices after its window closes', () =
   player.close();
 });
 
+test('subtitle restoration survives IINA resetting its selections after an initial match', () => {
+  const clock = spyOn(Date, 'now').mockReturnValue(10_000);
+  const preferences = new Map<string, unknown>([
+    [
+      'subtitleTrackChoices',
+      { 'file:///synthetic.mp4': { source: 'source', secondary: 'secondary' } }
+    ]
+  ]);
+  const player = fakePlayer(false, preferences);
+
+  try {
+    // 1. Let both saved choices match before IINA finishes its background loading.
+    expect(player.raw.core.subtitle.id).toBe(1);
+    expect(player.raw.core.subtitle.secondID).toBe(2);
+    player.tick();
+
+    // 2. Simulate IINA selecting its default track after the initial restoration.
+    clock.mockReturnValue(10_100);
+    player.raw.core.subtitle.id = 2;
+    player.raw.core.subtitle.secondID = 0;
+    player.tick();
+    player.tick();
+
+    expect(player.raw.core.subtitle.id).toBe(1);
+    expect(player.raw.core.subtitle.secondID).toBe(2);
+
+    // 3. Release restoration after a quiet interval so later native choices remain usable.
+    clock.mockReturnValue(11_100);
+    player.tick();
+    player.raw.core.subtitle.id = 2;
+    player.raw.core.subtitle.secondID = 0;
+    player.tick();
+
+    expect(player.raw.core.subtitle.id).toBe(2);
+    expect(player.raw.core.subtitle.secondID).toBe(0);
+  } finally {
+    player.close();
+    clock.mockRestore();
+  }
+});
+
+test('restoration waits for both tracks, changed IDs, and asynchronous selection confirmation', () => {
+  const preferences = new Map<string, unknown>([
+    ['subtitleTrackChoices', { 'file:///synthetic.mp4': { source: 'tr.srt', secondary: 'en.srt' } }]
+  ]);
+  const player = fakePlayer(false, preferences, false);
+  const commands: Array<{ name: string; value: unknown }> = [];
+  const originalSet = player.raw.mpv.set;
+  player.raw.mpv.set = (name, value) => {
+    if (name === 'sid' || name === 'secondary-sid') {
+      commands.push({ name, value });
+      return;
+    }
+
+    originalSet(name, value);
+  };
+
+  // 1. The restored source is initially occupied by the native secondary selection.
+  player.raw.core.subtitle.id = 7;
+  player.raw.core.subtitle.secondID = 9;
+  player.raw.core.subtitle.tracks.push({
+    id: 9,
+    isExternal: true,
+    title: 'tr.srt',
+    codec: 'subrip'
+  });
+  player.tick();
+  expect(commands).toEqual([{ name: 'secondary-sid', value: 'no' }]);
+  originalSet('secondary-sid', 'no');
+  commands.length = 0;
+  player.tick();
+  expect(commands).toEqual([{ name: 'sid', value: '9' }]);
+  originalSet('sid', '9');
+
+  // 2. Only select the translation once its external track is available.
+  commands.length = 0;
+  player.raw.core.subtitle.tracks.push({
+    id: 7,
+    isExternal: true,
+    title: 'en.srt',
+    codec: 'subrip'
+  });
+  player.tick();
+  expect(commands).toEqual([{ name: 'secondary-sid', value: '7' }]);
+  originalSet('secondary-sid', '7');
+  player.tick();
+
+  expect(player.states.at(-1).sourceId).toBe(9);
+  expect(player.states.at(-1).secondaryId).toBe(7);
+  expect(player.frames).toHaveLength(0);
+  player.close();
+});
+
+test('an explicit subtitle choice replaces pending restoration immediately', () => {
+  const preferences = new Map<string, unknown>([
+    [
+      'subtitleTrackChoices',
+      { 'file:///synthetic.mp4': { source: 'source', secondary: 'secondary' } }
+    ]
+  ]);
+  const player = fakePlayer(false, preferences);
+  const epoch = player.states.at(-1).mediaEpoch;
+
+  player.sidebar.get('selectSubtitleTrack')!({ role: 'secondary', id: 0, epoch });
+  player.tick();
+  player.tick();
+
+  expect(player.raw.core.subtitle.secondID).toBe(0);
+  expect(player.frames).toHaveLength(0);
+  player.close();
+});
+
+test('subtitle restoration stays pending through slow loading and rejects ambiguous titles', () => {
+  const clock = spyOn(Date, 'now').mockReturnValue(10_000);
+  const preferences = new Map<string, unknown>([
+    ['subtitleTrackChoices', { 'file:///synthetic.mp4': { source: 'tr.srt', secondary: 'en.srt' } }]
+  ]);
+  const player = fakePlayer(false, preferences, false);
+
+  try {
+    // 1. Keep the saved pair pending while the subtitle files are still missing.
+    clock.mockReturnValue(30_000);
+    player.tick();
+    player.raw.core.subtitle.tracks.push(
+      { id: 7, isExternal: true, title: 'tr.srt', codec: 'subrip' },
+      { id: 8, isExternal: true, title: 'tr.srt', codec: 'subrip' },
+      { id: 9, isExternal: true, title: 'en.srt', codec: 'subrip' }
+    );
+    player.tick();
+    expect(player.raw.core.subtitle.id).toBe(1);
+    expect(player.raw.core.subtitle.secondID).toBe(9);
+
+    // 2. Restore only an unambiguous source, then recover a later startup reset.
+    player.raw.core.subtitle.tracks.splice(1, 1);
+    player.tick();
+    player.tick();
+    expect(player.raw.core.subtitle.id).toBe(7);
+
+    clock.mockReturnValue(30_500);
+    player.raw.core.subtitle.id = 1;
+    player.raw.core.subtitle.secondID = 0;
+    player.tick();
+    player.tick();
+    expect(player.raw.core.subtitle.id).toBe(7);
+    expect(player.raw.core.subtitle.secondID).toBe(9);
+  } finally {
+    player.close();
+    clock.mockRestore();
+  }
+});
+
+test('Off choices and legacy null entries are saved in a property-list-compatible format', () => {
+  const preferences = new Map<string, unknown>([
+    ['subtitleTrackChoices', { 'file:///other.mp4': { source: 'tr.srt', secondary: null } }]
+  ]);
+  const player = fakePlayer(false, preferences);
+  const epoch = player.states.at(-1).mediaEpoch;
+  player.sidebar.get('selectSubtitleTrack')!({ role: 'source', id: 1, epoch });
+  player.sidebar.get('selectSubtitleTrack')!({ role: 'secondary', id: 0, epoch });
+
+  expect(preferences.get('subtitleTrackChoices')).toEqual({
+    'file:///other.mp4': { source: 'tr.srt', secondary: 0 },
+    'file:///synthetic.mp4': { source: 'source', secondary: 0 }
+  });
+  player.close();
+
+  const reopened = fakePlayer(false, preferences);
+  expect(reopened.raw.core.subtitle.id).toBe(1);
+  expect(reopened.raw.core.subtitle.secondID).toBe(0);
+  reopened.close();
+});
+
 test('a subtitle file that becomes readable after a media switch is retried', () => {
   const player = fakePlayer();
   const readTrack = player.raw.file.read;
