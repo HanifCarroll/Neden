@@ -22,6 +22,7 @@ QtObject {
     readonly property int space6: 32
     readonly property int caption: 12
     readonly property int body: 14
+    readonly property int quotation: 15
     readonly property int title: 20
     readonly property int heading: 24
     readonly property int controlHeight: 38

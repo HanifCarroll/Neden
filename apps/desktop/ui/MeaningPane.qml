@@ -24,50 +24,76 @@ Item {
         anchors.fill: parent
         anchors.margins: Theme.space4
         spacing: Theme.space3
-        RowLayout {
-            Layout.fillHeight: false
+        Rectangle {
+            id: sourceCard
+            objectName: "explanationSourceCard"
             Layout.fillWidth: true
-            Label {
-                objectName: "explanationSubject"
-                text: pane.study.subject || "Select a word or phrase in the subtitles."
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                textFormat: Text.PlainText
-                maximumLineCount: 4
-                elide: Text.ElideRight
-                color: Theme.accent
-                font.pixelSize: Theme.title
-            }
-            ActionButton {
-                text: "Close"
-                flat: true
-                onClicked: pane.dismissed()
-            }
-        }
-        RowLayout {
             Layout.fillHeight: false
-            visible: pane.study.subject.length > 0
-            ActionButton {
-                text: pane.session.replaying ? "Stop replay" : "Replay line"
-                implicitHeight: 30
-                font.pixelSize: Theme.caption
-                onClicked: pane.session.replayExplainedCue()
+            implicitHeight: sourceContents.implicitHeight + Theme.space3 * 2
+            radius: 10
+            color: Theme.elevated
+            border.color: Theme.border
+            ColumnLayout {
+                id: sourceContents
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Theme.space3
+                spacing: Theme.space1
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: false
+                    spacing: Theme.space2
+                    Label {
+                        objectName: "explanationSubject"
+                        text: pane.study.subject || "Select a word or phrase in the subtitles."
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                        color: pane.study.subject.length ? Theme.ink : Theme.muted
+                        font.pixelSize: Theme.quotation
+                        font.weight: Font.DemiBold
+                        lineHeight: 1.4
+                    }
+                    IconButton {
+                        objectName: "closeMeaningButton"
+                        name: "x"
+                        description: "Close explanation"
+                        Layout.alignment: Qt.AlignTop
+                        onClicked: pane.dismissed()
+                    }
+                }
+                RowLayout {
+                    Layout.fillHeight: false
+                    visible: pane.study.subject.length > 0
+                    ActionButton {
+                        text: pane.session.replaying ? "Stop replay" : "Replay line"
+                        flat: true
+                        implicitHeight: 30
+                        font.pixelSize: Theme.caption
+                        onClicked: pane.session.replayExplainedCue()
+                    }
+                    ActionButton {
+                        objectName: "fullSubtitleButton"
+                        text: "Full subtitle line"
+                        visible: pane.study.sourceCue.trim() !== pane.study.subject.trim()
+                        flat: true
+                        implicitHeight: 30
+                        font.pixelSize: Theme.caption
+                        onClicked: pane.showFullCue = !pane.showFullCue
+                    }
+                }
+                Label {
+                    visible: pane.showFullCue && pane.study.sourceCue.trim() !== pane.study.subject.trim()
+                    text: pane.study.sourceCue
+                    textFormat: Text.PlainText
+                    color: Theme.muted
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Theme.body
+                    Layout.fillWidth: true
+                }
             }
-            ActionButton {
-                text: "Full subtitle"
-                flat: true
-                implicitHeight: 30
-                font.pixelSize: Theme.caption
-                onClicked: pane.showFullCue = !pane.showFullCue
-            }
-        }
-        Label {
-            visible: pane.showFullCue && pane.study.sourceCue.length > 0
-            text: pane.study.sourceCue
-            textFormat: Text.PlainText
-            color: Theme.muted
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
         }
         ListView {
             id: conversation

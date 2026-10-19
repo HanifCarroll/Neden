@@ -65,8 +65,10 @@ private:
         QVERIFY(!engine->rootObjects().isEmpty());
         window = qobject_cast<QQuickWindow *>(engine->rootObjects().first());
         QVERIFY(window);
-        fullscreen->attach(window);
-        window->raise();
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            fullscreen->attach(window);
+            window->raise();
+        }
         window->requestActivate();
         QVERIFY(QTest::qWaitForWindowExposed(window));
     }
@@ -125,7 +127,26 @@ private:
     }
 
 private slots:
+    void init() {
+        const QStringList headlessChecks{"explainHoverCoversBothTracksAndThePathToTheButton",
+            "explanationPhraseUsesThePluginCardStyle", "hoveringAndExplainingTheFullLineUseOneExplicitRequest"};
+        if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")
+            && !headlessChecks.contains(QString::fromUtf8(QTest::currentTestFunction()))) {
+            QSKIP("This check needs the real player and a visible native display.");
+        }
+    }
+
     void initTestCase() {
+        if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            createWindow();
+            QFile videoFile(profile.filePath("headless-placeholder.webm"));
+            QVERIFY(videoFile.open(QIODevice::WriteOnly));
+            videoFile.close();
+            session->openVideo(QUrl::fromLocalFile(videoFile.fileName()));
+            session->setPaused(true);
+            return;
+        }
+
         for (const auto &name : {"NEDEN_CHECK_VIDEO", "NEDEN_CHECK_PRIMARY", "NEDEN_CHECK_SECONDARY"}) {
             QVERIFY2(QFile::exists(qEnvironmentVariable(name)), name);
         }
@@ -520,6 +541,96 @@ private slots:
         QTRY_VERIFY(session->selection().isEmpty());
     }
 
+    void explainHoverCoversBothTracksAndThePathToTheButton() {
+        window->setProperty("showRecent", false);
+        window->setProperty("transcriptOpen", true);
+        window->setProperty("inspectorTab", 0);
+        session->setPaused(true);
+
+        QFile secondaryFile(profile.filePath("hover-secondary.srt"));
+        QVERIFY(secondaryFile.open(QIODevice::WriteOnly));
+        secondaryFile.write("1\n00:00:00,000 --> 02:00:00,000\nI saw a light.\n");
+        secondaryFile.close();
+        session->openTranslation(QUrl::fromLocalFile(secondaryFile.fileName()));
+        session->setPaused(true);
+        auto *primary = visualItem(window->contentItem(), "primarySubtitleText");
+        auto *secondary = visualItem(window->contentItem(), "secondarySubtitleText");
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        auto *button = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
+        QVERIFY(primary && secondary && video && button);
+        const auto savedSize = window->size();
+        const auto savedAppearance = appearance->snapshot();
+
+        for (const bool reversed : {false, true}) {
+            auto preview = savedAppearance;
+            preview.insert("reversed", reversed);
+            QVERIFY(appearance->preview(preview));
+            for (const QSize size : {QSize(900, 540), QSize(1280, 756)}) {
+                window->resize(size);
+                for (const auto &phrase : QStringList{"Bir ışık gördüm.", "Bir ışık\ngördüm.",
+                    "Kafam olmuş bir milyon, dışarıda kar yağıyor, içime yağmur yağıyor."}) {
+                    session->replaceCues({{0, 7200000, phrase, {}}});
+                    QTest::qWait(80);
+                    QVERIFY(secondary->isVisible());
+                    for (auto *track : {secondary, primary}) {
+                        QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
+                        QTRY_VERIFY_WITH_TIMEOUT(!button->isVisible(), 1000);
+                        const QPoint start = track->mapToScene(QPointF(track->width() / 2, track->height() / 2)).toPoint();
+                        QTest::mouseMove(window, start);
+                        QTRY_VERIFY_WITH_TIMEOUT(button->isVisible(), 1000);
+                        const QPoint target = button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint();
+                        for (int step = 1; step <= 8; ++step) {
+                            const QPoint next = start + (target - start) * step / 8;
+                            QTest::mouseMove(window, next);
+                            QTest::qWait(30);
+                            QVERIFY(button->isVisible());
+                        }
+                        QVERIFY(button->property("hovered").toBool());
+                    }
+                    // A new cue must retain the action beneath a stationary pointer.
+                    QTest::mouseMove(window, primary->mapToScene(QPointF(primary->width() / 2, primary->height() / 2)).toPoint());
+                    session->replaceCues({{0, 7200000, phrase + " Şimdi.", {}}});
+                    QTest::qWait(80);
+                    QVERIFY(button->isVisible());
+                    QVERIFY(session->paused());
+                    QVERIFY(study->subject().isEmpty());
+                }
+            }
+        }
+        session->replaceCues({});
+        QTRY_VERIFY(!button->isVisible());
+        QVERIFY(appearance->preview(savedAppearance));
+        window->resize(savedSize);
+    }
+
+    void explanationPhraseUsesThePluginCardStyle() {
+        const QString phrase = "Ya abi, bilmem mi? Ben yani ben, motorların üstünde geçti benim hayatım.";
+        window->setProperty("showRecent", false);
+        window->setProperty("transcriptOpen", true);
+        window->setProperty("inspectorTab", 1);
+        study->explain(phrase, phrase);
+        auto *subject = visualItem(window->contentItem(), "explanationSubject");
+        auto *card = visualItem(window->contentItem(), "explanationSourceCard");
+        auto *disclosure = visualItem(window->contentItem(), "fullSubtitleButton");
+        QVERIFY(subject && card && disclosure);
+        QTest::qWait(100);
+        QCOMPARE(subject->property("text").toString(), phrase);
+        QCOMPARE(subject->property("color").value<QColor>(), QColor("#e6eaf2"));
+        QCOMPARE(subject->property("font").value<QFont>().pixelSize(), 15);
+        QCOMPARE(subject->property("font").value<QFont>().weight(), QFont::DemiBold);
+        QVERIFY(card->isVisible());
+        QVERIFY(!disclosure->isVisible());
+        QVERIFY(card->height() < 200);
+        session->select("Ben");
+        QCOMPARE(subject->property("text").toString(), phrase);
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/source-phrase-card.png"));
+        study->explain("bilmem mi?", phrase);
+        QTRY_VERIFY(disclosure->isVisible());
+        QCOMPARE(subject->property("text").toString(), QString("bilmem mi?"));
+        session->closeDefinition();
+    }
+
     void hoveringAndExplainingTheFullLineUseOneExplicitRequest() {
 
         // 1. Serve only a synthetic local explanation and retain the submitted phrase for assertions.
@@ -662,7 +773,8 @@ private slots:
 
 int main(int argc, char **argv) {
     qputenv("QSG_RENDER_LOOP", "basic");
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    QQuickWindow::setGraphicsApi(qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")
+        ? QSGRendererInterface::Software : QSGRendererInterface::OpenGL);
     QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
     QSurfaceFormat format;
     format.setVersion(3, 2);

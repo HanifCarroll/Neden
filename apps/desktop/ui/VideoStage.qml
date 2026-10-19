@@ -36,7 +36,12 @@ Rectangle {
         onClicked: stage.forceActiveFocus()
         onDoubleClicked: stage.fullscreenRequested()
     }
+    HoverHandler {
+        id: videoHover
+        blocking: false
+    }
     Item {
+        id: subtitleOverlay
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -66,16 +71,11 @@ Rectangle {
                 text: stage.session.subtitle
                 appearance: stage.appearance
                 pixelSize: stage.appearance.primarySize
-                explainEnabled: stage.appearance.selectable
                 selectable: stage.appearance.selectable
                 Layout.row: stage.appearance.reversed ? 1 : 0
                 onWordRequested: offset => stage.session.lookupWordAt(text, offset)
                 onSelectionChanged: selection => stage.session.select(selection)
                 onSelectionCommitted: stage.explainSelection()
-                onPhraseRequested: phrase => {
-                    stage.session.select(phrase);
-                    stage.explainSelection();
-                }
             }
             SubtitleText {
                 id: translation
@@ -92,6 +92,50 @@ Rectangle {
                 onSelectionCommitted: stage.explainSelection()
             }
         }
+    }
+    ActionButton {
+        id: explainLine
+        objectName: "primarySubtitleTextExplainButton"
+        readonly property real textRight: subtitleOverlay.x + subtitle.x + Math.min(subtitle.width, (subtitle.width + subtitle.paintedWidth) / 2)
+        readonly property bool fitsBesideText: textRight + Theme.space2 + width <= stage.width - Theme.space4
+        readonly property real preferredY: fitsBesideText ? subtitleOverlay.y + subtitle.y + (subtitle.height - height) / 2 : subtitleOverlay.y - height - Theme.space2
+        // Keep one hover target across both tracks and the detached action.
+        readonly property bool captionHovered: {
+            if (!videoHover.hovered)
+                return false;
+
+            const position = videoHover.point.position;
+            const left = Math.min(subtitleOverlay.x, x) - Theme.space3;
+            const right = Math.max(subtitleOverlay.x + subtitleOverlay.width, x + width) + Theme.space3;
+            const top = Math.min(subtitleOverlay.y, y) - Theme.space3;
+            const bottom = Math.max(subtitleOverlay.y + subtitleOverlay.height, y + height) + Theme.space3;
+            return position.x >= left && position.x <= right && position.y >= top && position.y <= bottom;
+        }
+        property bool hoverRetained: false
+        text: "Explain line"
+        implicitHeight: 30
+        focusPolicy: Qt.TabFocus
+        font.pixelSize: Theme.caption
+        x: Math.max(Theme.space2, Math.min(fitsBesideText ? textRight + Theme.space2 : textRight - width, stage.width - width - Theme.space2))
+        y: Math.max(Theme.space2, Math.min(preferredY, stage.height - height - Theme.space2))
+        visible: stage.appearance.selectable && subtitle.visible && !subtitle.selecting && (captionHovered || hoverRetained || hovered || activeFocus)
+        Accessible.name: "Explain the full primary subtitle"
+        onCaptionHoveredChanged: {
+            if (captionHovered) {
+                hideExplanation.stop();
+                hoverRetained = true;
+            } else
+                hideExplanation.restart();
+        }
+        onClicked: {
+            stage.session.select(subtitle.text);
+            stage.explainSelection();
+        }
+    }
+    Timer {
+        id: hideExplanation
+        interval: 180
+        onTriggered: explainLine.hoverRetained = false
     }
     Rectangle {
         objectName: "wordMeaningCard"

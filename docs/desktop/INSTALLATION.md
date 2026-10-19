@@ -37,3 +37,17 @@ Exercise Open, both subtitle pickers and simultaneous text, seeking, Close/Quit,
 In a separate build directory such as `build/desktop-ui`, the opt-in `NEDEN_NATIVE_UI_CHECKS=ON` CMake target, `NedenNativeChecks`, exercises the real QML window and libmpv on a visible Mac display. Supply `NEDEN_CHECK_VIDEO`, `NEDEN_CHECK_PRIMARY`, and `NEDEN_CHECK_SECONDARY` as absolute paths to local media/SRT files. It uses a temporary profile and no saved credentials. It also checks the bundled HTTPS backend against an unauthenticated API endpoint (no paid request), and uses a local synthetic streaming server to exercise word selection and explanation rendering. To avoid requiring Accessibility privileges, these checks use Qt's file-picker implementation and deliver its selected-file signal; they do not automate Apple's native Open panel. They verify that both subtitle text items are visible, Settings opens, a window/services restart restores the precise position and both chosen subtitle tracks in their original roles, and removing a playing entry remains effective after another restart. Keep these interaction checks on the MacBook Pro when the Air is in use.
 
 Keep the normal install/build directory configured with native UI checks disabled. The installer enforces this so Qt's lint tooling does not combine the same QML URI from two executables. Build the opt-in runner separately when needed.
+
+### Off-screen subtitle interaction checks
+
+For caption hover and source-card regressions without opening windows or disturbing another application, use the separately built `NedenNativeChecks` target:
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software NEDEN_CHECK_HEADLESS=1 \
+  build/desktop-ui/NedenNativeChecks \
+  explainHoverCoversBothTracksAndThePathToTheButton \
+  explanationPhraseUsesThePluginCardStyle \
+  hoveringAndExplainingTheFullLineUseOneExplicitRequest
+```
+
+This uses the actual QML with software rendering, a temporary profile and placeholder media, and a local mock AI endpoint. It checks both tracks, subtitle order, wrapping, resizing, pointer movement to the button, phrase-card styling, explicit request submission and follow-up editing. Native-only checks are skipped in this mode. It does not verify video rendering, macOS window chrome, or fullscreen animation; keep those checks on the Pro’s real display.
