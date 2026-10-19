@@ -83,7 +83,7 @@ def stage_native_qml(bundle):
     metadata.write_text(text.replace(optional_dependency, ""))
     plugins = list(qml.rglob("*.dylib"))
     for relative in ("platforms/libqcocoa.dylib", "webview/libqtwebview_darwin.dylib",
-                     "tls/libqsecuretransportbackend.dylib"):
+                     "tls/libqsecuretransportbackend.dylib", "imageformats/libqsvg.dylib"):
         source = qt_directory("QT_INSTALL_PLUGINS") / relative
         destination = bundle / "Contents/PlugIns" / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -159,6 +159,7 @@ def prepare_bundle(destination):
     shutil.copy2(ROOT / "LICENSE", notices / "Neden-MIT.txt")
     shutil.copy2(ROOT / "shared/fonts/LICENSE.txt", notices / "Inter-OFL.txt")
     shutil.copy2(ROOT / "docs/desktop/DEPENDENCIES.md", notices / "Dependencies.md")
+    shutil.copy2(ROOT / "shared/icons/lucide/LICENSE", notices / "Lucide-ISC.txt")
     identity = local_signing_identity()
     if not identity or identity == "-":
         raise SystemExit("A persistent Apple Development identity is required")

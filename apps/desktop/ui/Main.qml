@@ -15,11 +15,12 @@ ApplicationWindow {
     property bool dictionaryOpen: false
     property bool showRecent: false
     property bool transcriptOpen: true
+    property int inspectorTab: 0
     property string requestedSelection: ""
     width: 1280
-    height: 820
-    minimumWidth: 1100
-    minimumHeight: 640
+    height: 756
+    minimumWidth: 900
+    minimumHeight: 540
     visible: true
     title: session.hasMedia ? session.mediaTitle + " — Neden" : "Neden"
     onClosing: session.checkpoint()
@@ -72,7 +73,20 @@ ApplicationWindow {
                 onTriggered: root.session.toggle()
             }
             Action {
-                text: "Replay sentence"
+                text: "Previous subtitle"
+                enabled: root.session.canPreviousSubtitle
+                shortcut: "Ctrl+Left"
+                onTriggered: root.session.previousSubtitle()
+            }
+            Action {
+                text: "Next subtitle"
+                enabled: root.session.canNextSubtitle
+                shortcut: "Ctrl+Right"
+                onTriggered: root.session.nextSubtitle()
+            }
+            Action {
+                text: "Replay subtitle"
+                shortcut: "Ctrl+R"
                 enabled: root.session.activeCue >= 0
                 onTriggered: root.session.replay()
             }
@@ -132,7 +146,7 @@ ApplicationWindow {
                 text: "Explain selection"
                 enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
                 onTriggered: {
-                    root.openStudy(0);
+                    root.openMeaning();
                     root.session.explainSelection(false);
                 }
             }
@@ -140,7 +154,7 @@ ApplicationWindow {
                 text: "Translate selection"
                 enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
                 onTriggered: {
-                    root.openStudy(0);
+                    root.openMeaning();
                     root.session.explainSelection(true);
                 }
             }
@@ -174,8 +188,9 @@ ApplicationWindow {
                 onTriggered: root.fullscreen()
             }
             MenuSeparator {}
-            Action {
+            MenuItem {
                 text: "Settings…"
+                visible: Qt.platform.os !== "osx"
                 onTriggered: root.openSettings()
             }
         }
@@ -189,6 +204,21 @@ ApplicationWindow {
             root.showRecent = false;
         }
     }
+    function openMeaning() {
+        dictionaryOpen = false;
+        transcriptOpen = true;
+        inspectorTab = 1;
+    }
+    function toggleTranscript() {
+        if (transcriptOpen && inspectorTab === 0 && !dictionaryOpen) {
+            transcriptOpen = false;
+        } else {
+            closeSelection();
+            dictionaryOpen = false;
+            transcriptOpen = true;
+            inspectorTab = 0;
+        }
+    }
     function openStudy(tab) {
         studyLoader.active = true;
         const pane = studyLoader.item as StudyPane;
@@ -200,7 +230,7 @@ ApplicationWindow {
             return;
 
         requestedSelection = session.selection;
-        openStudy(0);
+        openMeaning();
         session.explainSelection(false);
     }
     function openSettings() {
@@ -235,9 +265,10 @@ ApplicationWindow {
             studyDrawer.close();
         else if (dictionaryOpen)
             closeDictionary();
-        else if (session.selection.length)
+        else if (session.selection.length) {
             closeSelection();
-        else if (session.replaying)
+            inspectorTab = 0;
+        } else if (session.replaying)
             session.stopReplay();
         else if (fullscreenController.active)
             fullscreenController.setActive(false);
@@ -250,6 +281,12 @@ ApplicationWindow {
         target: root.fullscreenController
         function onSettingsRequested() {
             root.openSettings();
+        }
+        function onTranscriptRequested() {
+            root.toggleTranscript();
+        }
+        function onMeaningRequested() {
+            root.openMeaning();
         }
     }
     Shortcut {
@@ -366,135 +403,173 @@ ApplicationWindow {
         }
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.leftMargin: Theme.space5
-        anchors.rightMargin: Theme.space5
-        anchors.topMargin: 8
-        anchors.bottomMargin: 16
-        spacing: 0
-        PlayerHeader {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 64
-            hasMedia: root.session.hasMedia
-            showingRecent: !root.session.hasMedia || root.showRecent
-            onOpenRecent: root.showRecent = true
-            onBackToVideo: root.showRecent = false
-            onOpenVideo: videoDialog.open()
-        }
-        Item {
-            Layout.fillWidth: true
-            implicitHeight: 24
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width
-                height: 1
-                color: Theme.border
-            }
-        }
-        StackLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            currentIndex: root.session.hasMedia && !root.showRecent ? 1 : 0
-            RecentVideosPane {
-                recentVideos: root.recentVideos
-                session: root.session
-                onOpenVideo: videoDialog.open()
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: Theme.space5
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 0
-                    Item {
-                        implicitHeight: 8
-                    }
-                    RowLayout {
-                        Label {
-                            text: root.session.mediaTitle || "Your listening space"
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                            textFormat: Text.PlainText
-                            color: Theme.ink
-                            font.pixelSize: 18
-                            font.weight: Font.Medium
-                        }
-                        Item {
-                            Layout.fillWidth: true
-                        }
-                    }
-                    Item {
-                        implicitHeight: 18
-                    }
-                    VideoStage {
-                        id: stage
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        session: root.session
-                        playback: root.playback
-                        appearance: root.appearance
-                        onExplainSelection: root.explainCommittedSelection()
-                        dictionaryOpen: root.dictionaryOpen
-                        onOpenDictionary: root.openDictionary("")
-                        onCloseSelection: root.closeSelection()
-                    }
-                    PlaybackControls {
-                        id: playbackControls
-                        Layout.fillWidth: true
-                        session: root.session
-                        onFullscreen: root.fullscreen()
-                    }
-                    Item {
-                        implicitHeight: 16
-                    }
-                    Label {
-                        text: "Double-click a word or select a phrase for an explanation."
-                        color: Theme.muted
-                        font.pixelSize: 12
-                    }
-                }
-                TranscriptPane {
-                    id: transcript
-                    visible: !root.dictionaryOpen && root.transcriptOpen
-                    Layout.preferredWidth: 352
-                    Layout.fillHeight: true
-                    session: root.session
-                }
-                Loader {
-                    id: dictionaryLoader
-                    objectName: "dictionaryLoader"
-                    active: root.dictionaryOpen
-                    visible: active
-                    Layout.preferredWidth: 352
-                    Layout.fillHeight: true
-                    sourceComponent: DictionaryPane {
-                        session: root.session
-                        onDismissed: root.closeDictionary()
-                    }
-                }
-            }
-        }
-        Item {
-            implicitHeight: 18
+    header: ToolBar {
+        visible: Qt.platform.os !== "osx" || root.fullscreenController.active
+        implicitHeight: visible ? 36 + root.fullscreenController.safeTopInset : 0
+        background: Rectangle {
+            color: Theme.surface
         }
         RowLayout {
-            Rectangle {
-                implicitWidth: 6
-                implicitHeight: 6
-                radius: 3
-                color: Theme.accent
-            }
+            anchors.fill: parent
+            anchors.topMargin: root.fullscreenController.safeTopInset
+            anchors.leftMargin: Theme.space3
+            anchors.rightMargin: Theme.space3
             Label {
-                text: root.recentVideos.error || root.session.status
+                text: root.session.hasMedia ? root.session.mediaTitle : "Neden"
                 color: Theme.muted
-                font.pixelSize: 11
-            }
-            Item {
+                font.pixelSize: Theme.caption
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
                 Layout.fillWidth: true
             }
+            IconButton {
+                name: "captions"
+                description: "Toggle transcript"
+                onClicked: root.toggleTranscript()
+            }
+            IconButton {
+                name: "info"
+                description: "Show meaning"
+                onClicked: root.openMeaning()
+            }
+        }
+    }
+    StackLayout {
+        anchors.fill: parent
+        currentIndex: root.session.hasMedia && !root.showRecent ? 1 : 0
+        RecentVideosPane {
+            Layout.margins: Theme.space5
+            recentVideos: root.recentVideos
+            session: root.session
+            onOpenVideo: videoDialog.open()
+        }
+        ColumnLayout {
+            spacing: 0
+            RowLayout {
+                spacing: 0
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                VideoStage {
+                    id: stage
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    session: root.session
+                    playback: root.playback
+                    appearance: root.appearance
+                    onExplainSelection: root.explainCommittedSelection()
+                }
+                Rectangle {
+                    objectName: "learningInspector"
+                    color: Theme.surface
+                    visible: root.dictionaryOpen || root.transcriptOpen
+                    Layout.preferredWidth: Math.max(280, Math.min(352, root.width * 0.275))
+                    Layout.fillHeight: true
+                    Rectangle {
+                        width: 1
+                        height: parent.height
+                        color: Theme.border
+                    }
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 1
+                        spacing: 0
+                        StackLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            currentIndex: root.dictionaryOpen ? 2 : root.inspectorTab
+                            TranscriptPane {
+                                id: transcript
+                                session: root.session
+                            }
+                            Loader {
+                                id: meaningLoader
+                                objectName: "meaningLoader"
+                                active: root.inspectorTab === 1
+                                sourceComponent: MeaningPane {
+                                    session: root.session
+                                    onDictionaryRequested: term => root.openDictionary(term)
+                                }
+                            }
+                            Loader {
+                                id: dictionaryLoader
+                                objectName: "dictionaryLoader"
+                                active: root.dictionaryOpen
+                                sourceComponent: DictionaryPane {
+                                    session: root.session
+                                    onDismissed: root.closeDictionary()
+                                }
+                            }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 1
+                            color: Theme.border
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 44
+                            spacing: 0
+                            InspectorTab {
+                                objectName: "transcriptTab"
+                                text: "Transcript"
+                                Layout.fillWidth: true
+                                checked: root.inspectorTab === 0 && !root.dictionaryOpen
+                                onClicked: {
+                                    root.closeSelection();
+                                    root.dictionaryOpen = false;
+                                    root.inspectorTab = 0;
+                                }
+                            }
+                            InspectorTab {
+                                objectName: "meaningTab"
+                                text: "Meaning"
+                                Layout.fillWidth: true
+                                checked: root.inspectorTab === 1 && !root.dictionaryOpen
+                                onClicked: root.openMeaning()
+                            }
+                        }
+                    }
+                }
+            }
+            PlaybackControls {
+                id: playbackControls
+                Layout.fillWidth: true
+                session: root.session
+                onFullscreen: root.fullscreen()
+            }
+        }
+    }
+    Popup {
+        id: errorNotice
+        anchors.centerIn: parent
+        width: Math.min(root.width - 48, 480)
+        padding: Theme.space4
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background: Rectangle {
+            color: Theme.elevated
+            radius: Theme.controlRadius
+            border.color: Theme.border
+        }
+        contentItem: Label {
+            text: root.recentVideos.error || root.session.status
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            color: Theme.ink
+        }
+    }
+    Connections {
+        target: root.session
+        function onStatusChanged() {
+            const normal = ["Ready to explore", "Loading local video…", "Primary subtitles loaded", "Secondary subtitles loaded"];
+            if (!normal.includes(root.session.status))
+                errorNotice.open();
+        }
+    }
+    Connections {
+        target: root.recentVideos
+        function onErrorChanged() {
+            if (root.recentVideos.error.length)
+                errorNotice.open();
         }
     }
 }

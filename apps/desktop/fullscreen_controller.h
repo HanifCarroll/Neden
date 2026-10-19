@@ -10,12 +10,14 @@ class FullscreenController : public QObject {
     QML_ELEMENT
     QML_UNCREATABLE("Fullscreen control is supplied by the application")
     Q_PROPERTY(bool active READ active NOTIFY activeChanged)
+    Q_PROPERTY(int safeTopInset READ safeTopInset NOTIFY activeChanged)
     Q_PROPERTY(bool nativeMode READ nativeMode WRITE setNativeMode NOTIFY nativeModeChanged)
     Q_PROPERTY(bool supportsNativeMode READ supportsNativeMode CONSTANT)
 public:
     explicit FullscreenController(QObject *parent = nullptr);
     ~FullscreenController() override;
     void attach(QQuickWindow *window);
+    int safeTopInset() const;
     bool active() const { return fullscreenActive; }
     bool nativeMode() const { return preferredNativeMode; }
     bool supportsNativeMode() const {
@@ -30,6 +32,8 @@ public:
     Q_INVOKABLE void setActive(bool enabled);
 signals:
     void settingsRequested();
+    void transcriptRequested();
+    void meaningRequested();
     void activeChanged();
     void nativeModeChanged();
 private:

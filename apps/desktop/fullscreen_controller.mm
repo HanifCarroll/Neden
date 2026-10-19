@@ -7,9 +7,19 @@
 @property(nonatomic, assign) FullscreenController *controller;
 - (void)toggleFullScreen:(id)sender;
 - (void)openSettings:(id)sender;
+- (void)showTranscript:(id)sender;
+- (void)showMeaning:(id)sender;
 @end
 
 @implementation NedenFullscreenTarget
+- (void)showTranscript:(id)sender {
+    Q_UNUSED(sender);
+    if (self.controller) emit self.controller->transcriptRequested();
+}
+- (void)showMeaning:(id)sender {
+    Q_UNUSED(sender);
+    if (self.controller) emit self.controller->meaningRequested();
+}
 - (void)openSettings:(id)sender {
     Q_UNUSED(sender);
     if (self.controller) emit self.controller->settingsRequested();
@@ -30,6 +40,7 @@ struct FullscreenController::NativeState {
     NSMenuItem *viewMenuItem = nil;
     bool ownsViewMenu = false;
     NSMenuItem *fullscreenMenuItem = nil;
+    NSTitlebarAccessoryViewController *inspectorAccessory = nil;
     NSMutableArray *observers = [NSMutableArray new];
 };
 
@@ -53,6 +64,9 @@ FullscreenController::~FullscreenController() {
     if (native->ownsViewMenu) [native->viewMenuItem.menu removeItem:native->viewMenuItem];
     for (id observer in native->observers) [[NSNotificationCenter defaultCenter] removeObserver:observer];
     native->target.controller = nullptr;
+    NSView *view = window ? (__bridge NSView *)reinterpret_cast<void *>(window->winId()) : nil;
+    const NSUInteger accessoryIndex = [view.window.titlebarAccessoryViewControllers indexOfObject:native->inspectorAccessory];
+    if (accessoryIndex != NSNotFound && view.window) [view.window removeTitlebarAccessoryViewControllerAtIndex:accessoryIndex];
     if (fullscreenActive && !nativeSession) {
         NSApp.presentationOptions = native->savedPresentation;
     }
@@ -93,8 +107,29 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
     native->settingsMenuItem.target = native->target;
     [NSApp.mainMenu.itemArray.firstObject.submenu insertItem:native->settingsMenuItem atIndex:1];
 
-    // 3. Reconcile native exits initiated by macOS, and ignore toggles during animation.
+    // 3. Keep the title and inspector controls in the native titlebar, without a second app banner.
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    view.window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+    view.window.titlebarAppearsTransparent = YES;
+    view.window.backgroundColor = [NSColor colorWithRed:0.09 green:0.115 blue:0.145 alpha:1];
+    native->inspectorAccessory = [NSTitlebarAccessoryViewController new];
+    native->inspectorAccessory.layoutAttribute = NSLayoutAttributeRight;
+    NSView *accessoryView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 80, 28)];
+    NSArray<NSString *> *symbols = @[@"captions.bubble", @"info.circle"];
+    NSArray<NSString *> *labels = @[@"Toggle transcript", @"Show meaning"];
+    for (NSUInteger index = 0; index < symbols.count; ++index) {
+        NSButton *button = [NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:symbols[index] accessibilityDescription:labels[index]]
+            target:native->target action:index == 0 ? @selector(showTranscript:) : @selector(showMeaning:)];
+        button.frame = NSMakeRect(index * 36, 1, 32, 26);
+        button.bordered = NO;
+        button.toolTip = labels[index];
+        [button setAccessibilityLabel:labels[index]];
+        [accessoryView addSubview:button];
+    }
+    native->inspectorAccessory.view = accessoryView;
+    [view.window addTitlebarAccessoryViewController:native->inspectorAccessory];
+
+    // 4. Reconcile native exits initiated by macOS, and ignore toggles during animation.
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     for (NSNotificationName name in @[NSWindowWillEnterFullScreenNotification, NSWindowWillExitFullScreenNotification]) {
         [native->observers addObject:[center addObserverForName:name object:view.window queue:nil usingBlock:^(NSNotification *) {
@@ -111,6 +146,13 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
             emit activeChanged();
         }]];
     }
+}
+
+int FullscreenController::safeTopInset() const {
+    if (!window || !fullscreenActive || nativeSession) return 0;
+
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    return int(view.window.screen.safeAreaInsets.top);
 }
 
 void FullscreenController::bindZoomButton() {

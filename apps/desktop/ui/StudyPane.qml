@@ -57,86 +57,9 @@ Rectangle {
             currentIndex: tabs.currentIndex
             Layout.fillWidth: true
             Layout.fillHeight: true
-            ColumnLayout {
-                Label {
-                    text: pane.session.selection.length ? pane.session.selection : pane.session.subtitle
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    textFormat: Text.PlainText
-                    maximumLineCount: 4
-                    elide: Text.ElideRight
-                    color: Theme.accent
-                    font.pixelSize: Theme.title
-                }
-                Label {
-                    text: "The selected phrase and current subtitle are sent to your configured AI provider when you request help."
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    color: Theme.muted
-                }
-                RowLayout {
-                    ActionButton {
-                        objectName: "explainButton"
-                        text: pane.study.state === "failed" || pane.study.state === "incomplete" ? "Try again" : "Explain"
-                        enabled: !pane.busy
-                        onClicked: pane.session.explainSelection(false)
-                    }
-                    ActionButton {
-                        text: "Translate"
-                        enabled: !pane.busy
-                        onClicked: pane.session.explainSelection(true)
-                    }
-                    ActionButton {
-                        text: "Stop"
-                        enabled: pane.study.state === "loading" || pane.study.state === "streaming"
-                        onClicked: pane.study.stop()
-                    }
-                }
-                ActionButton {
-                    text: "Look up in dictionary"
-                    flat: true
-                    enabled: pane.session.selection.length > 0 || pane.session.subtitle.length > 0
-                    onClicked: pane.dictionaryRequested(pane.session.selection || pane.session.subtitle)
-                }
-                Label {
-                    visible: pane.study.state !== "idle"
-                    text: ({
-                            loading: "Connecting…",
-                            streaming: "Writing…",
-                            complete: "Complete",
-                            incomplete: "Incomplete answer",
-                            failed: "Couldn’t get an explanation"
-                        })[pane.study.state] || ""
-                    color: pane.study.state === "failed" ? Theme.error : Theme.muted
-                }
-                Label {
-                    visible: pane.study.state === "failed" || pane.study.state === "incomplete"
-                    text: pane.study.message
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    textFormat: Text.PlainText
-                    color: Theme.muted
-                }
-                ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    TextArea {
-                        text: ExplanationFormat.render(pane.study.answer)
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextEdit.Wrap
-                        textFormat: TextEdit.RichText
-                        color: Theme.ink
-                        font.pixelSize: Theme.body
-                        padding: 0
-                        background: Item {}
-                    }
-                }
-                ActionButton {
-                    text: "Save flashcard"
-                    enabled: pane.study.state === "complete"
-                    onClicked: pane.session.saveCard()
-                }
+            MeaningPane {
+                session: pane.session
+                onDictionaryRequested: term => pane.dictionaryRequested(term)
             }
             ColumnLayout {
                 RowLayout {

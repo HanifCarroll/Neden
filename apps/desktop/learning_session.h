@@ -24,6 +24,8 @@ class LearningSession : public QObject {
     Q_PROPERTY(QString translationSubtitleName READ translationSubtitleName NOTIFY tracksChanged)
     Q_PROPERTY(bool replaying READ replaying NOTIFY replayingChanged)
     Q_PROPERTY(int activeCue READ activeCue NOTIFY cueChanged)
+    Q_PROPERTY(bool canPreviousSubtitle READ canPreviousSubtitle NOTIFY cueChanged)
+    Q_PROPERTY(bool canNextSubtitle READ canNextSubtitle NOTIFY cueChanged)
 public:
     Q_PROPERTY(StudyTools *study READ study CONSTANT)
     StudyTools *study() const { return studyTools; }
@@ -63,6 +65,11 @@ public:
     Q_INVOKABLE void toggleMute();
     Q_INVOKABLE void select(const QString &text);
     Q_INVOKABLE void closeDefinition();
+    bool canPreviousSubtitle() const { return previousSubtitleIndex() >= 0; }
+    bool canNextSubtitle() const { return nextSubtitleIndex() >= 0; }
+    Q_INVOKABLE void previousSubtitle();
+    Q_INVOKABLE void nextSubtitle();
+    Q_INVOKABLE void seekSubtitle(double seconds);
     Q_INVOKABLE void replay();
     Q_INVOKABLE void stopReplay();
     Q_INVOKABLE void saveCard();
@@ -78,6 +85,9 @@ signals:
     void tracksChanged();
     void volumeChanged();
 private:
+    int previousSubtitleIndex() const;
+    int nextSubtitleIndex() const;
+    void finishReplay();
     void syncPosition();
     void resetInteraction();
     void finishOpening(const QString &path);
@@ -90,6 +100,8 @@ private:
     double audioLevel = 60;
     double unmutedLevel = 60;
     double restorePosition = -1;
+    double subtitleSeekTarget = -1;
+    int subtitleSeekIndex = -1;
     bool mediaReady = false;
     bool rememberCurrent = true;
     QVector<Cue> translationCues;
@@ -103,6 +115,4 @@ private:
     bool replayArmed = false;
     double replayStart = 0;
     double replayEnd = 0;
-    double returnPosition = 0;
-    bool returnPaused = true;
 };

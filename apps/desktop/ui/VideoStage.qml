@@ -9,12 +9,9 @@ Rectangle {
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
     signal explainSelection
-    property bool dictionaryOpen: false
     readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
-    signal openDictionary
-    signal closeSelection
     color: "#080b0c"
-    radius: 14
+    radius: 0
     clip: true
     function selectAll() {
         subtitle.editor.forceActiveFocus();
@@ -30,35 +27,15 @@ Rectangle {
         playback: stage.playback
         mirrorVertically: true
     }
-    // Four small corner masks keep the video surface rounded without a full-size texture layer.
-    Repeater {
-        model: 4
-        delegate: Canvas {
-            required property int index
-            width: 14
-            height: 14
-            x: index === 0 || index === 3 ? 0 : stage.width - width
-            y: index < 2 ? 0 : stage.height - height
-            rotation: index * 90
-            onPaint: {
-                const painter = getContext("2d");
-                painter.fillStyle = Theme.background;
-                painter.beginPath();
-                painter.moveTo(0, 0);
-                painter.lineTo(14, 0);
-                painter.arc(14, 14, 14, -Math.PI / 2, -Math.PI, true);
-                painter.closePath();
-                painter.fill();
-            }
-        }
-    }
     Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.leftMargin: Theme.space6
         anchors.rightMargin: Theme.space6
-        anchors.bottomMargin: stage.appearance.bottomMargin
+        readonly property real videoAspect: stage.playback.sourceOutputSize.height > 0 ? stage.playback.sourceOutputSize.width / stage.playback.sourceOutputSize.height : 16 / 9
+        readonly property real pictureHeight: Math.min(stage.height, stage.width / videoAspect)
+        anchors.bottomMargin: (stage.height - pictureHeight) / 2 + stage.appearance.bottomMargin
         height: subtitleColumn.implicitHeight
         Rectangle {
             anchors.centerIn: parent

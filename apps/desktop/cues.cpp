@@ -114,6 +114,33 @@ void CueModel::replace(QVector<Cue> next) {
     endResetModel();
     emit countChanged();
 }
+void CueModel::setTranslationCues(const QVector<Cue> &translations) {
+
+    // 1. Project timed translations onto transcript rows without changing either track's own timing.
+    for (auto &cue : cues) {
+        if (translations.isEmpty()) continue;
+
+        const auto next = std::upper_bound(translations.begin(), translations.end(), cue.startMs,
+            [](qint64 time, const Cue &item) { return time < item.startMs; });
+        int index = qMax(0, int(next - translations.begin()) - 1);
+        QString bestText;
+        qint64 bestOverlap = 0;
+        int inspected = 0;
+        while (index < translations.size() && translations[index].startMs < cue.endMs && inspected++ < 64) {
+            const auto &translation = translations[index++];
+            const auto overlap = qMin(cue.endMs, translation.endMs) - qMax(cue.startMs, translation.startMs);
+            if (overlap > bestOverlap) {
+                bestOverlap = overlap;
+                bestText = translation.text;
+            }
+        }
+        cue.translation = bestText;
+    }
+
+    // 2. Refresh only translation cells, retaining search results and original cue identities.
+    if (!visible.isEmpty()) emit dataChanged(index(0), index(visible.size() - 1), {Translation});
+}
+
 QString CueModel::searchKey(const QString &text) const {
 
     // 1. Treat composed and decomposed spellings as the same search text.

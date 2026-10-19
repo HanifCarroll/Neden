@@ -104,6 +104,18 @@ private slots:
             QString("<img src=\"https://evil.test/a\"> <script>bad</script>"));
         QCOMPARE(subtitlePlainText("日本語 <i>字幕</i> — <u>مرحبا</u> — río"), QString("日本語 字幕 — مرحبا — río"));
     }
+    void transcriptTranslationsUseGreatestOverlapAndPreserveFilteredIdentity() {
+        CueModel model;
+        model.replace({{1000, 5000, "İstanbul ışığı", {}}, {6000, 8000, "yağmur", {}}});
+        model.search("yağmur");
+        model.setTranslationCues({{1000, 2000, "Istanbul", {}}, {2000, 4500, "light", {}}, {6500, 7500, "rain", {}}});
+        QCOMPARE(model.count(), 1);
+        QCOMPARE(model.rowForCue(1), 0);
+        QCOMPARE(model.rowForCue(0), -1);
+        QCOMPARE(model.data(model.index(0), CueModel::Translation).toString(), QString("rain"));
+        model.search("");
+        QCOMPARE(model.data(model.index(0), CueModel::Translation).toString(), QString("light"));
+    }
     void rejectsMalformedTimings() {
         QVERIFY_EXCEPTION_THROWN(parseSrt("1\n00:61:00,000 --> 00:62:00,000\nInvalid"), std::runtime_error);
         QVERIFY_EXCEPTION_THROWN(parseSrt("1\n00:00:03,000 --> 00:00:01,000\nInvalid"), std::runtime_error);

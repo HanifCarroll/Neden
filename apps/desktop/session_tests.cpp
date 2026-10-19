@@ -238,18 +238,115 @@ private slots:
         session.closeDefinition();
         QVERIFY(engine.paused());
     }
-    void replayRestoresPositionAndPause() {
+    void subtitleNavigationPausesAndHandlesGapsAndBoundaries() {
         FakePlayback engine;
         LearningSession session(&engine);
-        session.replaceCues({{0, 3000, "İstanbul", "Istanbul"}});
+        session.replaceCues({{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}, {9000, 11000, "yağmur", {}}});
+        QVERIFY(!session.canPreviousSubtitle());
+        QVERIFY(session.canNextSubtitle());
+        session.nextSubtitle();
+        QCOMPARE(engine.lastSeek, 1);
+        QVERIFY(engine.paused());
+        engine.advance(5.5);
+        engine.setPaused(false);
+        session.previousSubtitle();
+        QCOMPARE(engine.lastSeek, 1);
+        QVERIFY(engine.paused());
+        session.nextSubtitle();
+        QCOMPARE(engine.lastSeek, 5);
+        QVERIFY(engine.paused());
+        engine.advance(4);
+        session.previousSubtitle();
+        QCOMPARE(engine.lastSeek, 1);
+        engine.advance(4);
+        session.nextSubtitle();
+        QCOMPARE(engine.lastSeek, 5);
+        engine.advance(9.5);
+        QVERIFY(!session.canNextSubtitle());
+        session.nextSubtitle();
+        QCOMPARE(engine.lastSeek, 5);
+        engine.advance(12);
+        session.previousSubtitle();
+        QCOMPARE(engine.lastSeek, 9);
+    }
+    void repeatedSubtitleStepsAdvanceWhileTheDecoderIsStillSeeking() {
+        FakePlayback engine;
+        LearningSession session(&engine);
+        session.replaceCues({{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}, {9000, 11000, "yağmur", {}}});
+        engine.advance(1.5);
+        engine.applySeekImmediately = false;
+        session.nextSubtitle();
+        QCOMPARE(engine.lastSeek, 5);
+        session.nextSubtitle();
+        QCOMPARE(engine.lastSeek, 9);
+        QVERIFY(!session.canNextSubtitle());
+        engine.advance(5); // A late update from the first seek cannot replace the requested target.
+        session.previousSubtitle();
+        QCOMPARE(engine.lastSeek, 5);
+        session.previousSubtitle();
+        QCOMPARE(engine.lastSeek, 1);
+        QVERIFY(engine.paused());
+    }
+    void replayPlaysTheCueThenPausesAtItsEnd() {
+        FakePlayback engine;
+        LearningSession session(&engine);
+        session.replaceCues({{1000, 3000, "İstanbul", {}}, {3000, 5000, "ışık", {}}});
         engine.advance(1.2);
+        engine.setPaused(false);
         session.replay();
-        QCOMPARE(engine.lastSeek, 0);
+        QCOMPARE(engine.lastSeek, 1);
         QVERIFY(!engine.paused());
-        session.stopReplay();
-        QCOMPARE(engine.lastSeek, 1.2);
+        engine.advance(3.1);
         QVERIFY(engine.paused());
         QVERIFY(!session.replaying());
+        QCOMPARE(engine.lastSeek, 2.95);
+        QCOMPARE(session.activeCue(), 0);
+        QCOMPARE(session.subtitle(), QString("İstanbul"));
+        session.replay();
+        engine.advance(1.5);
+        session.stopReplay();
+        QCOMPARE(engine.position(), 1.5);
+        QVERIFY(engine.paused());
+    }
+    void delayedReplaySeekMustArriveBeforeItCanFinish() {
+        FakePlayback engine;
+        LearningSession session(&engine);
+        session.replaceCues({{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}});
+        engine.advance(1.5);
+        engine.applySeekImmediately = false;
+        session.replay();
+        engine.advance(8);
+        QVERIFY(session.replaying());
+        engine.advance(1);
+        engine.advance(3);
+        QVERIFY(!session.replaying());
+        QVERIFY(engine.paused());
+        QCOMPARE(engine.lastSeek, 2.95);
+    }
+    void navigationCancelsReplayAndDefinitionWithoutResuming() {
+        FakePlayback engine;
+        LearningSession session(&engine);
+        session.replaceCues({{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}});
+        engine.advance(1.5);
+        engine.setPaused(false);
+        session.select("İstanbul");
+        session.nextSubtitle();
+        session.closeDefinition();
+        QVERIFY(engine.paused());
+        QVERIFY(session.selection().isEmpty());
+        QCOMPARE(engine.lastSeek, 5);
+        session.replay();
+        session.previousSubtitle();
+        QCOMPARE(engine.lastSeek, 1);
+        QVERIFY(engine.paused());
+        QVERIFY(!session.replaying());
+        session.replaceCues({});
+        QVERIFY(!session.canPreviousSubtitle());
+        QVERIFY(!session.canNextSubtitle());
+        session.previousSubtitle();
+        session.nextSubtitle();
+        session.replay();
+        QVERIFY(engine.paused());
     }
     void seekCancelsSelectionWithoutResuming() {
         FakePlayback engine;

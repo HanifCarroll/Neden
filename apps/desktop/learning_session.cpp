@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <cmath>
+#include <algorithm>
 #include <stdexcept>
 #include <QStringDecoder>
 
@@ -48,9 +49,9 @@ QString LearningSession::translationSubtitleName() const { return QFileInfo(tran
 void LearningSession::checkpoint() {
     if (!recentVideos || !mediaReady || !rememberCurrent) return;
 
-    // 1. Save the viewing position rather than a temporary sentence replay position.
-    const double seconds = replayActive ? returnPosition
-        : restorePosition >= 0 ? restorePosition : engine->snapshotPosition();
+    // 1. Save the current viewing position, preserving a pending resume target.
+    const double seconds = restorePosition >= 0 ? restorePosition
+        : subtitleSeekTarget >= 0 ? subtitleSeekTarget : engine->snapshotPosition();
     if (!std::isfinite(seconds) || seconds < 0) return;
 
     const RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration())};
@@ -100,6 +101,7 @@ void LearningSession::openTranslation(const QUrl &url) {
         const QString text = decoder(file.readAll());
         if (decoder.hasError()) throw std::runtime_error("Save the translation subtitles as UTF-8 SRT.");
         translationCues = parseSrt(text);
+        model.setTranslationCues(translationCues);
         translationCue = cueAt(translationCues, qRound64(position() * 1000));
         if (studyTools) studyTools->invalidateContext();
         translationSubtitlePath = QFileInfo(file).absoluteFilePath();
@@ -113,15 +115,20 @@ void LearningSession::openTranslation(const QUrl &url) {
 
 void LearningSession::setPaused(bool value) { engine->setPaused(value); }
 void LearningSession::replaceCues(QVector<Cue> next) {
+    stopReplay();
+    resetInteraction();
     if (studyTools) studyTools->invalidateTrack();
     currentCue = -1;
     model.replace(std::move(next));
+    model.setTranslationCues(translationCues);
     syncPosition();
     emit cueChanged();
 }
 void LearningSession::resetInteraction() {
     if (studyTools) studyTools->invalidateContext();
     replayActive = false;
+    subtitleSeekTarget = -1;
+    subtitleSeekIndex = -1;
     selectedText.clear();
     resumeAfterDefinition = false;
     emit selectionChanged();
@@ -256,39 +263,89 @@ void LearningSession::closeDefinition() {
     }
     emit selectionChanged();
 }
+int LearningSession::previousSubtitleIndex() const {
+    if (subtitleSeekIndex >= 0) return subtitleSeekIndex - 1;
+
+    const auto milliseconds = qRound64(position() * 1000);
+    const auto active = cueAt(model.cues, milliseconds);
+    if (active >= 0) return active - 1;
+
+    const auto next = std::lower_bound(model.cues.begin(), model.cues.end(), milliseconds,
+        [](const Cue &cue, qint64 time) { return cue.startMs < time; });
+    return next == model.cues.begin() ? -1 : int(next - model.cues.begin()) - 1;
+}
+
+int LearningSession::nextSubtitleIndex() const {
+    if (subtitleSeekIndex >= 0) return subtitleSeekIndex + 1 < model.cues.size() ? subtitleSeekIndex + 1 : -1;
+
+    const auto milliseconds = qRound64(position() * 1000);
+    const auto next = std::upper_bound(model.cues.begin(), model.cues.end(), milliseconds,
+        [](qint64 time, const Cue &cue) { return time < cue.startMs; });
+    return next == model.cues.end() ? -1 : int(next - model.cues.begin());
+}
+
+void LearningSession::seekSubtitle(double seconds) {
+    if (!std::isfinite(seconds)) return;
+
+    // Pause before seeking so neither an asynchronous seek nor closing a definition resumes playback.
+    resetInteraction();
+    restorePosition = -1;
+    setPaused(true);
+    subtitleSeekTarget = qBound(0.0, seconds, duration());
+    subtitleSeekIndex = cueAt(model.cues, qRound64(subtitleSeekTarget * 1000));
+    engine->seek(subtitleSeekTarget);
+    emit cueChanged();
+}
+
+void LearningSession::previousSubtitle() {
+    const int index = previousSubtitleIndex();
+    if (index >= 0) seekSubtitle(model.cues[index].startMs / 1000.0);
+}
+
+void LearningSession::nextSubtitle() {
+    const int index = nextSubtitleIndex();
+    if (index >= 0) seekSubtitle(model.cues[index].startMs / 1000.0);
+}
+
 void LearningSession::replay() {
 
-    // 1. Require an active cue and treat a second replay command as Stop.
-    if (currentCue < 0) {
-        return;
-    }
-
+    // 1. A second press stops at the current position, still paused.
     if (replayActive) {
         stopReplay();
         return;
     }
+    const int cueIndex = subtitleSeekIndex >= 0 ? subtitleSeekIndex : currentCue;
+    if (cueIndex < 0) return;
 
-    // 2. Save the return state before starting the sentence.
-    returnPosition = position();
-    returnPaused = paused();
-    replayStart = model.cues[currentCue].startMs / 1000.0;
-    replayEnd = model.cues[currentCue].endMs / 1000.0;
+    // 2. Freeze the chosen cue before clearing any definition or prior interaction.
+    const Cue cue = model.cues[cueIndex];
+    resetInteraction();
+    restorePosition = -1;
+    setPaused(true);
+    replayStart = cue.startMs / 1000.0;
+    replayEnd = cue.endMs / 1000.0;
     replayArmed = false;
     replayActive = true;
     emit replayingChanged();
     engine->seek(replayStart);
     setPaused(false);
 }
+
 void LearningSession::stopReplay() {
-    if (!replayActive) {
-        return;
-    }
+    if (!replayActive) return;
 
     replayActive = false;
+    replayArmed = false;
+    setPaused(true);
     emit replayingChanged();
-    engine->seek(returnPosition);
-    setPaused(returnPaused);
 }
+
+void LearningSession::finishReplay() {
+    stopReplay();
+    // Keep the final subtitle visible for study rather than advancing into the next cue or gap.
+    engine->seek(qMax(replayStart, replayEnd - 0.050));
+}
+
 void LearningSession::saveCard() {
     if (studyTools) {
         studyTools->saveCard(selectedText.isEmpty() ? subtitle() : selectedText, subtitle(), translation(), position());
@@ -296,6 +353,10 @@ void LearningSession::saveCard() {
 }
 void LearningSession::syncPosition() {
     if (restorePosition >= 0 && std::abs(position() - restorePosition) < 1) restorePosition = -1;
+    if (subtitleSeekTarget >= 0 && std::abs(position() - subtitleSeekTarget) < 0.05) {
+        subtitleSeekTarget = -1;
+        subtitleSeekIndex = -1;
+    }
 
     // 1. Notify subtitle views only when their cue actually changes.
     const int translated = cueAt(translationCues, qRound64(position() * 1000));
@@ -312,6 +373,6 @@ void LearningSession::syncPosition() {
     // 2. Finish replay only after its requested start has been observed.
     if (replayActive) {
         if (position() >= replayStart - 0.1 && position() < replayEnd) replayArmed = true;
-        if (replayArmed && position() >= replayEnd) stopReplay();
+        if (replayArmed && position() >= replayEnd) finishReplay();
     }
 }

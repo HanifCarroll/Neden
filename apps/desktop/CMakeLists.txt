@@ -29,7 +29,7 @@ add_test(NAME video_render_lifetime_tests COMMAND video_render_lifetime_tests)
 if(NEDEN_CORE_ONLY)
     return()
 endif()
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 OpenGL WebView)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 OpenGL WebView Svg)
 qt_add_executable(explanation_tests explanation_tests.cpp explanation_format.cpp explanation_format.h)
 target_link_libraries(explanation_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Qml)
 add_test(NAME explanation_tests COMMAND explanation_tests)
@@ -51,15 +51,17 @@ set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set(NEDEN_UI_SOURCES subtitle_appearance.cpp subtitle_appearance.h media_path.h recent_videos.cpp recent_videos.h explanation_format.cpp explanation_format.h learning_session.cpp learning_session.h playback_engine.h mpv_playback.cpp mpv_playback.h video_render_lifetime.h
         cues.cpp cues.h study_tools.cpp study_tools.h video.cpp video.h video_geometry.h
         fullscreen_controller.h ${PLATFORM_SOURCES} credentials.h)
-set(NEDEN_QML_FILES ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml ui/PlayerHeader.qml
-        ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml
-        ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml ui/Glyph.qml)
+set(NEDEN_QML_FILES ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
+        ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/MeaningPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml
+        ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
     SOURCES ${NEDEN_UI_SOURCES}
     QML_FILES ${NEDEN_QML_FILES})
 qt_add_resources(NedenQt fonts PREFIX "/fonts" BASE "../../shared/fonts"
     FILES ../../shared/fonts/Inter-Regular.otf ../../shared/fonts/Inter-Medium.otf
         ../../shared/fonts/Inter-SemiBold.otf ../../shared/fonts/LICENSE.txt)
+file(GLOB NEDEN_ICON_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/icons/lucide/*.svg")
+qt_add_resources(NedenQt icons PREFIX "/icons" BASE "../../shared/icons/lucide" FILES ${NEDEN_ICON_FILES})
 target_include_directories(NedenQt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(NedenQt PRIVATE Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView)
 if(APPLE)
@@ -124,6 +126,7 @@ if(NEDEN_NATIVE_UI_CHECKS)
     qt_add_resources(NedenNativeChecks check_fonts PREFIX "/fonts" BASE "../../shared/fonts"
         FILES ../../shared/fonts/Inter-Regular.otf ../../shared/fonts/Inter-Medium.otf
             ../../shared/fonts/Inter-SemiBold.otf ../../shared/fonts/LICENSE.txt)
+    qt_add_resources(NedenNativeChecks check_icons PREFIX "/icons" BASE "../../shared/icons/lucide" FILES ${NEDEN_ICON_FILES})
     target_include_directories(NedenNativeChecks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${MPV_INCLUDE_DIR})
     target_link_libraries(NedenNativeChecks PRIVATE Qt6::Test Qt6::Network Qt6::Quick
         Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView "${REVIEWED_MPV_LIBRARY}")

@@ -32,6 +32,8 @@ public:
     void setSearchLanguage(SearchLanguage value);
     void replace(QVector<Cue> next);
     Q_INVOKABLE void search(const QString &query);
+    Q_INVOKABLE int rowForCue(int cueIndex) const { return visible.indexOf(cueIndex); }
+    void setTranslationCues(const QVector<Cue> &translations);
     QVector<Cue> cues;
 signals:
     void countChanged();

@@ -3,15 +3,16 @@ import QtQuick
 
 QtObject {
     // Shared color, type, spacing, and shape tokens for every application surface.
-    readonly property color background: "#101416"
-    readonly property color surface: "#191f22"
-    readonly property color elevated: "#222b2d"
-    readonly property color hover: "#2b3739"
-    readonly property color border: "#303b3d"
-    readonly property color ink: "#edf2ef"
-    readonly property color muted: "#9caeaa"
-    readonly property color accent: "#b6e5c9"
-    readonly property color selection: "#365c4d"
+    readonly property color background: "#10151b"
+    readonly property color surface: "#171d25"
+    readonly property color elevated: "#202731"
+    readonly property color hover: "#2a3441"
+    readonly property color border: "#303844"
+    readonly property color ink: "#e6eaf2"
+    readonly property color muted: "#9aa7b5"
+    readonly property color accent: "#429df5"
+    readonly property color selection: "#294665"
+    readonly property color selected: "#1e3041"
     readonly property color error: "#f0b4ab"
     readonly property int space1: 4
     readonly property int space2: 8
@@ -28,6 +29,9 @@ QtObject {
     readonly property int panelRadius: 12
 
     function clock(seconds) {
-        return Math.floor(seconds / 60).toString().padStart(2, "0") + ":" + Math.floor(seconds % 60).toString().padStart(2, "0");
+        const total = Math.max(0, Math.floor(seconds));
+        const minutes = Math.floor(total / 60);
+        const tail = (total % 60).toString().padStart(2, "0");
+        return total >= 3600 ? Math.floor(total / 3600) + ":" + (minutes % 60).toString().padStart(2, "0") + ":" + tail : minutes.toString().padStart(2, "0") + ":" + tail;
     }
 }

@@ -4,78 +4,116 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Neden
 
-Rectangle {
+Item {
     id: pane
     required property LearningSession session
-    readonly property bool editing: search.activeFocus
-    color: Theme.surface
-    radius: Theme.panelRadius
-    border.color: Theme.border
-    function searchFor(value) {
-        search.text = value;
-        session.cueModel.search(value);
+    readonly property bool editing: search.activeFocus || language.activeFocus
+    property bool searchOpen: false
+    property bool followingPlayback: true
+
+    function followCurrentCue() {
+        if (!followingPlayback)
+            return;
+
+        const row = session.cueModel.rowForCue(session.activeCue);
+        if (row >= 0) {
+            transcript.currentIndex = row;
+            transcript.forceLayout();
+            transcript.positionViewAtIndex(row, ListView.Center);
+            settleCurrentRow.restart();
+        }
     }
-    function toggleSearch() {
-        searchFor(search.text.length ? "" : "río");
-    }
-    function scrollToEnd() {
-        transcript.positionViewAtIndex(9500, ListView.Beginning);
+    Timer {
+        id: settleCurrentRow
+        interval: 80
+        onTriggered: {
+            if (pane.followingPlayback && transcript.currentIndex >= 0) {
+                transcript.forceLayout();
+                transcript.positionViewAtIndex(transcript.currentIndex, ListView.Center);
+            }
+        }
     }
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Theme.space4
-        spacing: Theme.space4
-        ColumnLayout {
+        spacing: 0
+        RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.space2
-            RowLayout {
-                Label {
-                    text: "Transcript"
-                    color: Theme.ink
-                    font.pixelSize: Theme.title
-                    font.weight: Font.DemiBold
+            Layout.preferredHeight: 60
+            Layout.leftMargin: Theme.space4
+            Layout.rightMargin: Theme.space3
+            Label {
+                text: "Transcript"
+                color: Theme.ink
+                font.pixelSize: Theme.title
+                font.weight: Font.DemiBold
+                Layout.fillWidth: true
+            }
+            IconButton {
+                visible: !pane.followingPlayback
+                name: "captions"
+                description: "Follow playback"
+                onClicked: {
+                    pane.followingPlayback = true;
+                    pane.followCurrentCue();
                 }
-                Item {
-                    Layout.fillWidth: true
-                }
-                Label {
-                    text: pane.session.cueModel.count + " lines"
-                    color: Theme.muted
-                    font.pixelSize: Theme.caption
+            }
+            IconButton {
+                objectName: "transcriptSearchButton"
+                name: "search"
+                description: "Search transcript"
+                checked: pane.searchOpen
+                onClicked: {
+                    pane.searchOpen = !pane.searchOpen;
+                    if (pane.searchOpen)
+                        search.forceActiveFocus();
+                    else
+                        search.text = "";
                 }
             }
         }
-        SearchField {
-            id: search
+        ColumnLayout {
+            visible: pane.searchOpen
             Layout.fillWidth: true
-            placeholderText: "Find a word or phrase…"
-            onTextChanged: pane.session.cueModel.search(text)
-            Accessible.name: "Search transcript"
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Label {
-                text: "Search language"
-                color: Theme.muted
-                font.pixelSize: Theme.caption
+            Layout.leftMargin: Theme.space4
+            Layout.rightMargin: Theme.space4
+            Layout.bottomMargin: Theme.space3
+            spacing: Theme.space2
+            SearchField {
+                id: search
                 Layout.fillWidth: true
+                placeholderText: "Find a word or phrase…"
+                onTextChanged: pane.session.cueModel.search(text)
+                Accessible.name: "Search transcript"
             }
             ChoiceBox {
                 id: language
-                model: ["Turkish", "Other languages"]
+                Layout.fillWidth: true
+                model: ["Turkish search", "Other languages"]
                 currentIndex: pane.session.cueModel.searchLanguage === CueModel.Turkish ? 0 : 1
                 onActivated: pane.session.cueModel.searchLanguage = currentIndex === 0 ? CueModel.Turkish : CueModel.Unicode
                 Accessible.name: "Transcript search language"
             }
         }
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.space4
+            Layout.rightMargin: Theme.space4
+            implicitHeight: 1
+            color: Theme.border
+        }
         ListView {
             id: transcript
+            objectName: "transcriptList"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: Theme.space2
             model: pane.session.cueModel
             reuseItems: true
+            onMovementStarted: {
+                pane.followingPlayback = false;
+                settleCurrentRow.stop();
+            }
+            Component.onCompleted: Qt.callLater(pane.followCurrentCue)
             ScrollBar.vertical: ScrollBar {}
             delegate: ItemDelegate {
                 id: cue
@@ -85,67 +123,90 @@ Rectangle {
                 required property int cueIndex
                 readonly property bool current: pane.session.activeCue === cue.cueIndex
                 width: transcript.width
-                height: cueContents.implicitHeight + Theme.space5
+                height: cueContents.implicitHeight + 32
+                padding: 0
                 background: Rectangle {
-                    radius: 9
-                    color: cue.current ? "#263b31" : (cue.hovered ? Theme.elevated : Theme.surface)
+                    color: cue.current ? Theme.selected : cue.hovered ? Theme.elevated : "transparent"
                     Rectangle {
-                        width: 2
-                        anchors.top: parent.top
+                        width: 3
+                        height: parent.height
+                        color: Theme.accent
+                        visible: cue.current
+                    }
+                    Rectangle {
                         anchors.bottom: parent.bottom
-                        anchors.margins: 8
-                        color: cue.current ? Theme.accent : "transparent"
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        height: 1
+                        color: Theme.border
+                        opacity: 0.6
                     }
                 }
                 Accessible.name: cue.cueText
-                onClicked: pane.session.seek(startSeconds)
-                ColumnLayout {
+                onClicked: {
+                    pane.followingPlayback = true;
+                    pane.session.seekSubtitle(startSeconds);
+                }
+                RowLayout {
                     id: cueContents
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    anchors.margins: 12
-                    spacing: 7
+                    anchors.margins: 16
+                    spacing: 14
                     Label {
                         text: Theme.clock(cue.startSeconds)
                         color: cue.current ? Theme.accent : Theme.muted
                         font.pixelSize: Theme.caption
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 44
                     }
-                    Label {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: cue.cueText
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
-                        textFormat: Text.PlainText
-                        wrapMode: Text.WordWrap
-                        color: Theme.ink
-                        font.pixelSize: Theme.body
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: cue.translation
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        textFormat: Text.PlainText
-                        wrapMode: Text.WordWrap
-                        color: Theme.muted
-                        font.pixelSize: Theme.caption
+                        spacing: 8
+                        Label {
+                            Layout.fillWidth: true
+                            text: cue.cueText
+                            textFormat: Text.PlainText
+                            wrapMode: Text.WordWrap
+                            color: Theme.ink
+                            font.pixelSize: Theme.body
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: text.length > 0
+                            text: cue.translation
+                            textFormat: Text.PlainText
+                            wrapMode: Text.WordWrap
+                            color: Theme.muted
+                            font.pixelSize: Theme.body
+                        }
                     }
                 }
             }
         }
-        Rectangle {
+        Label {
+            visible: pane.session.cueModel.count === 0
+            text: pane.searchOpen && search.text.length ? "No matching subtitles." : "Load a primary track from the Subtitles menu."
+            color: Theme.muted
+            font.pixelSize: Theme.body
+            wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            implicitHeight: 1
-            color: Theme.border
+            Layout.margins: Theme.space4
         }
-        ColumnLayout {
-            spacing: 2
-            Label {
-                text: (pane.session.study ? pane.session.study.cards.length : 0) + " flashcards saved"
-                color: Theme.muted
-                font.pixelSize: Theme.caption
-            }
+    }
+    Connections {
+        target: pane.session.cueModel
+        function onCountChanged() {
+            Qt.callLater(pane.followCurrentCue);
+        }
+    }
+    Connections {
+        target: pane.session
+        function onCueChanged() {
+            Qt.callLater(pane.followCurrentCue);
         }
     }
 }

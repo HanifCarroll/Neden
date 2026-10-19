@@ -4,9 +4,8 @@ import QtQuick.Controls
 Button {
     id: control
     property bool primary: false
-    property string glyph: ""
     implicitHeight: Theme.controlHeight
-    implicitWidth: label.implicitWidth + 28 + (glyph.length ? 24 : 0)
+    implicitWidth: label.implicitWidth + 28
     hoverEnabled: true
     opacity: enabled ? 1 : 0.45
     font.pixelSize: Theme.body
@@ -26,12 +25,6 @@ Button {
         Row {
             anchors.centerIn: parent
             spacing: 8
-            Glyph {
-                visible: control.glyph.length > 0
-                name: control.glyph
-                anchors.verticalCenter: parent.verticalCenter
-                strokeColor: label.color
-            }
             Text {
                 id: label
                 text: control.text

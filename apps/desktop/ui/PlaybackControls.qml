@@ -3,60 +3,86 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Neden
 
-ColumnLayout {
+Rectangle {
     id: controls
     required property LearningSession session
     readonly property bool editing: timeline.activeFocus || speed.activeFocus || volume.activeFocus
     signal fullscreen
-    spacing: 0
-    ControlSlider {
-        id: timeline
-        Layout.fillWidth: true
-        from: 0
-        to: Math.max(1, controls.session.duration)
-        value: controls.session.position
-        onMoved: controls.session.seek(value)
-        Accessible.name: "Playback position"
+    implicitHeight: 72
+    color: Theme.surface
+    Rectangle {
+        width: parent.width
+        height: 1
+        color: Theme.border
     }
     RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: Theme.space4
+        anchors.rightMargin: Theme.space4
         spacing: Theme.space2
-        ActionButton {
-            primary: true
-            text: controls.session.paused ? "Play" : "Pause"
-            glyph: controls.session.paused ? "play" : "pause"
+        IconButton {
+            objectName: "previousSubtitleButton"
+            name: "skip-back"
+            description: "Previous subtitle · pause"
+            enabled: controls.session.canPreviousSubtitle
+            onClicked: controls.session.previousSubtitle()
+        }
+        IconButton {
+            objectName: "playPauseButton"
+            name: controls.session.paused ? "play" : "pause"
+            description: controls.session.paused ? "Play" : "Pause"
+            implicitWidth: 42
             onClicked: controls.session.toggle()
         }
-        ActionButton {
-            flat: true
-            text: controls.session.replaying ? "Stop replay" : "Replay sentence"
+        IconButton {
+            objectName: "nextSubtitleButton"
+            name: "skip-forward"
+            description: "Next subtitle · pause"
+            enabled: controls.session.canNextSubtitle
+            onClicked: controls.session.nextSubtitle()
+        }
+        IconButton {
+            objectName: "replaySubtitleButton"
+            name: "rotate-ccw"
+            description: controls.session.replaying ? "Stop replay" : "Replay subtitle once · pause at end"
+            enabled: controls.session.activeCue >= 0 || controls.session.replaying
+            checked: controls.session.replaying
             onClicked: controls.session.replay()
         }
         Label {
-            text: Theme.clock(controls.session.position) + " / " + Theme.clock(controls.session.duration)
+            text: Theme.clock(controls.session.position)
             color: Theme.muted
             font.pixelSize: Theme.caption
+            Layout.preferredWidth: implicitWidth + Theme.space2
+            horizontalAlignment: Text.AlignHCenter
         }
-        Item {
+        ControlSlider {
+            id: timeline
+            objectName: "timelineSlider"
             Layout.fillWidth: true
+            Layout.minimumWidth: 80
+            from: 0
+            to: Math.max(1, controls.session.duration)
+            value: controls.session.position
+            onMoved: controls.session.seek(value)
+            Accessible.name: "Playback position"
         }
-        ChoiceBox {
-            id: speed
-            objectName: "speedChoice"
-            model: ["0.75×", "1.0×", "1.25×", "1.5×"]
-            currentIndex: 1
-            implicitWidth: 96
-            onActivated: controls.session.rate([0.75, 1, 1.25, 1.5][currentIndex])
-            Accessible.name: "Playback speed"
+        Label {
+            text: "−" + Theme.clock(Math.max(0, controls.session.duration - controls.session.position))
+            color: Theme.muted
+            font.pixelSize: Theme.caption
+            Layout.preferredWidth: implicitWidth + Theme.space2
+            horizontalAlignment: Text.AlignHCenter
         }
-        ActionButton {
-            flat: true
-            text: controls.session.volumeLevel === 0 ? "Unmute" : "Mute"
+        IconButton {
+            name: controls.session.volumeLevel === 0 ? "volume-x" : "volume-2"
+            description: controls.session.volumeLevel === 0 ? "Unmute" : "Mute"
             onClicked: controls.session.toggleMute()
         }
         ControlSlider {
             id: volume
             objectName: "volumeSlider"
-            Layout.preferredWidth: 100
+            Layout.preferredWidth: Math.min(140, controls.width * 0.1)
             from: 0
             to: 100
             stepSize: 1
@@ -66,9 +92,29 @@ ColumnLayout {
             ToolTip.visible: hovered || pressed
             ToolTip.text: Math.round(value) + "%"
         }
-        ActionButton {
-            flat: true
-            text: "Fullscreen"
+        Rectangle {
+            implicitWidth: 1
+            implicitHeight: 24
+            color: Theme.border
+            Layout.leftMargin: Theme.space2
+        }
+        ChoiceBox {
+            id: speed
+            objectName: "speedChoice"
+            model: ["0.75×", "1.0×", "1.25×", "1.5×"]
+            currentIndex: 1
+            implicitWidth: 78
+            background: Rectangle {
+                color: speed.hovered ? Theme.hover : "transparent"
+                radius: 6
+                border.color: speed.activeFocus ? Theme.accent : "transparent"
+            }
+            onActivated: controls.session.rate([0.75, 1, 1.25, 1.5][currentIndex])
+            Accessible.name: "Playback speed"
+        }
+        IconButton {
+            name: "maximize"
+            description: "Fullscreen"
             onClicked: controls.fullscreen()
         }
     }

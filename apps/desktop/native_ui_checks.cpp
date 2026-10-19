@@ -25,6 +25,7 @@
 
 #ifdef Q_OS_MACOS
 bool nativeMenusAreAvailable();
+bool clickNativeInspectorButton(QQuickWindow *window, unsigned index);
 #endif
 
 class NativeUiChecks : public QObject {
@@ -141,15 +142,18 @@ private slots:
         QFile secondaryFile(qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
         QVERIFY(secondaryFile.open(QIODevice::ReadOnly));
         const auto secondary = parseSrt(QString::fromUtf8(secondaryFile.readAll()));
-        double target = -1;
-        for (const auto &primaryCue : session->model.cues) {
-            if (primaryCue.startMs < 300000) continue;
-            for (const auto &secondaryCue : secondary) {
-                const auto start = qMax(primaryCue.startMs, secondaryCue.startMs);
-                const auto end = qMin(primaryCue.endMs, secondaryCue.endMs);
-                if (end - start > 500) { target = (start + 200) / 1000.0; break; }
+        double target = cueAt(session->model.cues, 195000) >= 0 && cueAt(secondary, 195000) >= 0 ? 195 : -1;
+        if (target < 0) {
+            for (const auto &primaryCue : session->model.cues) {
+                if (primaryCue.startMs < 190000) continue;
+
+                for (const auto &secondaryCue : secondary) {
+                    const auto start = qMax(primaryCue.startMs, secondaryCue.startMs);
+                    const auto end = qMin(primaryCue.endMs, secondaryCue.endMs);
+                    if (end - start > 500) { target = (start + 200) / 1000.0; break; }
+                }
+                if (target >= 0) break;
             }
-            if (target >= 0) break;
         }
         QVERIFY(target >= 0);
         session->seek(target);
@@ -178,6 +182,10 @@ private slots:
         // 3. Settings and the recent list use real QML controls and preserve the paused position.
 #ifdef Q_OS_MACOS
         QVERIFY(nativeMenusAreAvailable());
+        QVERIFY(clickNativeInspectorButton(window, 1));
+        QTRY_COMPARE(window->property("inspectorTab").toInt(), 1);
+        QVERIFY(clickNativeInspectorButton(window, 0));
+        QTRY_COMPARE(window->property("inspectorTab").toInt(), 0);
 #endif
         QTest::keyClick(window, Qt::Key_Comma, Qt::ControlModifier);
         auto *settings = window->findChild<QObject *>("settingsDialog");
@@ -189,8 +197,59 @@ private slots:
         }
         QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         QTRY_VERIFY(!settings->property("opened").toBool());
-        click("recentVideosButton");
+        QTest::keyClick(window, Qt::Key_L, Qt::ControlModifier);
         QVERIFY(window->property("showRecent").toBool());
+    }
+
+    void subtitleControlsPauseOnTheRealPlaybackAdapter() {
+        window->setProperty("showRecent", false);
+        session->seek(stoppedAt);
+        QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
+        const int initial = session->activeCue();
+        QVERIFY(initial > 0 && initial + 1 < session->model.cues.size());
+        session->setPaused(false);
+        click("previousSubtitleButton");
+        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial - 1].startMs / 1000.0) < 0.1);
+        QVERIFY(session->paused());
+        click("nextSubtitleButton");
+        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial].startMs / 1000.0) < 0.1);
+        QVERIFY(session->paused());
+        click("replaySubtitleButton");
+        QVERIFY(session->replaying());
+        QVERIFY(!session->paused());
+        const auto cueDuration = session->model.cues[initial].endMs - session->model.cues[initial].startMs;
+        QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), int(cueDuration) + 10000);
+        QVERIFY(session->paused());
+        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial].endMs / 1000.0) < 0.15);
+        session->seek(stoppedAt);
+        QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
+        session->setPaused(true);
+        session->checkpoint();
+    }
+
+    void fullscreenAndCompactWindowKeepControlsAvailable() {
+        window->setProperty("showRecent", false);
+        if (!fullscreen->nativeMode()) {
+            fullscreen->toggle();
+            QTRY_VERIFY(fullscreen->active());
+            QTest::qWait(200);
+            QVERIFY(visualItem(window->contentItem(), "volumeSlider")->isVisible());
+            fullscreen->toggle();
+            QTRY_VERIFY(!fullscreen->active());
+        }
+        const auto originalSize = window->size();
+        window->resize(900, 540);
+        QTest::qWait(200);
+        for (const auto &name : {"previousSubtitleButton", "nextSubtitleButton", "replaySubtitleButton", "volumeSlider", "speedChoice"}) {
+            auto *item = visualItem(window->contentItem(), name);
+            QVERIFY(item && item->isVisible());
+            const auto bounds = item->mapRectToScene(item->boundingRect());
+            QVERIFY(bounds.left() >= 0 && bounds.right() <= window->width());
+            QVERIFY(bounds.top() >= 0 && bounds.bottom() <= window->height());
+        }
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/compact.png"));
+        window->resize(originalSize);
     }
 
     void packagedHttpsBackendConnectsWithoutCredentials() {
@@ -226,7 +285,7 @@ private slots:
         QVERIFY(option->property("highlighted").toBool());
         auto *label = option->property("contentItem").value<QQuickItem *>();
         QVERIFY(label);
-        QCOMPARE(label->property("color").value<QColor>(), QColor("#101416"));
+        QCOMPARE(label->property("color").value<QColor>(), QColor("#10151b"));
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/highlight.png"));
         auto *speed = visualItem(window->contentItem(), "speedChoice");
@@ -277,12 +336,11 @@ private slots:
         QTRY_COMPARE_WITH_TIMEOUT(study->state(), QString("complete"), 5000);
         QCOMPARE(requests, 2);
         QCOMPARE(study->answer(), QString("### Natural meaning\nLight"));
-        auto *drawer = window->findChild<QObject *>("studyDrawer");
-        QVERIFY(drawer);
-        QTRY_VERIFY(drawer->property("opened").toBool());
+        QCOMPARE(window->property("inspectorTab").toInt(), 1);
+        auto *meaning = window->findChild<QObject *>("meaningLoader");
+        QVERIFY(meaning && meaning->property("active").toBool());
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/explanation.png"));
-        QVERIFY(QMetaObject::invokeMethod(drawer, "close"));
-        QTRY_VERIFY(!drawer->property("opened").toBool());
+        click("transcriptTab");
         QTRY_VERIFY(session->selection().isEmpty());
     }
 
@@ -303,7 +361,7 @@ private slots:
         QVERIFY(!visualItem(window->contentItem(), "secondarySubtitleText")->isVisible());
 
         // 2. Remove the playing video, close, and reopen without silently recreating its entry.
-        click("recentVideosButton");
+        QTest::keyClick(window, Qt::Key_L, Qt::ControlModifier);
         click("removeRecentButton");
         QCOMPARE(recent->count(), 0);
         session->checkpoint();

@@ -14,6 +14,7 @@ void FullscreenController::attach(QQuickWindow *target) {
         }
     });
 }
+int FullscreenController::safeTopInset() const { return 0; }
 void FullscreenController::bindZoomButton() {}
 void FullscreenController::setNativeMode(bool) {
     // Other platforms use the window manager's fullscreen mechanism without macOS Spaces.
