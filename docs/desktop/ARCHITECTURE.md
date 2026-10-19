@@ -11,4 +11,6 @@
 
 The dictionary WebView exists only while open. Settings and study panels are constructed on first use, then retain drafts/state. There is no sample-media autoload, comparison driver, or periodic profiling timer.
 
-Keep `io.github.hanifcarroll.neden.qt-lab` as the bundle/signing identifier and `Neden Qt Lab` as the internal application name until an explicit credential/data migration is implemented. The visible product name is Neden. The old internal names preserve Keychain access and the current application-data directory.
+`RecentVideos` is a bounded local JSON history model with atomic writes. It stores only video paths and precise playback positions/durations. `LearningSession` checkpoints on video switches, normal quit/close, and every five seconds, and ignores a removed active video until explicitly opened again. Subtitle choices remain session-only. Resume seeks use the full stored precision and reject another video's stale load callback. Sentence replay preserves the original viewing position for history.
+
+The app/executable is named **Neden**. Retain `io.github.hanifcarroll.neden.qt-lab` as the bundle/signing identifier. Existing study data and history use the established `Neden Qt Lab` application-support directory explicitly; this legacy directory name does not appear in the product UI. `DesktopApplication` handles Finder Open With events without taking over default video associations.

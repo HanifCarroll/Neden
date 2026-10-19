@@ -19,6 +19,7 @@
     "test:desktop": "sh scripts/desktop.sh test",
     "test:desktop:core": "sh scripts/desktop.sh core-test",
     "lint:desktop": "sh scripts/desktop.sh lint",
-    "check:layout": "python3 scripts/check_layout.py"
+    "check:layout": "python3 scripts/check_layout.py",
+    "install:desktop": "python3 scripts/install_desktop.py"
   }
 }

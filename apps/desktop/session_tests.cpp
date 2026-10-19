@@ -7,9 +7,11 @@ class FakePlayback : public PlaybackEngine {
 public:
     FakePlayback() { durationSeconds = 24; }
     double lastSeek = -1;
+    bool completeImmediately = true;
+    bool applySeekImmediately = true;
     void advance(double value) { positionSeconds = value; emit positionChanged(); }
-    void open(const QString &, bool) override { advance(0); emit loaded(); }
-    void seek(double value) override { lastSeek = value; advance(value); }
+    void open(const QString &path, bool) override { advance(0); if (completeImmediately) emit loaded(path); }
+    void seek(double value) override { lastSeek = value; if (applySeekImmediately) advance(value); }
     void setPaused(bool value) override { isPaused = value; emit pausedChanged(); }
     void rate(double) override {}
     void volume(double) override {}
@@ -18,6 +20,114 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void dualSubtitlesAreSessionOnlyWhileVideoPositionsSurviveRestart() {
+        QTemporaryDir directory;
+        const auto videoPath = directory.filePath("Leyla.webm");
+        const auto otherPath = directory.filePath("Other.webm");
+        for (const auto &path : {videoPath, otherPath}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+        const auto source = directory.filePath("source.tr.srt");
+        const auto translation = directory.filePath("translation.en.srt");
+        QFile sourceFile(source);
+        QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+        sourceFile.write(QString("1\n00:00:00,000 --> 00:00:24,000\nBir ışık gördüm.\n").toUtf8());
+        sourceFile.close();
+        QFile translationFile(translation);
+        QVERIFY(translationFile.open(QIODevice::WriteOnly));
+        translationFile.write("1\n00:00:00,000 --> 00:00:24,000\nI saw a light.\n");
+        translationFile.close();
+
+        // 1. Closing and switching videos preserve independent resume positions.
+        {
+            RecentVideos recent(directory.path());
+            FakePlayback playback;
+            LearningSession session(&playback);
+            session.setRecentVideos(&recent);
+            session.openVideo(QUrl::fromLocalFile(videoPath));
+            session.openSubtitles(QUrl::fromLocalFile(source));
+            session.openTranslation(QUrl::fromLocalFile(translation));
+            playback.advance(12.345678);
+            QCOMPARE(session.subtitle(), QString("Bir ışık gördüm."));
+            QCOMPARE(session.translation(), QString("I saw a light."));
+            session.openVideo(QUrl::fromLocalFile(otherPath));
+            playback.advance(6.125);
+        }
+
+        // 2. A new app session restores position without retaining subtitle choices.
+        RecentVideos recent(directory.path());
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setRecentVideos(&recent);
+        session.openVideo(QUrl::fromLocalFile(videoPath));
+        QCOMPARE(playback.lastSeek, 12.345678);
+        QVERIFY(session.subtitle().isEmpty());
+        QVERIFY(session.translation().isEmpty());
+        QVERIFY(!playback.paused());
+        session.openVideo(QUrl::fromLocalFile(otherPath));
+        QCOMPARE(playback.lastSeek, 6.125);
+        QVERIFY(session.subtitle().isEmpty());
+        QVERIFY(session.translation().isEmpty());
+    }
+    void removingCurrentVideoDoesNotReinsertItOnClose() {
+        QTemporaryDir directory;
+        QFile file(directory.filePath("video.webm"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+        RecentVideos recent(directory.path());
+        {
+            FakePlayback playback;
+            LearningSession session(&playback);
+            session.setRecentVideos(&recent);
+            session.openVideo(QUrl::fromLocalFile(file.fileName()));
+            recent.remove(QUrl::fromLocalFile(file.fileName()));
+            playback.advance(10);
+            session.checkpoint();
+        }
+        QCOMPARE(recent.count(), 0);
+        QVERIFY(file.exists());
+    }
+    void lateLoadCannotApplyAnotherVideosResumeState() {
+        QTemporaryDir directory;
+        const auto first = directory.filePath("first.webm");
+        const auto second = directory.filePath("second.webm");
+        for (const auto &path : {first, second}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+        RecentVideos recent(directory.path());
+        QVERIFY(recent.remember({first, 12.5, 24}, true));
+        FakePlayback playback;
+        playback.completeImmediately = false;
+        LearningSession session(&playback);
+        session.setRecentVideos(&recent);
+        session.openVideo(QUrl::fromLocalFile(first));
+        session.openVideo(QUrl::fromLocalFile(second));
+        emit playback.loaded(first);
+        QCOMPARE(playback.lastSeek, -1.0);
+        emit playback.loaded(second);
+        QCOMPARE(playback.lastSeek, -1.0);
+        QCOMPARE(recent.find(first)->position, 12.5);
+    }
+    void closeDuringResumeDoesNotReplaceSavedPositionWithZero() {
+        QTemporaryDir directory;
+        QFile file(directory.filePath("video.webm"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+        RecentVideos recent(directory.path());
+        QVERIFY(recent.remember({file.fileName(), 12.345, 24}, true));
+        FakePlayback playback;
+        playback.applySeekImmediately = false;
+        LearningSession session(&playback);
+        session.setRecentVideos(&recent);
+        session.openVideo(QUrl::fromLocalFile(file.fileName()));
+        session.checkpoint();
+        QCOMPARE(recent.find(file.fileName())->position, 12.345);
+        playback.advance(12.378);
+        session.checkpoint();
+        QCOMPARE(recent.find(file.fileName())->position, 12.378);
+    }
     void independentTranslationTimingAndMediaReset() {
         FakePlayback engine;
         LearningSession session(&engine);
@@ -33,7 +143,10 @@ private slots:
         QCOMPARE(session.translation(), QString("I saw a light."));
         engine.advance(2.5);
         QVERIFY(session.translation().isEmpty());
-        session.openVideo(QUrl::fromLocalFile(directory.filePath("next.mp4")));
+        QFile video(directory.filePath("next.mp4"));
+        QVERIFY(video.open(QIODevice::WriteOnly));
+        video.close();
+        session.openVideo(QUrl::fromLocalFile(video.fileName()));
         QVERIFY(session.translation().isEmpty());
     }
     void localSubtitleDecodingRejectsInvalidUtf8WithoutReplacingTrack() {

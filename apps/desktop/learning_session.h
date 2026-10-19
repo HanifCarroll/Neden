@@ -1,6 +1,8 @@
 #pragma once
 #include "cues.h"
 #include "study_tools.h"
+#include "recent_videos.h"
+#include <QTimer>
 #include <QUrl>
 #include "playback_engine.h"
 
@@ -15,12 +17,23 @@ class LearningSession : public QObject {
     Q_PROPERTY(QString translation READ translation NOTIFY cueChanged)
     Q_PROPERTY(QString selection READ selection NOTIFY selectionChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
+    Q_PROPERTY(bool hasMedia READ hasMedia NOTIFY mediaChanged)
+    Q_PROPERTY(QString mediaTitle READ mediaTitle NOTIFY mediaChanged)
+    Q_PROPERTY(QString sourceSubtitleName READ sourceSubtitleName NOTIFY tracksChanged)
+    Q_PROPERTY(QString translationSubtitleName READ translationSubtitleName NOTIFY tracksChanged)
     Q_PROPERTY(bool replaying READ replaying NOTIFY replayingChanged)
     Q_PROPERTY(int activeCue READ activeCue NOTIFY cueChanged)
 public:
     Q_PROPERTY(StudyTools *study READ study CONSTANT)
     StudyTools *study() const { return studyTools; }
     void setStudyTools(StudyTools *tools);
+    void setRecentVideos(RecentVideos *videos);
+    ~LearningSession() override;
+    bool hasMedia() const { return !currentMediaPath.isEmpty(); }
+    QString mediaTitle() const;
+    QString sourceSubtitleName() const;
+    QString translationSubtitleName() const;
+    Q_INVOKABLE void checkpoint();
     explicit LearningSession(PlaybackEngine *engine, QObject *parent = nullptr);
     Q_PROPERTY(CueModel *cueModel READ cueModel CONSTANT)
     CueModel *cueModel() { return &model; }
@@ -58,10 +71,21 @@ signals:
     void selectionChanged();
     void statusChanged();
     void replayingChanged();
+    void mediaChanged();
+    void tracksChanged();
 private:
     void syncPosition();
     void resetInteraction();
+    void finishOpening(const QString &path);
     StudyTools *studyTools = nullptr;
+    RecentVideos *recentVideos = nullptr;
+    QTimer checkpointTimer;
+    QString currentMediaPath;
+    QString sourceSubtitlePath;
+    QString translationSubtitlePath;
+    double restorePosition = -1;
+    bool mediaReady = false;
+    bool rememberCurrent = true;
     QVector<Cue> translationCues;
     int translationCue = -1;
     PlaybackEngine *engine;

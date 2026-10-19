@@ -6,6 +6,12 @@
 
 The IINA runtime and Keychain rules below apply to the plugin. Preserve the desktop app's existing native Keychain adapter and signing identity; do not introduce plaintext credential storage. The approved Qt application supersedes the earlier restriction on future desktop packages.
 
+## Updating the installed desktop app
+
+After desktop source changes, run `bun run install:desktop` from the repository root. This is the normal delivery path for the locally installed `/Applications/Neden.app`, not just a source build. It runs desktop tests and QML lint, assembles a self-contained bundle, preserves the existing signing/Keychain identity, quits the installed app gracefully to save playback position, replaces it with rollback on failure, and launches the installed copy. The Codex Run action uses the same command. Read `docs/desktop/INSTALLATION.md` for verification and isolated UI checks.
+
+Keep the visible name and executable **Neden**, bundle identifier `io.github.hanifcarroll.neden.qt-lab`, and existing native Keychain adapter. Do not use ad hoc signing for the main app or change the user's IINA installation. Never use force-kill for routine updates; allow normal shutdown to save recent-video positions. Recent history stores video paths and positions only. Subtitle choices and language presets must not be persisted as part of history.
+
 ## Code readability
 
 - All generated code should focus on readability as its highest value. Do not be clever or terse.

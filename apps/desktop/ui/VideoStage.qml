@@ -77,6 +77,7 @@ Rectangle {
             spacing: 7
             TextEdit {
                 id: subtitle
+                objectName: "primarySubtitleText"
                 Layout.fillWidth: true
                 text: stage.session.subtitle || "Open a video to begin"
                 textFormat: TextEdit.PlainText
@@ -95,6 +96,7 @@ Rectangle {
             }
             Label {
                 Layout.fillWidth: true
+                objectName: "secondarySubtitleText"
                 text: stage.session.translation
                 textFormat: Text.PlainText
                 color: Theme.muted

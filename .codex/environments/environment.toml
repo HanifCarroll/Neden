@@ -5,9 +5,9 @@ name = "Neden"
 script = ""
 
 [[actions]]
-name = "Run desktop"
+name = "Update installed Neden"
 icon = "run"
-command = "bun run run:desktop"
+command = "bun run install:desktop"
 
 [[actions]]
 name = "Check IINA plugin"

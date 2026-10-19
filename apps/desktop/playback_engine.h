@@ -9,6 +9,7 @@ class PlaybackEngine : public QObject {
 public:
     using QObject::QObject;
     double position() const { return positionSeconds; }
+    virtual double snapshotPosition() const { return positionSeconds; }
     double duration() const { return durationSeconds; }
     bool paused() const { return isPaused; }
     virtual void open(const QString &path, bool loop) = 0;
@@ -20,7 +21,7 @@ signals:
     void positionChanged();
     void durationChanged();
     void pausedChanged();
-    void loaded();
+    void loaded(QString path);
     void failed();
 protected:
     double positionSeconds = 0;

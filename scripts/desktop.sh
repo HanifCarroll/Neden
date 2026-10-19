@@ -31,9 +31,9 @@ cmake --build "$build_directory" --parallel "${NEDEN_BUILD_JOBS:-4}"
 case "$command_name" in
     run)
         if [ "$(uname -s)" = Darwin ]; then
-            exec "$build_directory/NedenQt.app/Contents/MacOS/NedenQt"
+            exec "$build_directory/Neden.app/Contents/MacOS/Neden"
         else
-            exec "$build_directory/NedenQt"
+            exec "$build_directory/Neden"
         fi
         ;;
     test|core-test) QT_QPA_PLATFORM=offscreen ctest --test-dir "$build_directory" --output-on-failure ;;

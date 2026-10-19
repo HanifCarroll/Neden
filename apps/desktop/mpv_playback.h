@@ -16,6 +16,7 @@ public:
     mpv_handle *handle() const { return mpv; }
     void open(const QString &path, bool loop) override;
     void seek(double seconds) override;
+    double snapshotPosition() const override;
     void setPaused(bool value) override;
     void rate(double value) override;
     void volume(double value) override;
@@ -35,6 +36,7 @@ private:
     QSize sourceSize;
     QJsonObject sourceParameters;
     VideoRenderLifetime renderLifetime;
+    QString requestedPath;
     QString pendingPath;
     bool pendingLoop = false;
     bool outputRequested = false;

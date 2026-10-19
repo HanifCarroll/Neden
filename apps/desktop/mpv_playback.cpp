@@ -83,6 +83,7 @@ void MpvPlayback::open(const QString &path, bool loop) {
     emit positionChanged();
     emit durationChanged();
     setPaused(true);
+    requestedPath = path;
     pendingPath = path;
     pendingLoop = loop;
     outputRequested = true;
@@ -115,7 +116,12 @@ void MpvPlayback::loadPendingMedia() {
     mpv_set_property_string(mpv, "loop-file", pendingLoop ? "inf" : "no");
     command({"loadfile", path});
 }
-void MpvPlayback::seek(double seconds) { command({"seek", QString::number(seconds), "absolute+exact"}); }
+void MpvPlayback::seek(double seconds) { command({"seek", QString::number(seconds, 'g', 17), "absolute+exact"}); }
+double MpvPlayback::snapshotPosition() const {
+    double seconds = positionSeconds;
+    mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &seconds);
+    return seconds;
+}
 void MpvPlayback::setPaused(bool value) {
     int flag = value;
     if (mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &flag) < 0) {
@@ -135,7 +141,16 @@ void MpvPlayback::drainEvents() {
     while (auto *event = mpv_wait_event(mpv, 0)) {
         if (event->event_id == MPV_EVENT_NONE) break;
 
-        if (event->event_id == MPV_EVENT_FILE_LOADED) emit loaded();
+        if (event->event_id == MPV_EVENT_FILE_LOADED) {
+            char *path = mpv_get_property_string(mpv, "path");
+            const auto loadedPath = QString::fromUtf8(path ? path : "");
+            mpv_free(path);
+            if (loadedPath == requestedPath) {
+                mpv_get_property(mpv, "duration", MPV_FORMAT_DOUBLE, &durationSeconds);
+                emit durationChanged();
+                emit loaded(loadedPath);
+            }
+        }
         if (event->event_id == MPV_EVENT_END_FILE && static_cast<mpv_event_end_file *>(event->data)->error < 0) emit failed();
         if (event->event_id != MPV_EVENT_PROPERTY_CHANGE) continue;
 

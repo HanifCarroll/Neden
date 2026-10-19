@@ -4,7 +4,7 @@ Neden's application source is MIT licensed. The linked libraries retain their ow
 
 ## Qt and fonts
 
-The Mac build uses dynamically linked Qt 6.12 Core, Gui, Network, OpenGL, Qml, Quick, Quick Controls 2, and WebView under their LGPLv3 option, or a separately obtained commercial Qt license. Qt Test is development-only. No GPL-only Qt module is intentionally selected. macOS Qt WebView uses Apple's WKWebView rather than shipping Chromium. Linux's WebView backend can involve Qt WebEngine and its additional third-party obligations.
+The Mac build uses dynamically linked Qt 6.12 Core, Gui, Network, OpenGL, Qml, Quick, Quick Controls 2, and WebView under their LGPLv3 option, or a separately obtained commercial Qt license. Qt Test is development-only. No GPL-only Qt module is intentionally selected. macOS Qt WebView uses Apple's WKWebView rather than shipping Chromium. The installer stages Qt's native WebView plugin and removes the optional `depends QtWebEngine auto` line from the bundled `QtWebView/qmldir`; this metadata-only adjustment is reproducible in `scripts/install_desktop.py`. Linux's WebView backend can involve Qt WebEngine and its additional third-party obligations.
 
 Inter 4.1 Regular, Medium, and SemiBold are from [Inter's release](https://github.com/rsms/inter/releases/tag/v4.1), under SIL OFL 1.1. Complete notices are preserved at `shared/fonts/LICENSE.txt` and included as application resources. Original vector control marks are drawn locally. System fallback supplies scripts outside Inter's coverage.
 
@@ -24,7 +24,7 @@ The Linux recipe pins FFmpeg 8.0.1 and mpv 0.41.0, disabling GPL/nonfree compone
 
 Package complete dependency notices, corresponding LGPL library sources with exact patches and build instructions, and the information needed to replace/relink modified libraries, including signing/install steps. App terms must preserve the debugging/reverse-engineering freedoms required by those licenses. This does not by itself require publishing Neden's application source. Final packaging, store terms, and applicable codec patent questions depend on the distribution route.
 
-Developer builds currently reference local Qt and playback libraries. Full notices/source packages and replacement instructions have not been assembled into an installer, so these builds are **not distribution-ready**. Required notices and license checks are part of the necessary project files.
+The local installation command embeds Qt, QML plugins, and reviewed playback libraries and checks for external library paths. Full notices/source packages and library replacement instructions have not been assembled for public distribution, so the local bundle is **not distribution-ready**. Required notices and license checks are part of the necessary project files.
 
 Primary references: [Qt LGPL obligations](https://www.qt.io/development/open-source-lgpl-obligations), [Qt licensing](https://doc.qt.io/qt-6/licensing.html), [mpv 0.36.0 copyright](https://github.com/mpv-player/mpv/blob/v0.36.0/Copyright), and [FFmpeg legal checklist](https://ffmpeg.org/legal.html).
 

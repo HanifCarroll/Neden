@@ -1,5 +1,7 @@
 #include "learning_session.h"
 #include <QFile>
+#include <QFileInfo>
+#include <cmath>
 #include <stdexcept>
 #include <QStringDecoder>
 
@@ -8,10 +10,10 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent) : QO
     connect(engine, &PlaybackEngine::durationChanged, this, &LearningSession::durationChanged);
     connect(engine, &PlaybackEngine::pausedChanged, this, &LearningSession::pausedChanged);
     connect(engine, &PlaybackEngine::positionChanged, this, &LearningSession::syncPosition);
-    connect(engine, &PlaybackEngine::loaded, this, [this] {
-        statusText = "Ready to explore";
-        emit statusChanged();
-    });
+    connect(engine, &PlaybackEngine::loaded, this, &LearningSession::finishOpening);
+    checkpointTimer.setInterval(5000);
+    connect(&checkpointTimer, &QTimer::timeout, this, &LearningSession::checkpoint);
+    checkpointTimer.start();
     connect(engine, &PlaybackEngine::failed, this, [this] {
         statusText = "Cannot play this file.";
         emit statusChanged();
@@ -23,7 +25,63 @@ void LearningSession::setStudyTools(StudyTools *tools) {
         stopReplay();
         closeDefinition();
         replaceCues(cues);
+        sourceSubtitlePath.clear();
+        emit tracksChanged();
+        checkpoint();
     });
+}
+
+LearningSession::~LearningSession() { checkpoint(); }
+
+void LearningSession::setRecentVideos(RecentVideos *videos) {
+    recentVideos = videos;
+    connect(videos, &RecentVideos::removed, this, [this](const QString &path) {
+        if (currentMediaPath == path) rememberCurrent = false;
+    });
+}
+
+QString LearningSession::mediaTitle() const { return QFileInfo(currentMediaPath).completeBaseName(); }
+QString LearningSession::sourceSubtitleName() const { return QFileInfo(sourceSubtitlePath).fileName(); }
+QString LearningSession::translationSubtitleName() const { return QFileInfo(translationSubtitlePath).fileName(); }
+
+void LearningSession::checkpoint() {
+    if (!recentVideos || !mediaReady || !rememberCurrent) return;
+
+    // 1. Save the viewing position rather than a temporary sentence replay position.
+    const double seconds = replayActive ? returnPosition
+        : restorePosition >= 0 ? restorePosition : engine->snapshotPosition();
+    if (!std::isfinite(seconds) || seconds < 0) return;
+
+    const RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration())};
+    const auto previous = recentVideos->find(currentMediaPath);
+    if (previous && previous->position == video.position && previous->duration == video.duration) return;
+
+    // 2. Commit only changed positions to local history.
+    recentVideos->remember(video);
+}
+
+void LearningSession::finishOpening(const QString &path) {
+    if (path != currentMediaPath) return;
+
+    // 1. Restore only playback position; subtitle choices remain session-only.
+    const auto saved = recentVideos ? recentVideos->find(path) : std::nullopt;
+    mediaReady = true;
+    restorePosition = saved ? saved->position : -1;
+    if (restorePosition > 0) {
+        if (duration() > 0) restorePosition = qMin(restorePosition, duration());
+        engine->seek(restorePosition);
+    } else {
+        restorePosition = -1;
+    }
+    setPaused(false);
+    statusText = "Ready to explore";
+    emit statusChanged();
+
+    // 2. Promote only successful opens, retaining the target until playback reaches it.
+    if (recentVideos && rememberCurrent) {
+        recentVideos->remember({currentMediaPath,
+            restorePosition >= 0 ? restorePosition : position(), qMax(0.0, duration())}, true);
+    }
 }
 
 void LearningSession::explainSelection(bool translate) {
@@ -43,8 +101,11 @@ void LearningSession::openTranslation(const QUrl &url) {
         translationCues = parseSrt(text);
         translationCue = cueAt(translationCues, qRound64(position() * 1000));
         if (studyTools) studyTools->invalidateContext();
-        statusText = "Translation subtitles loaded";
+        translationSubtitlePath = QFileInfo(file).absoluteFilePath();
+        statusText = "Secondary subtitles loaded";
         emit cueChanged();
+        emit tracksChanged();
+        checkpoint();
     } catch (const std::exception &error) { statusText = QString::fromUtf8(error.what()); }
     emit statusChanged();
 }
@@ -67,25 +128,37 @@ void LearningSession::resetInteraction() {
 }
 void LearningSession::openVideo(const QUrl &url) {
 
-    // 1. Accept only local media owned by this session.
-    if (!url.isLocalFile()) {
-        statusText = "Choose a local video file.";
+    // 1. Validate the local media before replacing the current playable session.
+    const QFileInfo file(url.toLocalFile());
+    if (!url.isLocalFile() || !file.isFile() || !file.isReadable()) {
+        statusText = "This video is unavailable. Choose an existing local video file.";
         emit statusChanged();
         return;
     }
 
-    // 2. Clear the previous interaction before opening the new media.
+    // 2. Checkpoint the old video before clearing its interaction and subtitle state.
+    checkpoint();
+    mediaReady = false;
+    restorePosition = -1;
+    rememberCurrent = true;
     resetInteraction();
     setPaused(true);
+    currentMediaPath = file.absoluteFilePath();
     currentCue = -1;
     model.replace({});
     translationCues.clear();
     translationCue = -1;
+    sourceSubtitlePath.clear();
+    translationSubtitlePath.clear();
     statusText = "Loading local video…";
+    emit mediaChanged();
+    emit tracksChanged();
     emit statusChanged();
-    engine->open(url.toLocalFile(), false);
-    if (studyTools) studyTools->setMedia(url.toLocalFile());
     emit cueChanged();
+
+    // 3. Bind study requests to this media before the adapter can finish loading it.
+    if (studyTools) studyTools->setMedia(currentMediaPath);
+    engine->open(currentMediaPath, false);
 }
 void LearningSession::openSubtitles(const QUrl &url) {
 
@@ -110,7 +183,10 @@ void LearningSession::openSubtitles(const QUrl &url) {
         closeDefinition();
         currentCue = -1;
         replaceCues(next);
-        statusText = "Loaded external SRT · plain text";
+        sourceSubtitlePath = QFileInfo(file).absoluteFilePath();
+        statusText = "Primary subtitles loaded";
+        emit tracksChanged();
+        checkpoint();
     } catch (const std::exception &error) {
         statusText = QString::fromUtf8(error.what());
     }
@@ -127,6 +203,7 @@ void LearningSession::toggle() {
 }
 void LearningSession::seek(double seconds) {
     resetInteraction();
+    restorePosition = -1;
     engine->seek(qBound(0.0, seconds, duration()));
 }
 void LearningSession::volume(double level) {
@@ -209,6 +286,7 @@ void LearningSession::saveCard() {
     }
 }
 void LearningSession::syncPosition() {
+    if (restorePosition >= 0 && std::abs(position() - restorePosition) < 1) restorePosition = -1;
 
     // 1. Notify subtitle views only when their cue actually changes.
     const int translated = cueAt(translationCues, qRound64(position() * 1000));
