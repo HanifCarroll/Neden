@@ -38,7 +38,7 @@ private slots:
         session.volume(std::numeric_limits<double>::quiet_NaN());
         QCOMPARE(session.volumeLevel(), 0);
     }
-    void dualSubtitlesAreSessionOnlyWhileVideoPositionsSurviveRestart() {
+    void dualSubtitleRolesAndVideoPositionsSurviveRestart() {
         QTemporaryDir directory;
         const auto videoPath = directory.filePath("Leyla.webm");
         const auto otherPath = directory.filePath("Other.webm");
@@ -70,23 +70,72 @@ private slots:
             QCOMPARE(session.subtitle(), QString("Bir ışık gördüm."));
             QCOMPARE(session.translation(), QString("I saw a light."));
             session.openVideo(QUrl::fromLocalFile(otherPath));
+            session.openSubtitles(QUrl::fromLocalFile(translation));
+            session.openTranslation(QUrl::fromLocalFile(source));
             playback.advance(6.125);
         }
 
-        // 2. A new app session restores position without retaining subtitle choices.
+        // 2. Each video restores its own chosen tracks and roles, without language presets.
         RecentVideos recent(directory.path());
         FakePlayback playback;
         LearningSession session(&playback);
         session.setRecentVideos(&recent);
         session.openVideo(QUrl::fromLocalFile(videoPath));
         QCOMPARE(playback.lastSeek, 12.345678);
-        QVERIFY(session.subtitle().isEmpty());
-        QVERIFY(session.translation().isEmpty());
+        QCOMPARE(session.subtitle(), QString("Bir ışık gördüm."));
+        QCOMPARE(session.translation(), QString("I saw a light."));
+        QCOMPARE(session.sourceSubtitleName(), QString("source.tr.srt"));
+        QCOMPARE(session.translationSubtitleName(), QString("translation.en.srt"));
         QVERIFY(!playback.paused());
         session.openVideo(QUrl::fromLocalFile(otherPath));
         QCOMPARE(playback.lastSeek, 6.125);
-        QVERIFY(session.subtitle().isEmpty());
-        QVERIFY(session.translation().isEmpty());
+        QCOMPARE(session.subtitle(), QString("I saw a light."));
+        QCOMPARE(session.translation(), QString("Bir ışık gördüm."));
+    }
+    void missingTrackIsRetainedWhileTheOtherTrackAndPositionRestore() {
+        QTemporaryDir directory;
+        const auto video = directory.filePath("video.webm");
+        const auto primary = directory.filePath("source.srt");
+        const auto secondary = directory.filePath("translation.srt");
+        const auto replacement = directory.filePath("replacement.srt");
+        for (const auto &path : {video, secondary, replacement}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("1\n00:00:00,000 --> 00:00:24,000\nI saw a light.\n");
+        }
+        RecentVideos recent(directory.path());
+        QVERIFY(recent.remember({video, 12.25, 24, primary, secondary}, true));
+        {
+            FakePlayback playback;
+            LearningSession session(&playback);
+            session.setRecentVideos(&recent);
+            session.openVideo(QUrl::fromLocalFile(video));
+            QCOMPARE(playback.lastSeek, 12.25);
+            QVERIFY(!playback.paused());
+            QVERIFY(session.subtitle().isEmpty());
+            QCOMPARE(session.translation(), QString("I saw a light."));
+            QVERIFY(session.status().contains("saved primary"));
+            session.checkpoint();
+            QCOMPARE(recent.find(video)->primarySubtitlePath, primary);
+        }
+
+        // A reconnected file restores without choosing it again.
+        QFile primaryFile(primary);
+        QVERIFY(primaryFile.open(QIODevice::WriteOnly));
+        primaryFile.write(QString("1\n00:00:00,000 --> 00:00:24,000\nBir ışık gördüm.\n").toUtf8());
+        primaryFile.close();
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setRecentVideos(&recent);
+        session.openVideo(QUrl::fromLocalFile(video));
+        QCOMPARE(session.subtitle(), QString("Bir ışık gördüm."));
+
+        // Changing a track at an unchanged position must still save its replacement.
+        session.openSubtitles(QUrl::fromLocalFile(replacement));
+        RecentVideos restored(directory.path());
+        QCOMPARE(restored.find(video)->primarySubtitlePath, replacement);
+        QCOMPARE(restored.find(video)->secondarySubtitlePath, secondary);
+        QCOMPARE(restored.find(video)->position, 12.25);
     }
     void finderUnicodePathResumesTheExistingMacVideo() {
 #ifndef Q_OS_MACOS

@@ -36,7 +36,7 @@ public:
     QVariantList cards() const { return savedCards.toVariantList(); }
     QVariantList subtitleResults() const { return results; }
     bool automaticSubtitles() const { return automatic; }
-    void setMedia(const QString &path);
+    void setMedia(const QString &path, bool searchSubtitles = true);
     void setSubtitleLoginReader(std::function<QByteArray()> reader) { subtitleLoginReader = std::move(reader); }
     void setCredentialAuthorizer(std::function<QString(const QString &)> authorizer) { credentialAuthorizer = std::move(authorizer); }
     Q_INVOKABLE void connectCredential(bool subtitles = false);
@@ -57,7 +57,7 @@ public:
     static QUrl buildDictionaryUrl(const QString &pattern, const QString &term);
 signals:
     void changed();
-    void subtitlesReady(QVector<Cue> cues);
+    void subtitlesReady(QVector<Cue> cues, QString savedPath);
 private:
     bool persist();
     void consumeEvents();

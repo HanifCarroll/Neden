@@ -438,10 +438,12 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(session->position() - stoppedAt) < 1, 10000);
         session->setPaused(true);
-        QVERIFY(session->subtitle().isEmpty());
-        QVERIFY(session->translation().isEmpty());
-        QVERIFY(!visualItem(window->contentItem(), "primarySubtitleText")->isVisible());
-        QVERIFY(!visualItem(window->contentItem(), "secondarySubtitleText")->isVisible());
+        QTRY_VERIFY(!session->subtitle().isEmpty());
+        QTRY_VERIFY(!session->translation().isEmpty());
+        QCOMPARE(session->sourceSubtitleName(), QFileInfo(qEnvironmentVariable("NEDEN_CHECK_PRIMARY")).fileName());
+        QCOMPARE(session->translationSubtitleName(), QFileInfo(qEnvironmentVariable("NEDEN_CHECK_SECONDARY")).fileName());
+        QVERIFY(visualItem(window->contentItem(), "primarySubtitleText")->isVisible());
+        QVERIFY(visualItem(window->contentItem(), "secondarySubtitleText")->isVisible());
 
         // 2. Remove the playing video, close, and reopen without silently recreating its entry.
         QTest::keyClick(window, Qt::Key_L, Qt::ControlModifier);

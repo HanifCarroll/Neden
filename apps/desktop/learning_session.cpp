@@ -23,11 +23,12 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent) : QO
 }
 void LearningSession::setStudyTools(StudyTools *tools) {
     studyTools = tools;
-    connect(tools, &StudyTools::subtitlesReady, this, [this](const QVector<Cue> &cues) {
+    connect(tools, &StudyTools::subtitlesReady, this, [this](const QVector<Cue> &cues, const QString &path) {
         stopReplay();
         closeDefinition();
         replaceCues(cues);
-        sourceSubtitlePath.clear();
+        sourceSubtitlePath = path;
+        rememberedSourceSubtitlePath = path;
         emit tracksChanged();
         checkpoint();
     });
@@ -54,19 +55,25 @@ void LearningSession::checkpoint() {
         : subtitleSeekTarget >= 0 ? subtitleSeekTarget : engine->snapshotPosition();
     if (!std::isfinite(seconds) || seconds < 0) return;
 
-    const RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration())};
+    const RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration()),
+        rememberedSourceSubtitlePath, rememberedTranslationSubtitlePath};
     const auto previous = recentVideos->find(currentMediaPath);
-    if (previous && previous->position == video.position && previous->duration == video.duration) return;
+    if (previous && previous->position == video.position && previous->duration == video.duration
+        && previous->primarySubtitlePath == video.primarySubtitlePath
+        && previous->secondarySubtitlePath == video.secondarySubtitlePath) return;
 
-    // 2. Commit only changed positions to local history.
+    // 2. Commit only changed positions or track associations to local history.
     recentVideos->remember(video);
 }
 
 void LearningSession::finishOpening(const QString &path) {
     if (path != currentMediaPath) return;
 
-    // 1. Restore only playback position; subtitle choices remain session-only.
+    // 1. Restore each track independently before checkpoints can replace its saved association.
     const auto saved = recentVideos ? recentVideos->find(path) : std::nullopt;
+    const QString trackWarning = saved ? restoreSubtitleTracks(*saved) : QString();
+
+    // 2. Restore the precise position and start playback even if a subtitle file is unavailable.
     mediaReady = true;
     restorePosition = saved ? saved->position : -1;
     if (restorePosition > 0) {
@@ -76,14 +83,37 @@ void LearningSession::finishOpening(const QString &path) {
         restorePosition = -1;
     }
     setPaused(false);
-    statusText = "Ready to explore";
+    statusText = trackWarning.isEmpty() ? "Ready to explore" : trackWarning;
     emit statusChanged();
 
-    // 2. Promote only successful opens, retaining the target until playback reaches it.
+    // 3. Promote only successful opens, retaining the target until playback reaches it.
     if (recentVideos && rememberCurrent) {
         recentVideos->remember({currentMediaPath,
-            restorePosition >= 0 ? restorePosition : position(), qMax(0.0, duration())}, true);
+            restorePosition >= 0 ? restorePosition : position(), qMax(0.0, duration()),
+            rememberedSourceSubtitlePath, rememberedTranslationSubtitlePath}, true);
     }
+}
+
+QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
+    QStringList unavailable;
+
+    // 1. Keep unavailable associations so reconnecting a drive can restore them on the next open.
+    if (rememberedSourceSubtitlePath.isEmpty() && !saved.primarySubtitlePath.isEmpty()) {
+        rememberedSourceSubtitlePath = saved.primarySubtitlePath;
+        openSubtitles(QUrl::fromLocalFile(saved.primarySubtitlePath));
+        if (sourceSubtitlePath.isEmpty()) unavailable.append("primary");
+    }
+    if (rememberedTranslationSubtitlePath.isEmpty() && !saved.secondarySubtitlePath.isEmpty()) {
+        rememberedTranslationSubtitlePath = saved.secondarySubtitlePath;
+        openTranslation(QUrl::fromLocalFile(saved.secondarySubtitlePath));
+        if (translationSubtitlePath.isEmpty()) unavailable.append("secondary");
+    }
+
+    // 2. A failed track must not prevent the other track or the video from loading.
+    if (unavailable.isEmpty()) return {};
+
+    return "Could not reload the saved " + unavailable.join(" and ")
+        + " subtitles. Reconnect their drive or choose replacement files above the transcript.";
 }
 
 void LearningSession::explainSelection() {
@@ -105,6 +135,7 @@ void LearningSession::openTranslation(const QUrl &url) {
         translationCue = cueAt(translationCues, qRound64(position() * 1000));
         if (studyTools) studyTools->invalidateContext();
         translationSubtitlePath = QFileInfo(file).absoluteFilePath();
+        rememberedTranslationSubtitlePath = translationSubtitlePath;
         statusText = "Secondary subtitles loaded";
         emit cueChanged();
         emit tracksChanged();
@@ -158,6 +189,8 @@ void LearningSession::openVideo(const QUrl &url) {
     translationCue = -1;
     sourceSubtitlePath.clear();
     translationSubtitlePath.clear();
+    rememberedSourceSubtitlePath.clear();
+    rememberedTranslationSubtitlePath.clear();
     statusText = "Loading local video…";
     emit mediaChanged();
     emit tracksChanged();
@@ -165,7 +198,10 @@ void LearningSession::openVideo(const QUrl &url) {
     emit cueChanged();
 
     // 3. Bind study requests to this media before the adapter can finish loading it.
-    if (studyTools) studyTools->setMedia(currentMediaPath);
+    if (studyTools) {
+        const auto saved = recentVideos ? recentVideos->find(currentMediaPath) : std::nullopt;
+        studyTools->setMedia(currentMediaPath, !saved || saved->primarySubtitlePath.isEmpty());
+    }
     engine->open(currentMediaPath, false);
 }
 void LearningSession::openSubtitles(const QUrl &url) {
@@ -192,6 +228,7 @@ void LearningSession::openSubtitles(const QUrl &url) {
         currentCue = -1;
         replaceCues(next);
         sourceSubtitlePath = QFileInfo(file).absoluteFilePath();
+        rememberedSourceSubtitlePath = sourceSubtitlePath;
         statusText = "Primary subtitles loaded";
         emit tracksChanged();
         checkpoint();

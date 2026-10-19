@@ -189,13 +189,20 @@ private slots:
         StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
         study.setSubtitleLoginReader([] { return QByteArray(R"({"username":"synthetic-user","password":"synthetic-password"})"); });
         QVector<Cue> received;
-        connect(&study, &StudyTools::subtitlesReady, this, [&](QVector<Cue> cues) { received = cues; });
+        QString savedPath;
+        connect(&study, &StudyTools::subtitlesReady, this, [&](QVector<Cue> cues, QString path) {
+            received = cues;
+            savedPath = path;
+        });
 
         // 2. An exact match may auto-download, but signed file requests never receive the key.
         study.setMedia(media.fileName());
         study.findSubtitles("tr", true);
         QTRY_COMPARE(received.size(), 1);
         QCOMPARE(received.first().text, QString("İstanbul ışığı"));
+        QFile savedSubtitle(savedPath);
+        QVERIFY(savedSubtitle.open(QIODevice::ReadOnly));
+        QCOMPARE(parseSrt(QString::fromUtf8(savedSubtitle.readAll())).first().text, QString("İstanbul ışığı"));
         QCOMPARE(requests.size(), 5);
         QVERIFY(requests.first().contains("languages=tr&moviehash=0000000000020000"));
         QVERIFY(apiAuthenticated);
@@ -210,6 +217,12 @@ private slots:
         QCOMPARE(query.queryItemValue("season_number"), QString("2"));
         QCOMPARE(query.queryItemValue("episode_number"), QString("1"));
         QVERIFY(!query.hasQueryItem("moviehash"));
+
+        // 4. Reopening a video with a saved track must not trigger another API request.
+        QVERIFY(study.configure(base, "mock", "https://example.org/%s", true));
+        study.setMedia(media.fileName(), false);
+        QTest::qWait(100);
+        QCOMPARE(requests.size(), 6);
     }
     void subtitleSearchRefusesDifferentPathRedirect() {
         QTemporaryDir directory;

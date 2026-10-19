@@ -8,6 +8,8 @@ struct RecentVideo {
     QString path;
     double position = 0;
     double duration = 0;
+    QString primarySubtitlePath;
+    QString secondarySubtitlePath;
 };
 
 class RecentVideos : public QAbstractListModel {

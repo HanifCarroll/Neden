@@ -92,12 +92,15 @@ private:
     void syncPosition();
     void resetInteraction();
     void finishOpening(const QString &path);
+    QString restoreSubtitleTracks(const RecentVideo &saved);
     StudyTools *studyTools = nullptr;
     RecentVideos *recentVideos = nullptr;
     QTimer checkpointTimer;
     QString currentMediaPath;
     QString sourceSubtitlePath;
     QString translationSubtitlePath;
+    QString rememberedSourceSubtitlePath;
+    QString rememberedTranslationSubtitlePath;
     double audioLevel = 60;
     double unmutedLevel = 60;
     double restorePosition = -1;

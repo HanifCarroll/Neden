@@ -21,7 +21,9 @@ bool validPath(const QString &path) {
 
 bool validVideo(const RecentVideo &video) {
     return validPath(video.path) && std::isfinite(video.position) && video.position >= 0
-        && std::isfinite(video.duration) && video.duration >= 0;
+        && std::isfinite(video.duration) && video.duration >= 0
+        && (video.primarySubtitlePath.isEmpty() || validPath(video.primarySubtitlePath))
+        && (video.secondarySubtitlePath.isEmpty() || validPath(video.secondarySubtitlePath));
 }
 }
 
@@ -83,15 +85,19 @@ void RecentVideos::load() {
         const auto document = QJsonDocument::fromJson(file.readAll(), &error);
         const auto root = document.object();
         const auto entries = root.value("videos").toArray();
+        const int version = root.value("version").toInt();
         validStorage = error.error == QJsonParseError::NoError && document.isObject()
-            && root.value("version").toInt() == 1 && root.value("videos").isArray()
+            && (version == 1 || version == 2) && root.value("videos").isArray()
             && entries.size() <= maximumRecentVideos;
         QSet<QString> paths;
         for (const auto &entry : entries) {
             const auto item = entry.toObject();
             RecentVideo video{item.value("path").toString(), item.value("position").toDouble(-1),
-                item.value("duration").toDouble(-1)};
-            if (!entry.isObject() || !validVideo(video)) {
+                item.value("duration").toDouble(-1), item.value("primarySubtitlePath").toString(),
+                item.value("secondarySubtitlePath").toString()};
+            const bool validTrackFields = (!item.contains("primarySubtitlePath") || item.value("primarySubtitlePath").isString())
+                && (!item.contains("secondarySubtitlePath") || item.value("secondarySubtitlePath").isString());
+            if (!entry.isObject() || !validTrackFields || !validVideo(video)) {
                 validStorage = false;
                 break;
             }
@@ -113,13 +119,15 @@ void RecentVideos::load() {
 bool RecentVideos::persist(const QList<RecentVideo> &next) {
     if (!validStorage) return false;
 
-    // 1. Serialize only local video references and playback positions.
+    // 1. Save local file references and playback positions, never subtitle contents or credentials.
     QJsonArray entries;
     for (const auto &video : next) {
-        entries.append(QJsonObject{{"path", video.path}, {"position", video.position},
-            {"duration", video.duration}});
+        QJsonObject item{{"path", video.path}, {"position", video.position}, {"duration", video.duration}};
+        if (!video.primarySubtitlePath.isEmpty()) item.insert("primarySubtitlePath", video.primarySubtitlePath);
+        if (!video.secondarySubtitlePath.isEmpty()) item.insert("secondarySubtitlePath", video.secondarySubtitlePath);
+        entries.append(item);
     }
-    const auto bytes = QJsonDocument(QJsonObject{{"version", 1}, {"videos", entries}}).toJson();
+    const auto bytes = QJsonDocument(QJsonObject{{"version", 2}, {"videos", entries}}).toJson();
 
     // 2. Commit atomically so an interrupted update cannot truncate existing history.
     QSaveFile file(storageFile);

@@ -2,6 +2,7 @@
 #include "network_error.h"
 #include <QSslSocket>
 #include <QDateTime>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -311,12 +312,12 @@ void StudyTools::invalidateContext() {
 
 void StudyTools::invalidateTrack() { cancelSubtitles(); invalidateContext(); }
 
-void StudyTools::setMedia(const QString &path) {
+void StudyTools::setMedia(const QString &path, bool searchSubtitles) {
     invalidateContext();
     cancelSubtitles();
     results.clear();
     mediaPath = path;
-    if (automatic && !path.isEmpty()) findSubtitles("tr", true);
+    if (automatic && searchSubtitles && !path.isEmpty()) findSubtitles("tr", true);
     emit changed();
 }
 
@@ -543,7 +544,8 @@ void StudyTools::requestSubtitleDownload(int index, quint64 owner) {
 }
 
 void StudyTools::fetchSubtitle(const QUrl &url, quint64 owner) {
-    // The signed download URL receives no API key or authorization header.
+
+    // 1. Fetch the signed file URL without an API key or authorization header.
     QNetworkRequest request(url);
     request.setTransferTimeout(60000);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
@@ -558,11 +560,27 @@ void StudyTools::fetchSubtitle(const QUrl &url, quint64 owner) {
             fail(networkFailureMessage(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error(), "Subtitle file download failed")); return;
         }
         try {
+
+            // 2. Validate the complete subtitle file before storing it for future resumes.
             QStringDecoder decoder(QStringDecoder::Utf8);
-            const QString text = decoder.decode(reply->readAll());
+            const QByteArray bytes = reply->readAll();
+            const QString text = decoder.decode(bytes);
             if (decoder.hasError()) throw std::runtime_error("Invalid UTF-8 subtitles.");
             const auto cues = parseSrt(text);
-            emit subtitlesReady(cues);
+
+            // 3. Commit an owner-readable local copy before publishing its stable path.
+            const QString directory = storage + "/subtitles";
+            const QString filename = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()) + ".srt";
+            const QString path = directory + "/" + filename;
+            QSaveFile file(path);
+            if (!QDir().mkpath(directory) || !file.open(QIODevice::WriteOnly)
+                || !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)
+                || file.write(bytes) != bytes.size() || !file.commit()) {
+                fail("Downloaded subtitles could not be saved. Check free space and folder permissions.");
+                return;
+            }
+
+            emit subtitlesReady(cues, path);
             fail("Downloaded subtitles loaded. Check their timing against the dialogue.");
         } catch (...) { fail("The download is not a supported SRT subtitle file."); }
     });

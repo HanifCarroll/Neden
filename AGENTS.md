@@ -10,7 +10,7 @@ The IINA runtime and Keychain rules below apply to the plugin. Preserve the desk
 
 After desktop source changes, run `bun run install:desktop` from the repository root. This is the normal delivery path for the locally installed `/Applications/Neden.app`, not just a source build. It runs desktop tests and QML lint, assembles a self-contained bundle, preserves the existing signing/Keychain identity, quits the installed app gracefully to save playback position, replaces it with rollback on failure, and launches the installed copy. The Codex Run action uses the same command. Read `docs/desktop/INSTALLATION.md` for verification and isolated UI checks.
 
-Keep the visible name and executable **Neden**, bundle identifier `io.github.hanifcarroll.neden.qt-lab`, and existing native Keychain adapter. Do not use ad hoc signing for the main app or change the user's IINA installation. Never use force-kill for routine updates; allow normal shutdown to save recent-video positions. Recent history stores video paths and positions only. Subtitle choices and language presets must not be persisted as part of history.
+Keep the visible name and executable **Neden**, bundle identifier `io.github.hanifcarroll.neden.qt-lab`, and existing native Keychain adapter. Do not use ad hoc signing for the main app or change the user's IINA installation. Never use force-kill for routine updates; allow normal shutdown to save recent-video positions. Recent history stores video paths, positions, and the chosen primary/secondary subtitle file paths for each video. Restore those tracks in their original roles when reopening that video. Do not impose or persist fixed language presets; missing files must not erase their saved associations or prevent playback.
 
 ## Code readability
 
