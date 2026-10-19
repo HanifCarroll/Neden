@@ -174,6 +174,8 @@ private slots:
         session->setPaused(true);
         QVERIFY(session->subtitle().isEmpty());
         QVERIFY(session->translation().isEmpty());
+        QVERIFY(!visualItem(window->contentItem(), "primarySubtitleText")->isVisible());
+        QVERIFY(!visualItem(window->contentItem(), "secondarySubtitleText")->isVisible());
 
         // 2. Remove the playing video, close, and reopen without silently recreating its entry.
         click("recentVideosButton");

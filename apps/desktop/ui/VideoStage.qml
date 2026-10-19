@@ -65,6 +65,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 24
+        visible: stage.session.subtitle.length > 0 || stage.session.translation.length > 0
         height: subtitleColumn.implicitHeight + 28
         radius: 12
         color: "#e6101416"
@@ -79,7 +80,8 @@ Rectangle {
                 id: subtitle
                 objectName: "primarySubtitleText"
                 Layout.fillWidth: true
-                text: stage.session.subtitle || "Open a video to begin"
+                text: stage.session.subtitle
+                visible: text.length > 0
                 textFormat: TextEdit.PlainText
                 readOnly: true
                 selectByMouse: true
@@ -98,6 +100,7 @@ Rectangle {
                 Layout.fillWidth: true
                 objectName: "secondarySubtitleText"
                 text: stage.session.translation
+                visible: text.length > 0
                 textFormat: Text.PlainText
                 color: Theme.muted
                 font.pixelSize: 13
