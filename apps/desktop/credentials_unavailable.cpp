@@ -10,3 +10,8 @@ QString authorizeSavedCredential(const QString &) {
 }
 
 QByteArray readSavedSubtitleLogin() { return {}; }
+
+QString saveCredential(const QString &, QByteArray key) {
+    key.fill(0);
+    return "This platform needs a verified credential-store adapter. Nothing was saved.";
+}

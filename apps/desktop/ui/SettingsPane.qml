@@ -11,9 +11,45 @@ ColumnLayout {
     required property FullscreenController fullscreenController
     readonly property StudyTools study: session.study
     property string appearanceMessage: ""
+    function restoreAppearanceControls() {
+        primarySize.value = appearance.primarySize;
+        secondarySize.value = appearance.secondarySize;
+        bottomMargin.value = appearance.bottomMargin;
+        outline.checked = appearance.outline;
+        backgroundOption.checked = appearance.background;
+        bold.checked = appearance.bold;
+        textColor.text = appearance.textColor;
+        secondaryColor.text = appearance.secondaryColor;
+        trackGap.value = appearance.gap;
+        reverseOrder.checked = appearance.reversed;
+        selectable.checked = appearance.selectable;
+        bottomPercent.value = appearance.bottomPercent;
+    }
+    function previewAppearance() {
+        const values = pane.appearance.snapshot();
+        values.primarySize = Math.round(primarySize.value);
+        values.secondarySize = Math.round(secondarySize.value);
+        values.bottomMargin = Math.round(bottomMargin.value);
+        values.outline = outline.checked;
+        values.background = backgroundOption.checked;
+        values.bold = bold.checked;
+        values.textColor = textColor.text;
+        values.secondaryColor = secondaryColor.text;
+        values.gap = Math.round(trackGap.value);
+        values.reversed = reverseOrder.checked;
+        values.selectable = selectable.checked;
+        values.bottomPercent = bottomPercent.value;
+        return pane.appearance.preview(values);
+    }
     spacing: Theme.space4
     TabBar {
         id: categories
+        onCurrentIndexChanged: {
+            if (currentIndex !== 0) {
+                pane.appearance.cancelPreview();
+                pane.restoreAppearanceControls();
+            }
+        }
         Layout.fillWidth: true
         SegmentButton {
             text: "Subtitles"
@@ -51,6 +87,7 @@ ColumnLayout {
                 from: 16
                 to: 64
                 stepSize: 1
+                onMoved: pane.previewAppearance()
                 value: pane.appearance.primarySize
                 Layout.fillWidth: true
                 Accessible.name: "Primary subtitle size"
@@ -64,6 +101,7 @@ ColumnLayout {
                 from: 12
                 to: 56
                 stepSize: 1
+                onMoved: pane.previewAppearance()
                 value: pane.appearance.secondarySize
                 Layout.fillWidth: true
                 Accessible.name: "Secondary subtitle size"
@@ -77,6 +115,7 @@ ColumnLayout {
                 from: 8
                 to: 160
                 stepSize: 1
+                onMoved: pane.previewAppearance()
                 value: pane.appearance.bottomMargin
                 Layout.fillWidth: true
                 Accessible.name: "Subtitle bottom margin"
@@ -84,46 +123,108 @@ ColumnLayout {
             CheckBox {
                 id: outline
                 text: "Dark outline"
+                onToggled: pane.previewAppearance()
                 checked: pane.appearance.outline
             }
             CheckBox {
                 id: bold
                 text: "Semibold text"
+                onToggled: pane.previewAppearance()
                 checked: pane.appearance.bold
             }
             CheckBox {
                 id: backgroundOption
                 text: "Compact dark background"
+                onToggled: pane.previewAppearance()
                 checked: pane.appearance.background
             }
             Label {
-                text: "Text color (hex)"
+                text: "Primary text color (hex)"
                 color: Theme.ink
             }
             SearchField {
                 id: textColor
+                onTextEdited: pane.previewAppearance()
                 text: pane.appearance.textColor
                 Layout.fillWidth: true
                 Accessible.name: "Subtitle text color"
                 maximumLength: 7
             }
-            RowLayout {
+            Label {
+                text: "Secondary text color (hex)"
+                color: Theme.ink
+            }
+            SearchField {
+                id: secondaryColor
+                text: pane.appearance.secondaryColor
+                onTextEdited: pane.previewAppearance()
+                maximumLength: 7
+                Layout.fillWidth: true
+                Accessible.name: "Secondary subtitle color"
+            }
+            Label {
+                text: "Space between tracks · " + Math.round(trackGap.value) + " px"
+                color: Theme.ink
+            }
+            ControlSlider {
+                id: trackGap
+                from: 0
+                to: 80
+                stepSize: 1
+                value: pane.appearance.gap
+                onMoved: pane.previewAppearance()
+                Layout.fillWidth: true
+                Accessible.name: "Space between subtitle tracks"
+            }
+            Label {
+                text: "Additional bottom offset · " + Math.round(bottomPercent.value) + "% of picture"
+                color: Theme.ink
+            }
+            ControlSlider {
+                id: bottomPercent
+                from: 0
+                to: 40
+                stepSize: 1
+                value: pane.appearance.bottomPercent
+                onMoved: pane.previewAppearance()
+                Layout.fillWidth: true
+                Accessible.name: "Relative subtitle bottom offset"
+            }
+            CheckBox {
+                id: reverseOrder
+                text: "Display secondary subtitles above primary"
+                checked: pane.appearance.reversed
+                onToggled: pane.previewAppearance()
+            }
+            CheckBox {
+                id: selectable
+                text: "Selectable subtitles and explanation controls"
+                checked: pane.appearance.selectable
+                onToggled: pane.previewAppearance()
+            }
+            Label {
+                text: "Preview changes in the video. Apply to keep them; closing Settings restores the saved appearance."
+                color: Theme.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: Theme.space2
+                ActionButton {
+                    text: "Preview"
+                    onClicked: pane.appearanceMessage = pane.previewAppearance() ? "Previewing. Apply to keep these changes." : "Check subtitle sizes and hex colors."
+                }
                 ActionButton {
                     text: "Apply appearance"
                     primary: true
-                    onClicked: pane.appearanceMessage = pane.appearance.configure(Math.round(primarySize.value), Math.round(secondarySize.value), Math.round(bottomMargin.value), outline.checked, backgroundOption.checked, bold.checked, textColor.text) ? "Appearance saved." : "Couldn’t save. Use a color such as #ffffff and check that your settings folder is writable."
+                    onClicked: pane.appearanceMessage = pane.previewAppearance() && pane.appearance.applyPreview() ? "Appearance saved." : "Couldn’t save appearance."
                 }
                 ActionButton {
                     text: "Restore defaults"
                     onClicked: {
                         pane.appearance.reset();
-                        primarySize.value = pane.appearance.primarySize;
-                        secondarySize.value = pane.appearance.secondarySize;
-                        bottomMargin.value = pane.appearance.bottomMargin;
-                        outline.checked = pane.appearance.outline;
-                        backgroundOption.checked = pane.appearance.background;
-                        bold.checked = pane.appearance.bold;
-                        textColor.text = pane.appearance.textColor;
+                        pane.restoreAppearanceControls();
                         pane.appearanceMessage = "Default appearance restored.";
                     }
                 }
@@ -210,13 +311,133 @@ ColumnLayout {
                 text: "Save settings"
                 onClicked: pane.study.configure(endpointField.text, modelField.text, dictionaryField.text, automaticField.checked)
             }
-            ActionButton {
-                text: "Connect AI Keychain"
-                onClicked: pane.study.connectCredential(false)
+            Label {
+                text: "Explanation languages"
+                color: Theme.ink
+                font.pixelSize: Theme.title
+            }
+            SearchField {
+                id: sourceLanguage
+                text: pane.study.sourceLanguage
+                placeholderText: "Source language"
+                Layout.fillWidth: true
+                Accessible.name: "Source language"
+            }
+            SearchField {
+                id: explanationLanguage
+                text: pane.study.explanationLanguage
+                placeholderText: "Explanation language"
+                Layout.fillWidth: true
+                Accessible.name: "Explanation language"
+            }
+            CheckBox {
+                id: includeSecondary
+                text: "Use overlapping secondary subtitles as context"
+                checked: pane.study.includeSecondary
+            }
+            CheckBox {
+                id: noKeyRequired
+                text: "Configured endpoint does not require an API key"
+                checked: pane.study.learningSettings.noKeyRequired || false
+            }
+            Label {
+                text: "Primary explanation provider"
+                color: Theme.muted
+            }
+            ChoiceBox {
+                id: primaryProvider
+                model: ["Configured provider", "GPT-6 Luna"]
+                currentIndex: pane.study.learningSettings.primaryProvider === "luna" ? 1 : 0
+                Layout.fillWidth: true
+                Accessible.name: "Primary explanation provider"
+            }
+            CheckBox {
+                id: fallbackEnabled
+                text: "Use the other provider after 5 seconds without an answer"
+                checked: pane.study.learningSettings.fallbackEnabled || false
+            }
+            Label {
+                text: "Fallback is optional and may bill both attempts. It never switches after an answer starts. Each provider needs its own saved key."
+                color: Theme.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            Label {
+                text: "Single-click word meanings"
+                color: Theme.ink
+                font.pixelSize: Theme.title
+            }
+            ChoiceBox {
+                id: wordProvider
+                model: ["Off", "Google Cloud Translation", "Microsoft Translator"]
+                currentIndex: pane.study.learningSettings.wordProvider === "google" ? 1 : pane.study.learningSettings.wordProvider === "microsoft" ? 2 : 0
+                Layout.fillWidth: true
+                Accessible.name: "Word translation provider"
+            }
+            SearchField {
+                id: wordRegion
+                text: pane.study.learningSettings.wordRegion || ""
+                placeholderText: "Microsoft region (if required)"
+                Layout.fillWidth: true
+                Accessible.name: "Microsoft Translator region"
+            }
+            Label {
+                text: "When enabled, clicking a subtitle word sends it to this provider and may incur charges. Double-click or drag a phrase for an AI explanation."
+                color: Theme.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
             ActionButton {
-                text: "Connect OpenSubtitles Keychain"
-                onClicked: pane.study.connectCredential(true)
+                text: "Save learning settings"
+                onClicked: pane.study.configureLearning({
+                    sourceLanguage: sourceLanguage.text,
+                    explanationLanguage: explanationLanguage.text,
+                    includeSecondary: includeSecondary.checked,
+                    noKeyRequired: noKeyRequired.checked,
+                    primaryProvider: primaryProvider.currentIndex === 1 ? "luna" : "configured",
+                    fallbackEnabled: fallbackEnabled.checked,
+                    wordProvider: ["off", "google", "microsoft"][wordProvider.currentIndex],
+                    wordRegion: wordRegion.text
+                })
+            }
+            Label {
+                text: "Secure service credentials"
+                color: Theme.ink
+                font.pixelSize: Theme.title
+            }
+            ChoiceBox {
+                id: keyService
+                model: ["Configured AI", "GPT-6 Luna", "Google Translation", "Microsoft Translator", "OpenSubtitles"]
+                Layout.fillWidth: true
+                Accessible.name: "Credential service"
+            }
+            SearchField {
+                id: newKey
+                text: ""
+                echoMode: TextInput.Password
+                maximumLength: 512
+                placeholderText: "New API key"
+                Layout.fillWidth: true
+                Accessible.name: "New API key"
+            }
+            RowLayout {
+                ActionButton {
+                    text: "Save key in Keychain"
+                    enabled: newKey.text.length > 0
+                    onClicked: {
+                        if (keyService.currentIndex !== 0 || pane.study.configure(endpointField.text, modelField.text, dictionaryField.text, automaticField.checked)) {
+                            pane.study.saveServiceKey(["ai", "luna", "google", "microsoft", "subtitles"][keyService.currentIndex], newKey.text);
+                            newKey.clear();
+                        }
+                    }
+                }
+                ActionButton {
+                    text: "Connect saved key"
+                    onClicked: {
+                        if (keyService.currentIndex !== 0 || pane.study.configure(endpointField.text, modelField.text, dictionaryField.text, automaticField.checked))
+                            pane.study.connectServiceKey(["ai", "luna", "google", "microsoft", "subtitles"][keyService.currentIndex]);
+                    }
+                }
             }
             Label {
                 text: "Connect lets macOS ask for access to the saved Neden key. Approve in the system dialog. Keys are kept private for this app session; automatic lookups never prompt."

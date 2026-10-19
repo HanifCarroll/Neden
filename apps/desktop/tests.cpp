@@ -4,6 +4,22 @@
 class CueTests : public QObject {
     Q_OBJECT
 private slots:
+    void webVttKeepsIndependentTimingsAndPlainText() {
+        const auto cues = parseSrt("WEBVTT\n\nNOTE ignored\nmetadata\n\nfirst\n00:01.250 --> 00:03.000 align:center\n<i>İstanbul</i>\n\n00:03.000 --> 00:05.100\n日本語\n");
+        QCOMPARE(cues.size(), 2);
+        QCOMPARE(cues[0].startMs, 1250);
+        QCOMPARE(cues[0].endMs, 3000);
+        QCOMPARE(cues[0].text, QString("İstanbul"));
+        QCOMPARE(subtitlePlainText("<v Ali><c.green>Şüphe</c></v>"), QString("Şüphe"));
+        QCOMPARE(cues[1].text, QString("日本語"));
+        QVERIFY_EXCEPTION_THROWN(parseSrt("WEBVTT\n\n00:60.000 --> 01:01.000\nBad"), std::runtime_error);
+        CueModel model;
+        model.replace(cues);
+        model.setTranslationCues({{1250, 3000, "English", {}}});
+        model.setTranslationCues({});
+        QVERIFY(model.cues[0].translation.isEmpty());
+    }
+
     void turkishSearch_data() {
         QTest::addColumn<QString>("query");
         QTest::addColumn<int>("expectedCount");

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import Neden
 
 Rectangle {
@@ -43,7 +44,7 @@ Rectangle {
         anchors.rightMargin: Theme.space6
         readonly property real videoAspect: stage.playback.sourceOutputSize.height > 0 ? stage.playback.sourceOutputSize.width / stage.playback.sourceOutputSize.height : 16 / 9
         readonly property real pictureHeight: Math.min(stage.height, stage.width / videoAspect)
-        anchors.bottomMargin: (stage.height - pictureHeight) / 2 + stage.appearance.bottomMargin
+        anchors.bottomMargin: (stage.height - pictureHeight) / 2 + stage.appearance.bottomMargin + pictureHeight * stage.appearance.bottomPercent / 100
         height: subtitleColumn.implicitHeight
         Rectangle {
             anchors.centerIn: parent
@@ -53,10 +54,11 @@ Rectangle {
             color: "#aa101416"
             visible: stage.appearance.background && (subtitle.visible || translation.visible)
         }
-        ColumnLayout {
+        GridLayout {
             id: subtitleColumn
+            columns: 1
             width: parent.width
-            spacing: Theme.space3
+            rowSpacing: stage.appearance.gap
             SubtitleText {
                 id: subtitle
                 objectName: "primarySubtitleText"
@@ -64,7 +66,10 @@ Rectangle {
                 text: stage.session.subtitle
                 appearance: stage.appearance
                 pixelSize: stage.appearance.primarySize
-                explainEnabled: true
+                explainEnabled: stage.appearance.selectable
+                selectable: stage.appearance.selectable
+                Layout.row: stage.appearance.reversed ? 1 : 0
+                onWordRequested: offset => stage.session.lookupWordAt(text, offset)
                 onSelectionChanged: selection => stage.session.select(selection)
                 onSelectionCommitted: stage.explainSelection()
                 onPhraseRequested: phrase => {
@@ -79,8 +84,77 @@ Rectangle {
                 text: stage.session.translation
                 appearance: stage.appearance
                 pixelSize: stage.appearance.secondarySize
+                selectable: stage.appearance.selectable
+                textColor: stage.appearance.secondaryColor
+                Layout.row: stage.appearance.reversed ? 0 : 1
+                onWordRequested: offset => stage.session.lookupWordAt(text, offset)
                 onSelectionChanged: selection => stage.session.select(selection)
                 onSelectionCommitted: stage.explainSelection()
+            }
+        }
+    }
+    Rectangle {
+        objectName: "wordMeaningCard"
+        visible: stage.session.study.words.state !== "idle"
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Math.min(parent.height - height, 160)
+        width: Math.min(360, parent.width - 32)
+        height: wordContents.implicitHeight + 32
+        radius: Theme.panelRadius
+        color: Theme.surface
+        border.color: Theme.border
+        ColumnLayout {
+            id: wordContents
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 16
+            spacing: Theme.space2
+            RowLayout {
+                Label {
+                    text: stage.session.study.words.word
+                    textFormat: Text.PlainText
+                    color: Theme.accent
+                    font.pixelSize: Theme.title
+                    Layout.fillWidth: true
+                }
+                ActionButton {
+                    text: "Close"
+                    flat: true
+                    onClicked: stage.session.closeWordCard()
+                }
+            }
+            Repeater {
+                model: stage.session.study.words.meanings
+                delegate: Label {
+                    required property string modelData
+                    text: modelData
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    color: Theme.ink
+                }
+            }
+            Label {
+                visible: stage.session.study.words.state !== "complete"
+                text: stage.session.study.words.state === "loading" ? "Looking up…" : stage.session.study.words.message
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                color: Theme.muted
+                Layout.fillWidth: true
+            }
+            ActionButton {
+                text: "Try word translation"
+                visible: stage.session.study.learningSettings.wordProvider === "microsoft" && stage.session.study.words.state === "failed"
+                onClicked: stage.session.translateWord()
+            }
+            ActionButton {
+                text: "Explain in context"
+                onClicked: {
+                    stage.session.select(stage.session.study.words.word);
+                    stage.explainSelection();
+                }
             }
         }
     }

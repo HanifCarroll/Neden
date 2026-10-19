@@ -8,11 +8,14 @@ Item {
     property alias text: textEditor.text
     property int pixelSize: 28
     property bool selectable: true
+    property color textColor: appearance.textColor
     property bool explainEnabled: false
     property alias editor: textEditor
     signal selectionChanged(string selection)
     signal selectionCommitted
     signal phraseRequested(string phrase)
+    signal wordRequested(int offset)
+    property int wordOffset: -1
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
     visible: textEditor.length > 0
@@ -27,7 +30,7 @@ Item {
         wrapMode: Text.Wrap
         horizontalAlignment: Text.AlignHCenter
         renderType: Text.QtRendering
-        color: line.appearance.textColor
+        color: line.textColor
         style: line.appearance.outline ? Text.Outline : Text.Normal
         styleColor: "#111111"
     }
@@ -47,7 +50,9 @@ Item {
         color: "transparent"
         selectionColor: Theme.selection
         selectedTextColor: "white"
+        onTextChanged: wordDelay.stop()
         onSelectedTextChanged: {
+            wordDelay.stop();
             if (selectedText.length)
                 line.selectionChanged(selectedText);
         }
@@ -55,6 +60,10 @@ Item {
             id: selectionPointer
             acceptedButtons: Qt.LeftButton
             onActiveChanged: {
+                if (active) {
+                    wordDelay.stop();
+                    line.wordOffset = textEditor.positionAt(point.position.x, point.position.y);
+                } else if (line.selectable && !textEditor.selectedText.length) wordDelay.restart();
                 if (!active && textEditor.selectedText.length)
                     Qt.callLater(line.selectionCommitted);
             }
@@ -62,6 +71,13 @@ Item {
         Keys.onReleased: event => {
             if (event.key === Qt.Key_Shift && textEditor.selectedText.length)
                 line.selectionCommitted();
+        }
+    }
+    Timer {
+        id: wordDelay
+        interval: 350
+        onTriggered: {
+            if (!textEditor.selectedText.length) line.wordRequested(line.wordOffset);
         }
     }
     Item {

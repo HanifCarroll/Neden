@@ -73,3 +73,32 @@ QString authorizeSavedCredential(const QString &endpoint) {
     // 2. Report access only; the selected action will make the network request.
     return "Connected. The saved credentials are available for this app session.";
 }
+
+QString saveCredential(const QString &endpoint, QByteArray key) {
+
+    // 1. Validate secret bytes without including them in a status or log.
+    if (key.isEmpty() || key.size() > 512 || key.contains('\r') || key.contains('\n')) {
+        key.fill(0);
+        return "Use a nonempty API key of at most 512 bytes without line breaks.";
+    }
+
+    // 2. Update the existing endpoint-bound item or create it in the same native Keychain.
+    const auto service = ("io.github.hanifcarroll.iina-language-learning - api:" + endpoint).toUtf8();
+    NSDictionary *query = @{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrService: [NSString stringWithUTF8String:service.constData()],
+        (__bridge id)kSecAttrAccount: @"api-key"
+    };
+    NSData *data = [NSData dataWithBytes:key.constData() length:key.size()];
+    NSDictionary *attributes = @{(__bridge id)kSecValueData: data};
+    OSStatus status = SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)attributes);
+    if (status == errSecItemNotFound) {
+        NSMutableDictionary *item = [query mutableCopy];
+        [item addEntriesFromDictionary:attributes];
+        status = SecItemAdd((__bridge CFDictionaryRef)item, nullptr);
+    }
+    if (status == errSecSuccess) authorizedKeys.insert(endpoint, key);
+    key.fill(0);
+    return status == errSecSuccess ? "Key saved securely in Keychain."
+        : QString("Keychain could not save the key (status %1). Nothing was written to preferences.").arg(status);
+}

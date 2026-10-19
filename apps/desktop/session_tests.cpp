@@ -21,6 +21,32 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void loadedTracksCanBeReusedOrDisabledIndependently() {
+        QTemporaryDir directory;
+        const auto first = directory.filePath("source.vtt");
+        const auto second = directory.filePath("secondary.srt");
+        for (const auto &path : {first, second}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("1\n00:00:00,000 --> 00:00:24,000\nSubtitle\n");
+        }
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.openSubtitles(QUrl::fromLocalFile(first));
+        session.openTranslation(QUrl::fromLocalFile(second));
+        QCOMPARE(session.subtitleTracks().size(), 2);
+        session.clearTrack(true);
+        QVERIFY(session.translation().isEmpty());
+        QVERIFY(!session.subtitle().isEmpty());
+        QVERIFY(session.model.cues.first().translation.isEmpty());
+        session.chooseTrack(first, true);
+        QCOMPARE(session.translationSubtitleName(), QString("source.vtt"));
+        session.clearTrack(false);
+        QVERIFY(session.subtitle().isEmpty());
+        QVERIFY(!session.translation().isEmpty());
+        QCOMPARE(session.subtitleTracks().size(), 2);
+    }
+
     void volumeIsBoundedAndUnmuteRestoresTheSliderLevel() {
         FakePlayback playback;
         LearningSession session(&playback);

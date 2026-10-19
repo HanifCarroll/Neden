@@ -22,6 +22,7 @@ class LearningSession : public QObject {
     Q_PROPERTY(QString mediaTitle READ mediaTitle NOTIFY mediaChanged)
     Q_PROPERTY(QString sourceSubtitleName READ sourceSubtitleName NOTIFY tracksChanged)
     Q_PROPERTY(QString translationSubtitleName READ translationSubtitleName NOTIFY tracksChanged)
+    Q_PROPERTY(QVariantList subtitleTracks READ subtitleTracks NOTIFY tracksChanged)
     Q_PROPERTY(bool replaying READ replaying NOTIFY replayingChanged)
     Q_PROPERTY(int activeCue READ activeCue NOTIFY cueChanged)
     Q_PROPERTY(bool canPreviousSubtitle READ canPreviousSubtitle NOTIFY cueChanged)
@@ -36,6 +37,9 @@ public:
     QString mediaTitle() const;
     QString sourceSubtitleName() const;
     QString translationSubtitleName() const;
+    QVariantList subtitleTracks() const;
+    Q_INVOKABLE void chooseTrack(const QString &path, bool secondary);
+    Q_INVOKABLE void clearTrack(bool secondary);
     Q_INVOKABLE void checkpoint();
     explicit LearningSession(PlaybackEngine *engine, QObject *parent = nullptr);
     Q_PROPERTY(CueModel *cueModel READ cueModel CONSTANT)
@@ -56,6 +60,11 @@ public:
     Q_INVOKABLE void openVideo(const QUrl &url);
     Q_INVOKABLE void openTranslation(const QUrl &url);
     Q_INVOKABLE void explainSelection();
+    Q_INVOKABLE void lookupWordAt(const QString &text, int offset);
+    Q_INVOKABLE void translateWord();
+    Q_INVOKABLE void closeWordCard(bool resume = true);
+    Q_INVOKABLE bool followUp(const QString &question);
+    Q_INVOKABLE void replayExplainedCue();
     Q_INVOKABLE void openSubtitles(const QUrl &url);
     Q_INVOKABLE void toggle();
     Q_INVOKABLE void seek(double seconds);
@@ -90,13 +99,14 @@ private:
     void playSubtitle(int index);
     void finishReplay();
     void syncPosition();
-    void resetInteraction();
+    void resetInteraction(bool clearConversation = false);
     void finishOpening(const QString &path);
     QString restoreSubtitleTracks(const RecentVideo &saved);
     StudyTools *studyTools = nullptr;
     RecentVideos *recentVideos = nullptr;
     QTimer checkpointTimer;
     QString currentMediaPath;
+    QStringList loadedSubtitlePaths;
     QString sourceSubtitlePath;
     QString translationSubtitlePath;
     QString rememberedSourceSubtitlePath;
@@ -112,9 +122,12 @@ private:
     int translationCue = -1;
     PlaybackEngine *engine;
     int currentCue = -1;
+    int explainedCueIndex = -1;
     QString selectedText;
     QString statusText = "Ready to explore";
     bool resumeAfterDefinition = false;
+    bool wordResume = false;
+    bool wordActive = false;
     bool replayActive = false;
     bool replayArmed = false;
     double replayStart = 0;

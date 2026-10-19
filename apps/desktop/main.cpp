@@ -57,6 +57,7 @@ int main(int argc, char **argv) {
     RecentVideos recentVideos(storage);
     StudyTools study(storage, readSavedCredential);
     study.setCredentialAuthorizer(authorizeSavedCredential);
+    study.setCredentialWriter(saveCredential);
     study.setSubtitleLoginReader(readSavedSubtitleLogin);
     LearningSession session(&playback);
     session.setStudyTools(&study);

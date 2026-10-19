@@ -28,6 +28,7 @@ void LearningSession::setStudyTools(StudyTools *tools) {
         closeDefinition();
         replaceCues(cues);
         sourceSubtitlePath = path;
+        if (!loadedSubtitlePaths.contains(path)) loadedSubtitlePaths.append(path);
         rememberedSourceSubtitlePath = path;
         emit tracksChanged();
         checkpoint();
@@ -117,7 +118,43 @@ QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
 }
 
 void LearningSession::explainSelection() {
-    if (studyTools) studyTools->explain(selectedText.isEmpty() ? subtitle() : selectedText, subtitle());
+    if (!studyTools || currentCue < 0) return;
+
+    // 1. Freeze the source cue and three neighbors on each side at the time of selection.
+    const Cue &cue = model.cues[currentCue];
+    if (selectedText.isEmpty()) select(cue.text);
+    QJsonArray before;
+    QJsonArray after;
+    QJsonArray secondary;
+    for (int index = qMax(0, currentCue - 3); index < currentCue; ++index) before.append(model.cues[index].text);
+    for (int index = currentCue + 1; index < qMin(int(model.cues.size()), currentCue + 4); ++index) after.append(model.cues[index].text);
+    if (studyTools->includeSecondary()) {
+        for (const auto &translation : translationCues) {
+            if (translation.startMs < cue.endMs && translation.endMs > cue.startMs) secondary.append(translation.text);
+        }
+    }
+
+    // 2. Keep the selected phrase, timing and optional translation clues together for all follow-ups.
+    explainedCueIndex = currentCue;
+    studyTools->explainContext(QJsonObject{{"selection", selectedText.isEmpty() ? cue.text : selectedText},
+        {"sourceCue", cue.text}, {"before", before}, {"after", after}, {"secondary", secondary},
+        {"sourceLanguage", studyTools->sourceLanguage()}, {"explanationLanguage", studyTools->explanationLanguage()},
+        {"cueIndex", currentCue}, {"cueStartMs", cue.startMs}, {"cueEndMs", cue.endMs}});
+}
+
+bool LearningSession::followUp(const QString &question) {
+    if (!studyTools || studyTools->subject().isEmpty()) return false;
+
+    select(studyTools->subject());
+    const bool sent = studyTools->followUp(question);
+    if (sent) setPaused(true);
+    return sent;
+}
+
+void LearningSession::replayExplainedCue() {
+    if (replayActive) { stopReplay(); return; }
+
+    playSubtitle(explainedCueIndex);
 }
 
 void LearningSession::openTranslation(const QUrl &url) {
@@ -129,12 +166,17 @@ void LearningSession::openTranslation(const QUrl &url) {
         }
         QStringDecoder decoder(QStringDecoder::Utf8);
         const QString text = decoder(file.readAll());
-        if (decoder.hasError()) throw std::runtime_error("Save the translation subtitles as UTF-8 SRT.");
-        translationCues = parseSrt(text);
+        if (decoder.hasError()) throw std::runtime_error("Save the translation subtitles as UTF-8 SRT or WebVTT.");
+        const auto next = parseSrt(text);
+        closeWordCard();
+        closeDefinition();
+        resetInteraction(true);
+        translationCues = next;
         model.setTranslationCues(translationCues);
         translationCue = cueAt(translationCues, qRound64(position() * 1000));
         if (studyTools) studyTools->invalidateContext();
         translationSubtitlePath = QFileInfo(file).absoluteFilePath();
+        if (!loadedSubtitlePaths.contains(translationSubtitlePath)) loadedSubtitlePaths.append(translationSubtitlePath);
         rememberedTranslationSubtitlePath = translationSubtitlePath;
         statusText = "Secondary subtitles loaded";
         emit cueChanged();
@@ -147,7 +189,7 @@ void LearningSession::openTranslation(const QUrl &url) {
 void LearningSession::setPaused(bool value) { engine->setPaused(value); }
 void LearningSession::replaceCues(QVector<Cue> next) {
     stopReplay();
-    resetInteraction();
+    resetInteraction(true);
     if (studyTools) studyTools->invalidateTrack();
     currentCue = -1;
     model.replace(std::move(next));
@@ -155,8 +197,13 @@ void LearningSession::replaceCues(QVector<Cue> next) {
     syncPosition();
     emit cueChanged();
 }
-void LearningSession::resetInteraction() {
-    if (studyTools) studyTools->invalidateContext();
+void LearningSession::resetInteraction(bool clearConversation) {
+    closeWordCard(false);
+    if (studyTools) {
+        if (clearConversation) studyTools->invalidateContext();
+        else studyTools->stop();
+    }
+    if (clearConversation) explainedCueIndex = -1;
     replayActive = false;
     subtitleSeekTarget = -1;
     subtitleSeekIndex = -1;
@@ -180,13 +227,14 @@ void LearningSession::openVideo(const QUrl &url) {
     mediaReady = false;
     restorePosition = -1;
     rememberCurrent = true;
-    resetInteraction();
+    resetInteraction(true);
     setPaused(true);
     currentMediaPath = mediaPathIdentity(file.absoluteFilePath());
     currentCue = -1;
     model.replace({});
     translationCues.clear();
     translationCue = -1;
+    loadedSubtitlePaths.clear();
     sourceSubtitlePath.clear();
     translationSubtitlePath.clear();
     rememberedSourceSubtitlePath.clear();
@@ -228,6 +276,7 @@ void LearningSession::openSubtitles(const QUrl &url) {
         currentCue = -1;
         replaceCues(next);
         sourceSubtitlePath = QFileInfo(file).absoluteFilePath();
+        if (!loadedSubtitlePaths.contains(sourceSubtitlePath)) loadedSubtitlePaths.append(sourceSubtitlePath);
         rememberedSourceSubtitlePath = sourceSubtitlePath;
         statusText = "Primary subtitles loaded";
         emit tracksChanged();
@@ -279,19 +328,20 @@ void LearningSession::select(const QString &text) {
         stopReplay();
     }
     if (selectedText.isEmpty()) {
-        resumeAfterDefinition = !paused();
+        resumeAfterDefinition = wordActive ? wordResume : !paused();
     }
+    closeWordCard(false);
     if (studyTools) studyTools->stop();
     selectedText = text.trimmed();
     emit selectionChanged();
     setPaused(true);
 }
 void LearningSession::closeDefinition() {
+    if (studyTools) studyTools->stop();
     if (selectedText.isEmpty()) {
         return;
     }
 
-    if (studyTools) studyTools->invalidateContext();
     selectedText.clear();
     const bool resume = resumeAfterDefinition;
     resumeAfterDefinition = false;
@@ -407,11 +457,13 @@ void LearningSession::syncPosition() {
     const int translated = cueAt(translationCues, qRound64(position() * 1000));
     if (translated != translationCue) {
         translationCue = translated;
+        closeWordCard(false);
         emit cueChanged();
     }
     const int next = cueAt(model.cues, qRound64(position() * 1000));
     if (next != currentCue) {
         currentCue = next;
+        closeWordCard(false);
         emit cueChanged();
     }
 
@@ -424,4 +476,72 @@ void LearningSession::syncPosition() {
         }
         if (replayArmed && position() >= replayEnd) finishReplay();
     }
+}
+
+QVariantList LearningSession::subtitleTracks() const {
+    QVariantList tracks;
+    for (const auto &path : loadedSubtitlePaths) {
+        tracks.append(QVariantMap{{"path", path}, {"name", QFileInfo(path).fileName()},
+            {"primary", path == sourceSubtitlePath}, {"secondary", path == translationSubtitlePath}});
+    }
+    return tracks;
+}
+
+void LearningSession::chooseTrack(const QString &path, bool secondary) {
+    if (!loadedSubtitlePaths.contains(path)) return;
+
+    if (secondary) openTranslation(QUrl::fromLocalFile(path));
+    else openSubtitles(QUrl::fromLocalFile(path));
+}
+
+void LearningSession::clearTrack(bool secondary) {
+    closeWordCard();
+    closeDefinition();
+    resetInteraction(true);
+    if (secondary) {
+        translationCues.clear();
+        translationCue = -1;
+        translationSubtitlePath.clear();
+        rememberedTranslationSubtitlePath.clear();
+        model.setTranslationCues({});
+    } else {
+        model.replace({});
+        currentCue = -1;
+        sourceSubtitlePath.clear();
+        rememberedSourceSubtitlePath.clear();
+    }
+    emit tracksChanged();
+    emit cueChanged();
+    checkpoint();
+}
+
+void LearningSession::lookupWordAt(const QString &text, int offset) {
+    if (!studyTools || studyTools->learningSettings().value("wordProvider", "off").toString() == "off") return;
+
+    const QString word = WordLookup::wordAt(text, offset);
+    if (word.isEmpty()) return;
+
+    const bool resume = wordActive ? wordResume : !paused();
+    closeWordCard(false);
+    wordResume = resume;
+    wordActive = true;
+    setPaused(true);
+    studyTools->words()->lookup(word, studyTools->learningSettings());
+}
+
+void LearningSession::closeWordCard(bool resume) {
+    if (!wordActive) return;
+
+    const bool shouldResume = resume && wordResume;
+    wordActive = false;
+    wordResume = false;
+    if (studyTools) studyTools->words()->cancel();
+    if (shouldResume) setPaused(false);
+}
+
+void LearningSession::translateWord() {
+    if (!wordActive || !studyTools) return;
+
+    const auto word = studyTools->words()->word();
+    studyTools->words()->lookup(word, studyTools->learningSettings(), true);
 }

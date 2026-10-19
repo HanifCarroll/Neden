@@ -16,6 +16,7 @@ ApplicationWindow {
     property bool showRecent: false
     property bool transcriptOpen: true
     property int inspectorTab: 0
+    readonly property bool meaningEditing: transcriptOpen && inspectorTab === 1 && meaningLoader.item !== null && (meaningLoader.item as MeaningPane).editing
     property string requestedSelection: ""
     width: 1280
     height: 756
@@ -41,6 +42,16 @@ ApplicationWindow {
     palette.highlight: Theme.accent
     palette.highlightedText: Theme.background
 
+    Connections {
+        target: root.appearance
+        function onChanged() {
+            if (!root.appearance.selectable) {
+                root.session.closeWordCard();
+                root.session.closeDefinition();
+                root.session.study.invalidateContext();
+            }
+        }
+    }
     menuBar: MenuBar {
         Menu {
             title: "&File"
@@ -257,6 +268,8 @@ ApplicationWindow {
             studyDrawer.close();
         else if (dictionaryOpen)
             closeDictionary();
+        else if (session.study.words.state !== "idle")
+            session.closeWordCard();
         else if (session.selection.length) {
             closeSelection();
             inspectorTab = 0;
@@ -291,22 +304,22 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Space"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !playbackControls.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !playbackControls.editing
         onActivated: root.session.toggle()
     }
     Shortcut {
         sequence: "M"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !playbackControls.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !playbackControls.editing
         onActivated: root.session.toggleMute()
     }
     Shortcut {
         sequence: "Right"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !stage.editing && !playbackControls.editing
         onActivated: root.session.seek(root.session.position + 5)
     }
     Shortcut {
         sequence: "Left"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !stage.editing && !playbackControls.editing
         onActivated: root.session.seek(root.session.position - 5)
     }
     FileDialog {
@@ -320,7 +333,7 @@ ApplicationWindow {
         id: subtitleDialog
         objectName: "primaryPicker"
         title: "Choose Primary subtitles"
-        nameFilters: ["SRT subtitles (*.srt)"]
+        nameFilters: ["Subtitle files (*.srt *.vtt)"]
         onAccepted: root.session.openSubtitles(selectedFile)
     }
 
@@ -328,7 +341,7 @@ ApplicationWindow {
         id: translationDialog
         objectName: "secondaryPicker"
         title: "Choose Secondary subtitles"
-        nameFilters: ["SRT subtitles (*.srt)"]
+        nameFilters: ["Subtitle files (*.srt *.vtt)"]
         onAccepted: root.session.openTranslation(selectedFile)
     }
     Dialog {
@@ -372,7 +385,11 @@ ApplicationWindow {
                 appearance: root.appearance
             }
         }
-        onClosed: root.contentItem.forceActiveFocus()
+        onClosed: {
+            root.appearance.cancelPreview();
+            settingsLoader.active = false;
+            root.contentItem.forceActiveFocus();
+        }
     }
     Drawer {
         id: studyDrawer
@@ -497,6 +514,10 @@ ApplicationWindow {
                                 sourceComponent: MeaningPane {
                                     session: root.session
                                     onDictionaryRequested: term => root.openDictionary(term)
+                                    onDismissed: {
+                                        root.closeSelection();
+                                        root.transcriptOpen = false;
+                                    }
                                 }
                             }
                             Loader {

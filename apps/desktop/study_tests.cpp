@@ -12,6 +12,139 @@
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void appearancePreviewsCanBeCancelledOrApplied() {
+        QTemporaryDir directory;
+        SubtitleAppearance style(directory.path());
+        auto values = style.snapshot();
+        values.insert("secondaryColor", "#ffeeaa");
+        values.insert("gap", 24);
+        values.insert("reversed", true);
+        QVERIFY(style.preview(values));
+        QCOMPARE(style.secondaryColor(), QString("#ffeeaa"));
+        SubtitleAppearance unchanged(directory.path());
+        QCOMPARE(unchanged.gap(), 12);
+        style.cancelPreview();
+        QCOMPARE(style.gap(), 12);
+        QVERIFY(style.preview(values));
+        QVERIFY(style.applyPreview());
+        SubtitleAppearance restored(directory.path());
+        QCOMPARE(restored.gap(), 24);
+        QVERIFY(restored.reversed());
+    }
+    void wordExtractionAndResponsesStayPlainAndBounded() {
+        QCOMPARE(WordLookup::wordAt("Bir ışık gördüm.", 5), QString("ışık"));
+        QCOMPARE(WordLookup::wordAt("日本語 العربية", 1), QString("日本語"));
+        QCOMPARE(WordLookup::languageCode("Turkish"), QString("tr"));
+        QVERIFY_EXCEPTION_THROWN(WordLookup::languageCode("bad/host"), std::runtime_error);
+        QCOMPARE(WordLookup::parseMeanings(R"({"data":{"translations":[{"translatedText":"light &amp; bright"}]}})", true, false), QStringList{"light & bright"});
+        QCOMPARE(WordLookup::parseMeanings(R"([{"translations":[{"displayTarget":"light"},{"displayTarget":"light"},{"displayTarget":"brightness"}]}])", false, true), (QStringList{"light", "brightness"}));
+        QVERIFY_EXCEPTION_THROWN(WordLookup::parseMeanings(QByteArray(64001, 'x'), false, false), std::runtime_error);
+    }
+    void learningSettingsWhitelistFieldsAndNeverPersistKeys() {
+        QTemporaryDir directory;
+        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
+        const QVariantMap settings{{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"},
+            {"includeSecondary", true}, {"primaryProvider", "configured"}, {"wordProvider", "off"}, {"apiKey", "should-not-save"}};
+        QVERIFY(study.configureLearning(settings));
+        QFile file(directory.filePath("study.json"));
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(!file.readAll().contains("should-not-save"));
+        StudyTools restored(directory.path(), [](const QString &) { return QByteArray(); });
+        QCOMPARE(restored.sourceLanguage(), QString("Turkish"));
+        QVERIFY(restored.includeSecondary());
+
+        QString savedEndpoint;
+        study.setCredentialWriter([&](const QString &endpoint, QByteArray key) {
+            savedEndpoint = endpoint;
+            const bool valid = key == "synthetic-test-key";
+            key.fill(0);
+            return valid ? QString("Saved") : QString("Invalid");
+        });
+        study.saveServiceKey("google", "synthetic-test-key");
+        QCOMPARE(savedEndpoint, QString("https://translation.googleapis.com"));
+        QCOMPARE(study.message(), QString("Saved"));
+        QVERIFY(!study.learningSettings().contains("apiKey"));
+    }
+
+    void optedInFallbackWaitsAndUsesOnlyOneAlternateAttempt() {
+        QTemporaryDir directory;
+        QTcpServer primary;
+        QTcpServer alternate;
+        QVERIFY(primary.listen(QHostAddress::LocalHost));
+        QVERIFY(alternate.listen(QHostAddress::LocalHost));
+        int primaryRequests = 0;
+        int alternateRequests = 0;
+        connect(&primary, &QTcpServer::newConnection, this, [&] {
+            auto *socket = primary.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                socket->readAll();
+                if (socket->property("counted").toBool()) return;
+
+                socket->setProperty("counted", true);
+                ++primaryRequests;
+            });
+        });
+        connect(&alternate, &QTcpServer::newConnection, this, [&] {
+            auto *socket = alternate.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                socket->readAll();
+                if (socket->property("sent").toBool()) return;
+
+                socket->setProperty("sent", true);
+                ++alternateRequests;
+                const QByteArray answer = "data: {\"choices\":[{\"delta\":{\"content\":\"Light\"}}]}\n\ndata: [DONE]\n\n";
+                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(answer.size()) + "\r\nConnection: close\r\n\r\n" + answer);
+                socket->disconnectFromHost();
+            });
+        });
+        const QString local = QString("http://127.0.0.1:%1");
+        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
+            "https://api.opensubtitles.com/api/v1", local.arg(alternate.serverPort()));
+        QVERIFY(study.configure(local.arg(primary.serverPort()), "mock", "https://example.org/%s", false));
+        QVariantMap settings{{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}, {"wordProvider", "off"},
+            {"primaryProvider", "configured"}, {"fallbackEnabled", true}};
+        QVERIFY(study.configureLearning(settings));
+        study.explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE(primaryRequests, 1);
+        QTest::qWait(100);
+        QCOMPARE(alternateRequests, 0);
+        QTRY_COMPARE_WITH_TIMEOUT(study.state(), QString("complete"), 7000);
+        QCOMPARE(primaryRequests, 1);
+        QCOMPARE(alternateRequests, 1);
+        QCOMPARE(study.turns().first().toMap().value("fallback").toBool(), true);
+        QCOMPARE(study.turns().first().toMap().value("provider").toString(), QString("gpt-6-luna"));
+    }
+    void wordLookupStreamsOneBoundedResponseAndCancellationRejectsLateCallbacks() {
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int requests = 0;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            auto *socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                socket->readAll();
+                if (socket->property("sent").toBool()) return;
+
+                socket->setProperty("sent", true);
+                ++requests;
+                const QByteArray body = R"({"data":{"translations":[{"translatedText":"light"}]}})";
+                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body.left(10));
+                QTimer::singleShot(150, socket, [socket, body] { socket->write(body.mid(10)); socket->disconnectFromHost(); });
+            });
+        });
+        WordLookup words([](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
+            QUrl(QString("http://127.0.0.1:%1").arg(server.serverPort())));
+        const QVariantMap settings{{"wordProvider", "google"}, {"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}};
+        words.lookup("ışık", settings);
+        QTRY_COMPARE(words.state(), QString("complete"));
+        QCOMPARE(words.meanings(), QStringList{"light"});
+        QCOMPARE(requests, 1);
+        words.lookup("ışık", settings);
+        QTRY_COMPARE(requests, 2);
+        words.cancel();
+        QTest::qWait(200);
+        QCOMPARE(words.state(), QString("idle"));
+        QVERIFY(words.meanings().isEmpty());
+    }
     void appearanceIsBoundedAndPersistsSeparately() {
         QTemporaryDir directory;
         SubtitleAppearance style(directory.path());

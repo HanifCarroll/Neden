@@ -298,6 +298,33 @@ private slots:
         session->checkpoint();
     }
 
+    void trackSelectorsAndAppearancePreviewUseActualControls() {
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorTab", 0);
+        window->setProperty("transcriptOpen", true);
+        auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
+        auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
+        QVERIFY(primary && secondary);
+        QCOMPARE(primary->property("count").toInt(), 3);
+        QCOMPARE(secondary->property("count").toInt(), 3);
+        QCOMPARE(primary->property("currentIndex").toInt(), 1);
+        QCOMPARE(secondary->property("currentIndex").toInt(), 2);
+
+        QTest::keyClick(window, Qt::Key_Comma, Qt::ControlModifier);
+        auto *settings = window->findChild<QObject *>("settingsDialog");
+        QVERIFY(settings);
+        QTRY_VERIFY(settings->property("opened").toBool());
+        auto *size = visualItem(window->contentItem(), "primarySizeSlider");
+        QVERIFY(size);
+        const auto savedSize = appearance->primarySize();
+        QVERIFY(size->setProperty("value", savedSize + 4));
+        QVERIFY(QMetaObject::invokeMethod(size, "moved"));
+        QCOMPARE(appearance->primarySize(), savedSize + 4);
+        QVERIFY(QMetaObject::invokeMethod(settings, "close"));
+        QTRY_VERIFY(!settings->property("opened").toBool());
+        QCOMPARE(appearance->primarySize(), savedSize);
+    }
+
     void doubleClickVideoTogglesFullscreenWithoutChangingPlayback() {
         window->setProperty("showRecent", false);
         session->setPaused(true);
@@ -500,6 +527,7 @@ private slots:
         QVERIFY(server.listen(QHostAddress::LocalHost));
         int requests = 0;
         QString submitted;
+        QJsonArray submittedMessages;
         connect(&server, &QTcpServer::newConnection, this, [&] {
             auto *socket = server.nextPendingConnection();
             auto bytes = std::make_shared<QByteArray>();
@@ -517,6 +545,7 @@ private slots:
                 socket->setProperty("sent", true);
                 ++requests;
                 const auto body = QJsonDocument::fromJson(bytes->mid(boundary + 4, length)).object();
+                submittedMessages = body.value("messages").toArray();
                 const auto context = body.value("messages").toArray().at(1).toObject().value("content").toString();
                 submitted = QJsonDocument::fromJson(context.toUtf8()).object().value("selection").toString();
                 const QByteArray answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI saw a light.\"}}]}\n\ndata: [DONE]\n\n";
@@ -556,7 +585,28 @@ private slots:
         QVERIFY(!fullscreen->active());
         QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
         QTRY_VERIFY(!button->isVisible());
+        // 4. Follow-up editing keeps Space and M as text, while preserving the frozen phrase and first answer.
+        auto *input = visualItem(window->contentItem(), "followUpInput");
+        QVERIFY(input);
+        input->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_W);
+        QTest::keyClick(window, Qt::Key_H);
+        QTest::keyClick(window, Qt::Key_Y);
+        QTest::keyClick(window, Qt::Key_Space);
+        QTest::keyClick(window, Qt::Key_M);
+        QCOMPARE(input->property("text").toString(), QString("why m"));
+        QVERIFY(session->paused());
+        click("sendFollowUpButton");
+        QTRY_COMPARE(study->state(), QString("complete"));
+        QCOMPARE(requests, 2);
+        QCOMPARE(study->turns().size(), 2);
+        QCOMPARE(submittedMessages.size(), 4);
+        QCOMPARE(submittedMessages.last().toObject().value("content").toString(), QString("why m"));
+        QCOMPARE(study->subject(), phrase);
+        QTest::qWait(150);
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/follow-up-chat.png"));
         click("transcriptTab");
+        QCOMPARE(study->turns().size(), 2);
     }
 
     void closeReopenResumeAndRemoveThroughTheUi() {

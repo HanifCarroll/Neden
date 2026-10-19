@@ -128,6 +128,52 @@ Item {
                 Accessible.name: "Transcript search language"
             }
         }
+        RowLayout {
+            visible: pane.session.subtitleTracks.length > 0
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.space4
+            Layout.rightMargin: Theme.space4
+            Layout.bottomMargin: Theme.space3
+            Repeater {
+                model: [false, true]
+                delegate: ChoiceBox {
+                    id: trackChoice
+                    required property bool modelData
+                    objectName: modelData ? "secondaryTrackChoice" : "primaryTrackChoice"
+                    Layout.fillWidth: true
+                    textRole: "name"
+                    model: {
+                        const tracks = [
+                            {
+                                name: "None",
+                                path: "",
+                                primary: !pane.session.sourceSubtitleName.length,
+                                secondary: !pane.session.translationSubtitleName.length
+                            }
+                        ];
+                        for (let index = 0; index < pane.session.subtitleTracks.length; ++index)
+                            tracks.push(pane.session.subtitleTracks[index]);
+                        return tracks;
+                    }
+                    currentIndex: {
+                        for (let i = 0; i < count; ++i) {
+                            const track = model[i];
+                            if (modelData ? track.secondary : track.primary)
+                                return i;
+                        }
+                        return 0;
+                    }
+                    Accessible.name: modelData ? "Secondary track" : "Primary track"
+                    onActivated: {
+                        if (currentIndex === 0)
+                            pane.session.clearTrack(modelData);
+                        else
+                            pane.session.chooseTrack(model[currentIndex].path, modelData);
+                        pane.forceActiveFocus();
+                    }
+                }
+            }
+        }
         Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: Theme.space4
