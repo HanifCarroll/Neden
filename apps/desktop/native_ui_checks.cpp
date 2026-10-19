@@ -18,6 +18,8 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtTest>
 #include <QtWebView/QtWebView>
 #include <cmath>
@@ -26,6 +28,7 @@
 #ifdef Q_OS_MACOS
 bool nativeMenusAreAvailable();
 bool clickNativeInspectorButton(QQuickWindow *window, unsigned index);
+bool nativeInspectorControlsVisible(QQuickWindow *window);
 #endif
 
 class NativeUiChecks : public QObject {
@@ -295,6 +298,29 @@ private slots:
         session->checkpoint();
     }
 
+    void doubleClickVideoTogglesFullscreenWithoutChangingPlayback() {
+        window->setProperty("showRecent", false);
+        session->setPaused(true);
+        const double originalPosition = session->position();
+
+        // 1. Enter fullscreen by double-clicking the picture, away from selectable subtitles.
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(video && video->isVisible());
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier,
+            video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
+        QTRY_VERIFY(fullscreen->active());
+        QVERIFY(session->paused());
+        QVERIFY(std::abs(session->position() - originalPosition) < 0.1);
+
+        // 2. Use the same gesture on the resized picture to return to the normal window.
+        QTest::qWait(200);
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier,
+            video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
+        QTRY_VERIFY(!fullscreen->active());
+        QVERIFY(session->paused());
+        QVERIFY(std::abs(session->position() - originalPosition) < 0.1);
+    }
+
     void fullscreenAndCompactWindowKeepControlsAvailable() {
         window->setProperty("showRecent", false);
         if (!fullscreen->nativeMode()) {
@@ -302,8 +328,23 @@ private slots:
             QTRY_VERIFY(fullscreen->active());
             QTest::qWait(200);
             QVERIFY(visualItem(window->contentItem(), "volumeSlider")->isVisible());
+            auto *toolbar = visualItem(window->contentItem(), "playerToolbar");
+            auto *search = visualItem(window->contentItem(), "transcriptSearchButton");
+            QVERIFY(toolbar && search);
+            const auto toolbarBounds = toolbar->mapRectToScene(toolbar->boundingRect());
+            const auto searchBounds = search->mapRectToScene(search->boundingRect());
+            QVERIFY(searchBounds.top() >= toolbarBounds.bottom());
+#ifdef Q_OS_MACOS
+            QVERIFY(!nativeInspectorControlsVisible(window));
+#endif
+            const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+            if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/fullscreen-controls.png"));
             fullscreen->toggle();
             QTRY_VERIFY(!fullscreen->active());
+#ifdef Q_OS_MACOS
+            QTRY_VERIFY(nativeInspectorControlsVisible(window));
+#endif
+            QTest::qWait(200);
         }
         const auto originalSize = window->size();
         window->resize(900, 540);
@@ -395,6 +436,7 @@ private slots:
         QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier,
             subtitle->mapToScene(QPointF(subtitle->width() / 2, subtitle->height() / 2)).toPoint());
         QTRY_COMPARE(session->selection(), QString("ışık"));
+        QVERIFY(!fullscreen->active());
         QTRY_COMPARE_WITH_TIMEOUT(study->state(), QString("failed"), 5000);
         QVERIFY(study->message().contains("allowance"));
         QTest::qWait(300);
@@ -418,8 +460,103 @@ private slots:
         QCOMPARE(subject->property("text").toString(), QString("ışık"));
         QCOMPARE(study->answer(), QString("### Natural meaning\nLight"));
         QCOMPARE(requests, 2);
+
+        // 5. Read-only subtitle and answer focus must not disable Space or require a click first.
+        auto *editor = subtitle->property("editor").value<QQuickItem *>();
+        QVERIFY(editor);
+        editor->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(!session->paused());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(session->paused());
+        auto *answer = visualItem(window->contentItem(), "explanationAnswerText");
+        QVERIFY(answer);
+        answer->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(!session->paused());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(session->paused());
+
+        // 6. Clicking the picture returns focus to playback without changing its state.
+        editor->forceActiveFocus();
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(video);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+            video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
+        QVERIFY(!editor->hasActiveFocus());
+        QVERIFY(session->paused());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(!session->paused());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(session->paused());
         click("transcriptTab");
         QTRY_VERIFY(session->selection().isEmpty());
+    }
+
+    void hoveringAndExplainingTheFullLineUseOneExplicitRequest() {
+
+        // 1. Serve only a synthetic local explanation and retain the submitted phrase for assertions.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int requests = 0;
+        QString submitted;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            auto *socket = server.nextPendingConnection();
+            auto bytes = std::make_shared<QByteArray>();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket, bytes] {
+                *bytes += socket->readAll();
+                const int boundary = bytes->indexOf("\r\n\r\n");
+                if (boundary < 0 || socket->property("sent").toBool()) return;
+
+                int length = 0;
+                for (const auto &line : bytes->left(boundary).split('\n')) {
+                    if (line.toLower().startsWith("content-length:")) length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
+                }
+                if (bytes->size() < boundary + 4 + length) return;
+
+                socket->setProperty("sent", true);
+                ++requests;
+                const auto body = QJsonDocument::fromJson(bytes->mid(boundary + 4, length)).object();
+                const auto context = body.value("messages").toArray().at(1).toObject().value("content").toString();
+                submitted = QJsonDocument::fromJson(context.toUtf8()).object().value("selection").toString();
+                const QByteArray answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI saw a light.\"}}]}\n\ndata: [DONE]\n\n";
+                socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\nContent-Length: "
+                    + QByteArray::number(answer.size()) + "\r\n\r\n" + answer);
+                socket->disconnectFromHost();
+            });
+        });
+        QVERIFY(study->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        session->setPaused(true);
+        const auto start = qRound64(session->position() * 1000) - 500;
+        const QString phrase = "Bir ışık\ngördüm.";
+        session->replaceCues({{start, start + 10000, phrase, {}}});
+        auto *subtitle = visualItem(window->contentItem(), "primarySubtitleText");
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(subtitle && video);
+        QTest::qWait(150);
+
+        // 2. Hover reveals the button, but sends nothing and does not steal selection gestures.
+        QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
+        auto *button = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
+        QVERIFY(button);
+        QTRY_VERIFY(!button->isVisible());
+        QTest::mouseMove(window, subtitle->mapToScene(QPointF(subtitle->width() / 2, subtitle->height() / 2)).toPoint());
+        QTRY_VERIFY(button->isVisible());
+        QCOMPARE(requests, 0);
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/explain-line-hover.png"));
+
+        // 3. Clicking sends the complete multiline cue exactly once and keeps playback paused.
+        click("primarySubtitleTextExplainButton");
+        QTRY_COMPARE(study->state(), QString("complete"));
+        QCOMPARE(requests, 1);
+        QCOMPARE(submitted, phrase);
+        QCOMPARE(study->subject(), phrase);
+        QVERIFY(session->paused());
+        QVERIFY(!fullscreen->active());
+        QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
+        QTRY_VERIFY(!button->isVisible());
+        click("transcriptTab");
     }
 
     void closeReopenResumeAndRemoveThroughTheUi() {

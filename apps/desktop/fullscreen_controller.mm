@@ -65,8 +65,10 @@ FullscreenController::~FullscreenController() {
     for (id observer in native->observers) [[NSNotificationCenter defaultCenter] removeObserver:observer];
     native->target.controller = nullptr;
     NSView *view = window ? (__bridge NSView *)reinterpret_cast<void *>(window->winId()) : nil;
-    const NSUInteger accessoryIndex = [view.window.titlebarAccessoryViewControllers indexOfObject:native->inspectorAccessory];
-    if (accessoryIndex != NSNotFound && view.window) [view.window removeTitlebarAccessoryViewControllerAtIndex:accessoryIndex];
+    if (view.window.styleMask & NSWindowStyleMaskTitled) {
+        const NSUInteger accessoryIndex = [view.window.titlebarAccessoryViewControllers indexOfObject:native->inspectorAccessory];
+        if (accessoryIndex != NSNotFound) [view.window removeTitlebarAccessoryViewControllerAtIndex:accessoryIndex];
+    }
     if (fullscreenActive && !nativeSession) {
         NSApp.presentationOptions = native->savedPresentation;
     }
@@ -141,6 +143,7 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
             transitioning = false;
             fullscreenActive = (view.window.styleMask & NSWindowStyleMaskFullScreen) != 0;
             nativeSession = fullscreenActive;
+            native->inspectorAccessory.view.hidden = fullscreenActive;
             native->fullscreenMenuItem.title = fullscreenActive ? @"Exit Full Screen" : @"Enter Full Screen";
             bindZoomButton();
             emit activeChanged();
@@ -158,6 +161,12 @@ int FullscreenController::safeTopInset() const {
 void FullscreenController::bindZoomButton() {
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
     NSWindow *nativeWindow = view.window;
+    if (native->inspectorAccessory && (nativeWindow.styleMask & NSWindowStyleMaskTitled)) {
+        if (![nativeWindow.titlebarAccessoryViewControllers containsObject:native->inspectorAccessory]) {
+            [nativeWindow addTitlebarAccessoryViewController:native->inspectorAccessory];
+        }
+        native->inspectorAccessory.view.hidden = fullscreenActive;
+    }
     nativeWindow.collectionBehavior = (nativeWindow.collectionBehavior
         & ~(NSWindowCollectionBehaviorFullScreenPrimary | NSWindowCollectionBehaviorFullScreenAuxiliary)
         & ~NSWindowCollectionBehaviorFullScreenNone)
@@ -183,6 +192,7 @@ void FullscreenController::setActive(bool enabled) {
     }
 
     // 1. Select the mode on entry; changing the preference never changes an active session.
+    native->inspectorAccessory.view.hidden = enabled;
     if (enabled) nativeSession = preferredNativeMode;
     if (nativeSession) {
         transitioning = true;

@@ -8,9 +8,11 @@ Item {
     property alias text: textEditor.text
     property int pixelSize: 28
     property bool selectable: true
+    property bool explainEnabled: false
     property alias editor: textEditor
     signal selectionChanged(string selection)
     signal selectionCommitted
+    signal phraseRequested(string phrase)
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
     visible: textEditor.length > 0
@@ -50,6 +52,7 @@ Item {
                 line.selectionChanged(selectedText);
         }
         PointHandler {
+            id: selectionPointer
             acceptedButtons: Qt.LeftButton
             onActiveChanged: {
                 if (!active && textEditor.selectedText.length)
@@ -60,5 +63,32 @@ Item {
             if (event.key === Qt.Key_Shift && textEditor.selectedText.length)
                 line.selectionCommitted();
         }
+    }
+    Item {
+        id: phraseHoverRegion
+        readonly property real textLeft: Math.max(0, (line.width - line.paintedWidth) / 2)
+        readonly property real textRight: Math.min(line.width, (line.width + line.paintedWidth) / 2)
+        x: Math.max(0, Math.min(textLeft - Theme.space2, explainLine.x))
+        y: Math.min(0, explainLine.y)
+        width: Math.min(line.width, Math.max(textRight + Theme.space2, explainLine.x + explainLine.width)) - x
+        height: Math.max(line.height, explainLine.y + explainLine.height) - y
+        enabled: line.explainEnabled
+        HoverHandler {
+            id: phraseHover
+        }
+    }
+    ActionButton {
+        id: explainLine
+        objectName: line.objectName + "ExplainButton"
+        readonly property bool fitsBesideText: phraseHoverRegion.textRight + Theme.space2 + width <= line.width
+        text: "Explain line"
+        implicitHeight: 30
+        focusPolicy: Qt.TabFocus
+        font.pixelSize: Theme.caption
+        x: fitsBesideText ? phraseHoverRegion.textRight + Theme.space2 : line.width - width
+        y: fitsBesideText ? (line.height - height) / 2 : -height - Theme.space2
+        visible: line.explainEnabled && !selectionPointer.active && (phraseHover.hovered || hovered || activeFocus)
+        Accessible.name: "Explain the full subtitle"
+        onClicked: line.phraseRequested(line.text)
     }
 }

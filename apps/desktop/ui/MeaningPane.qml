@@ -80,6 +80,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             TextArea {
+                objectName: "explanationAnswerText"
                 text: ExplanationFormat.render(pane.study.answer)
                 readOnly: true
                 selectByMouse: true

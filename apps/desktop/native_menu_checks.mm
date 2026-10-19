@@ -10,8 +10,18 @@ bool nativeMenusAreAvailable() {
 
 #include <QQuickWindow>
 
+bool nativeInspectorControlsVisible(QQuickWindow *window) {
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    if (!(view.window.styleMask & NSWindowStyleMaskTitled)) return false;
+
+    NSView *accessory = view.window.titlebarAccessoryViewControllers.lastObject.view;
+    return accessory && !accessory.isHidden;
+}
+
 bool clickNativeInspectorButton(QQuickWindow *window, unsigned index) {
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    if (!(view.window.styleMask & NSWindowStyleMaskTitled)) return false;
+
     NSView *accessory = view.window.titlebarAccessoryViewControllers.lastObject.view;
     if (index >= accessory.subviews.count) return false;
 

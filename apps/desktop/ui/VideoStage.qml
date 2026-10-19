@@ -9,6 +9,7 @@ Rectangle {
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
     signal explainSelection
+    signal fullscreenRequested
     readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
     color: "#080b0c"
     radius: 0
@@ -26,6 +27,13 @@ Rectangle {
         anchors.fill: parent
         playback: stage.playback
         mirrorVertically: true
+    }
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        enabled: stage.session.hasMedia
+        onClicked: stage.forceActiveFocus()
+        onDoubleClicked: stage.fullscreenRequested()
     }
     Item {
         anchors.left: parent.left
@@ -56,8 +64,13 @@ Rectangle {
                 text: stage.session.subtitle
                 appearance: stage.appearance
                 pixelSize: stage.appearance.primarySize
+                explainEnabled: true
                 onSelectionChanged: selection => stage.session.select(selection)
                 onSelectionCommitted: stage.explainSelection()
+                onPhraseRequested: phrase => {
+                    stage.session.select(phrase);
+                    stage.explainSelection();
+                }
             }
             SubtitleText {
                 id: translation

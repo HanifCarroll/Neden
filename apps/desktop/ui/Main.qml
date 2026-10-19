@@ -291,12 +291,12 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Space"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !playbackControls.editing
         onActivated: root.session.toggle()
     }
     Shortcut {
         sequence: "M"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !playbackControls.editing
         onActivated: root.session.toggleMute()
     }
     Shortcut {
@@ -400,7 +400,11 @@ ApplicationWindow {
         }
     }
 
-    header: ToolBar {
+    ToolBar {
+        id: playerToolbar
+        objectName: "playerToolbar"
+        width: parent.width
+        height: implicitHeight
         visible: Qt.platform.os !== "osx" || root.fullscreenController.active
         implicitHeight: visible ? 36 + root.fullscreenController.safeTopInset : 0
         background: Rectangle {
@@ -420,11 +424,13 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
             IconButton {
+                objectName: "toolbarTranscriptButton"
                 name: "captions"
                 description: "Toggle transcript"
                 onClicked: root.toggleTranscript()
             }
             IconButton {
+                objectName: "toolbarMeaningButton"
                 name: "info"
                 description: "Show meaning"
                 onClicked: root.openMeaning()
@@ -432,7 +438,10 @@ ApplicationWindow {
         }
     }
     StackLayout {
-        anchors.fill: parent
+        anchors.top: playerToolbar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         currentIndex: root.session.hasMedia && !root.showRecent ? 1 : 0
         RecentVideosPane {
             Layout.margins: Theme.space5
@@ -454,6 +463,7 @@ ApplicationWindow {
                     playback: root.playback
                     appearance: root.appearance
                     onExplainSelection: root.explainCommittedSelection()
+                    onFullscreenRequested: root.fullscreen()
                 }
                 Rectangle {
                     objectName: "learningInspector"
