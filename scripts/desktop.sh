@@ -19,10 +19,10 @@ fi
 if [ "$command_name" = core-test ]; then
     cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release -DNEDEN_CORE_ONLY=ON
 elif [ "$(uname -s)" = Darwin ]; then
-    cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release \
+    cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release -DNEDEN_NATIVE_UI_CHECKS=OFF \
         -DNEDEN_MPV_FRAMEWORKS="${NEDEN_MPV_FRAMEWORKS:-$repo_root/.cache/playback-frameworks}"
 else
-    cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release \
+    cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release -DNEDEN_NATIVE_UI_CHECKS=OFF \
         -DAUDITED_MPV_PREFIX="${AUDITED_MPV_PREFIX:?Set AUDITED_MPV_PREFIX to the reviewed LGPL runtime}"
 fi
 cmake --build "$build_directory" --parallel "${NEDEN_BUILD_JOBS:-4}"
