@@ -150,7 +150,7 @@ def prepare_bundle(destination):
     revision = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT):
         revision += "-dirty"
-    info.update(CFBundleIdentifier=BUNDLE_ID, CFBundleName="Neden", CFBundleDisplayName="Neden",
+    info.update(CFBundleIdentifier=BUNDLE_ID, CFBundleName="Neden", CFBundleDisplayName="Neden", CFBundleExecutable="Neden",
                 NedenSourceRevision=revision)
     info_path.write_bytes(plistlib.dumps(info))
     notices = destination / "Contents/Resources/licenses"
