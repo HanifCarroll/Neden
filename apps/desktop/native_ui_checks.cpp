@@ -604,6 +604,20 @@ private slots:
         QCOMPARE(submittedMessages.last().toObject().value("content").toString(), QString("why m"));
         QCOMPARE(study->subject(), phrase);
         QTest::qWait(150);
+        QList<QQuickItem *> answers;
+        std::function<void(QQuickItem *)> collectAnswers = [&](QQuickItem *item) {
+            if (item->objectName() == "explanationAnswerText") answers.append(item);
+            for (auto *child : item->childItems()) collectAnswers(child);
+        };
+        collectAnswers(window->contentItem());
+        QCOMPARE(answers.size(), 2);
+        auto *chatView = visualItem(window->contentItem(), "conversationList");
+        QVERIFY(chatView->height() > 300);
+        QVERIFY(chatView->property("contentY").toReal() + chatView->height() >= chatView->property("contentHeight").toReal() - 1);
+        for (auto *answer : answers) {
+            QVERIFY(answer->height() >= answer->property("contentHeight").toReal() - 1);
+            QVERIFY(answer->property("text").toString().contains("I saw a light."));
+        }
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/follow-up-chat.png"));
         click("transcriptTab");
         QCOMPARE(study->turns().size(), 2);

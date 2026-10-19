@@ -25,6 +25,7 @@ Item {
         anchors.margins: Theme.space4
         spacing: Theme.space3
         RowLayout {
+            Layout.fillHeight: false
             Layout.fillWidth: true
             Label {
                 objectName: "explanationSubject"
@@ -44,6 +45,7 @@ Item {
             }
         }
         RowLayout {
+            Layout.fillHeight: false
             visible: pane.study.subject.length > 0
             ActionButton {
                 text: pane.session.replaying ? "Stop replay" : "Replay line"
@@ -74,8 +76,21 @@ Item {
             Layout.fillHeight: true
             clip: true
             spacing: Theme.space4
+            property bool followingAnswer: true
             model: pane.study.turns.length
-            onCountChanged: Qt.callLater(positionViewAtEnd)
+            onMovementStarted: followingAnswer = false
+            onMovementEnded: {
+                if (atYEnd)
+                    followingAnswer = true;
+            }
+            onContentHeightChanged: {
+                if (followingAnswer)
+                    Qt.callLater(positionViewAtEnd);
+            }
+            onCountChanged: {
+                followingAnswer = true;
+                Qt.callLater(positionViewAtEnd);
+            }
             ScrollBar.vertical: ScrollBar {}
             delegate: ColumnLayout {
                 id: turn
@@ -101,6 +116,8 @@ Item {
                 }
                 TextArea {
                     objectName: "explanationAnswerText"
+                    Layout.preferredHeight: contentHeight
+                    Layout.minimumHeight: contentHeight
                     text: ExplanationFormat.render(turn.modelData.answer)
                     readOnly: true
                     selectByMouse: true
@@ -130,6 +147,7 @@ Item {
             color: pane.study.state === "failed" ? Theme.error : Theme.muted
         }
         RowLayout {
+            Layout.fillHeight: false
             ActionButton {
                 objectName: "explainButton"
                 text: pane.study.state === "idle" ? "Explain" : "Try again"
@@ -149,6 +167,7 @@ Item {
             }
         }
         RowLayout {
+            Layout.fillHeight: false
             visible: pane.study.turns.length > 0
             Layout.fillWidth: true
             ScrollView {
@@ -199,6 +218,7 @@ Item {
             Layout.fillWidth: true
         }
         RowLayout {
+            Layout.fillHeight: false
             Layout.fillWidth: true
             ActionButton {
                 text: "Dictionary"
@@ -219,7 +239,7 @@ Item {
     Connections {
         target: pane.study
         function onChanged() {
-            if (conversation.atYEnd)
+            if (conversation.followingAnswer)
                 Qt.callLater(conversation.positionViewAtEnd);
         }
     }
