@@ -62,6 +62,7 @@ qt_add_resources(NedenQt fonts PREFIX "/fonts" BASE "../../shared/fonts"
         ../../shared/fonts/Inter-SemiBold.otf ../../shared/fonts/LICENSE.txt)
 file(GLOB NEDEN_ICON_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/icons/lucide/*.svg")
 qt_add_resources(NedenQt icons PREFIX "/icons" BASE "../../shared/icons/lucide" FILES ${NEDEN_ICON_FILES})
+qt_add_resources(NedenQt branding PREFIX "/branding" BASE "../../shared/branding" FILES ../../shared/branding/neden.png)
 target_include_directories(NedenQt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(NedenQt PRIVATE Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView)
 if(APPLE)
@@ -127,6 +128,7 @@ if(NEDEN_NATIVE_UI_CHECKS)
         FILES ../../shared/fonts/Inter-Regular.otf ../../shared/fonts/Inter-Medium.otf
             ../../shared/fonts/Inter-SemiBold.otf ../../shared/fonts/LICENSE.txt)
     qt_add_resources(NedenNativeChecks check_icons PREFIX "/icons" BASE "../../shared/icons/lucide" FILES ${NEDEN_ICON_FILES})
+    qt_add_resources(NedenNativeChecks check_branding PREFIX "/branding" BASE "../../shared/branding" FILES ../../shared/branding/neden.png)
     target_include_directories(NedenNativeChecks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${MPV_INCLUDE_DIR})
     target_link_libraries(NedenNativeChecks PRIVATE Qt6::Test Qt6::Network Qt6::Quick
         Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView "${REVIEWED_MPV_LIBRARY}")

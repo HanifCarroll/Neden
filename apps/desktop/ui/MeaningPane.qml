@@ -15,7 +15,8 @@ Item {
         anchors.margins: Theme.space4
         spacing: Theme.space3
         Label {
-            text: pane.session.selection.length ? pane.session.selection : pane.session.subtitle || "Select a word or phrase in the subtitles."
+            objectName: "explanationSubject"
+            text: pane.study.subject || "Select a word or phrase in the subtitles."
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
@@ -34,13 +35,14 @@ Item {
             ActionButton {
                 objectName: "explainButton"
                 text: pane.study.state === "failed" || pane.study.state === "incomplete" ? "Try again" : "Explain"
+                visible: pane.study.state === "idle" || pane.study.state === "failed" || pane.study.state === "incomplete"
                 enabled: !pane.busy && (pane.session.selection.length > 0 || pane.session.subtitle.length > 0)
-                onClicked: pane.session.explainSelection(false)
-            }
-            ActionButton {
-                text: "Translate"
-                enabled: !pane.busy && (pane.session.selection.length > 0 || pane.session.subtitle.length > 0)
-                onClicked: pane.session.explainSelection(true)
+                onClicked: {
+                    if (pane.study.state === "idle")
+                        pane.session.explainSelection();
+                    else
+                        pane.study.retryExplanation();
+                }
             }
             ActionButton {
                 text: "Stop"
@@ -53,7 +55,7 @@ Item {
             text: "Look up in dictionary"
             flat: true
             enabled: pane.session.selection.length > 0 || pane.session.subtitle.length > 0
-            onClicked: pane.dictionaryRequested(pane.session.selection || pane.session.subtitle)
+            onClicked: pane.dictionaryRequested(pane.study.subject || pane.session.selection || pane.session.subtitle)
         }
         Label {
             visible: pane.study.state !== "idle"

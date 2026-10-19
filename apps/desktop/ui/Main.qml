@@ -22,7 +22,7 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 540
     visible: true
-    title: session.hasMedia ? session.mediaTitle + " — Neden" : "Neden"
+    title: session.hasMedia && !showRecent ? session.mediaTitle + " — Neden" : "Neden"
     onClosing: session.checkpoint()
     color: Theme.background
     font.family: "Inter"
@@ -147,15 +147,7 @@ ApplicationWindow {
                 enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
                 onTriggered: {
                     root.openMeaning();
-                    root.session.explainSelection(false);
-                }
-            }
-            Action {
-                text: "Translate selection"
-                enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
-                onTriggered: {
-                    root.openMeaning();
-                    root.session.explainSelection(true);
+                    root.session.explainSelection();
                 }
             }
             Action {
@@ -231,7 +223,7 @@ ApplicationWindow {
 
         requestedSelection = session.selection;
         openMeaning();
-        session.explainSelection(false);
+        session.explainSelection();
     }
     function openSettings() {
         if (studyDrawer.opened)
@@ -301,6 +293,11 @@ ApplicationWindow {
         sequence: "Space"
         enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
         onActivated: root.session.toggle()
+    }
+    Shortcut {
+        sequence: "M"
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
+        onActivated: root.session.toggleMute()
     }
     Shortcut {
         sequence: "Right"
@@ -480,6 +477,8 @@ ApplicationWindow {
                             TranscriptPane {
                                 id: transcript
                                 session: root.session
+                                onPrimaryRequested: subtitleDialog.open()
+                                onSecondaryRequested: translationDialog.open()
                             }
                             Loader {
                                 id: meaningLoader

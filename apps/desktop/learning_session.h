@@ -55,7 +55,7 @@ public:
     int activeCue() const { return currentCue; }
     Q_INVOKABLE void openVideo(const QUrl &url);
     Q_INVOKABLE void openTranslation(const QUrl &url);
-    Q_INVOKABLE void explainSelection(bool translate = false);
+    Q_INVOKABLE void explainSelection();
     Q_INVOKABLE void openSubtitles(const QUrl &url);
     Q_INVOKABLE void toggle();
     Q_INVOKABLE void seek(double seconds);
@@ -87,6 +87,7 @@ signals:
 private:
     int previousSubtitleIndex() const;
     int nextSubtitleIndex() const;
+    void playSubtitle(int index);
     void finishReplay();
     void syncPosition();
     void resetInteraction();

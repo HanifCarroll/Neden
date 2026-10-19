@@ -12,6 +12,7 @@ class StudyTools : public QObject {
     QML_ELEMENT
     QML_UNCREATABLE("Study services are supplied by the application")
     Q_PROPERTY(QString answer READ answer NOTIFY changed)
+    Q_PROPERTY(QString subject READ subject NOTIFY changed)
     Q_PROPERTY(QString state READ state NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
     Q_PROPERTY(QString endpoint READ endpoint NOTIFY changed)
@@ -26,6 +27,7 @@ public:
         QString subtitleApi = "https://api.opensubtitles.com/api/v1");
     ~StudyTools() override;
     QString answer() const { return answerText; }
+    QString subject() const { return subjectText; }
     QString state() const { return requestState; }
     QString message() const { return statusText; }
     QString endpoint() const { return endpointText; }
@@ -42,7 +44,8 @@ public:
     void invalidateTrack();
     Q_INVOKABLE bool configure(const QString &endpoint, const QString &model, const QString &dictionary, bool automatic);
     Q_INVOKABLE QUrl dictionaryUrl(const QString &term);
-    Q_INVOKABLE void explain(const QString &selection, const QString &context, bool translate = false);
+    Q_INVOKABLE void explain(const QString &selection, const QString &context);
+    Q_INVOKABLE void retryExplanation();
     Q_INVOKABLE void stop();
     Q_INVOKABLE void saveCard(const QString &front, const QString &context, const QString &translation, double seconds);
     Q_INVOKABLE void removeCard(int index);
@@ -74,6 +77,8 @@ private:
     QByteArray subtitleToken;
     QByteArray pendingEvents;
     QString answerText;
+    QString subjectText;
+    QString subjectContext;
     QString requestState = "idle";
     QString statusText = "Select a subtitle to study.";
     QString endpointText = "https://api.deepseek.com";

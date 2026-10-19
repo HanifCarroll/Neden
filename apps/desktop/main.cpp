@@ -11,6 +11,7 @@
 #include <QColorSpace>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -35,6 +36,7 @@ int main(int argc, char **argv) {
     DesktopApplication application(argc, argv);
     application.setApplicationName("Neden");
     application.setApplicationDisplayName("Neden");
+    application.setWindowIcon(QIcon(":/branding/neden.png"));
     QQuickStyle::setStyle("Basic");
     for (const auto &weight : {"Regular", "Medium", "SemiBold"}) {
         QFontDatabase::addApplicationFont(QString(":/fonts/Inter-%1.otf").arg(weight));

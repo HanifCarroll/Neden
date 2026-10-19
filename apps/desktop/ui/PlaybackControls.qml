@@ -23,7 +23,7 @@ Rectangle {
         IconButton {
             objectName: "previousSubtitleButton"
             name: "skip-back"
-            description: "Previous subtitle · pause"
+            description: "Play previous subtitle · pause at end"
             enabled: controls.session.canPreviousSubtitle
             onClicked: controls.session.previousSubtitle()
         }
@@ -37,7 +37,7 @@ Rectangle {
         IconButton {
             objectName: "nextSubtitleButton"
             name: "skip-forward"
-            description: "Next subtitle · pause"
+            description: "Play next subtitle · pause at end"
             enabled: controls.session.canNextSubtitle
             onClicked: controls.session.nextSubtitle()
         }
@@ -109,7 +109,22 @@ Rectangle {
                 radius: 6
                 border.color: speed.activeFocus ? Theme.accent : "transparent"
             }
-            onActivated: controls.session.rate([0.75, 1, 1.25, 1.5][currentIndex])
+            onActivated: {
+                controls.session.rate([0.75, 1, 1.25, 1.5][currentIndex]);
+                controls.forceActiveFocus();
+            }
+            Keys.onSpacePressed: event => {
+                if (!popup.visible) {
+                    controls.session.toggle();
+                    event.accepted = true;
+                } else {
+                    event.accepted = false;
+                }
+            }
+            Keys.onReleased: event => {
+                if (event.key === Qt.Key_Space && !popup.visible)
+                    event.accepted = true;
+            }
             Accessible.name: "Playback speed"
         }
         IconButton {

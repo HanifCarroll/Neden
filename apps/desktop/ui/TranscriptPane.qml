@@ -10,6 +10,8 @@ Item {
     readonly property bool editing: search.activeFocus || language.activeFocus
     property bool searchOpen: false
     property bool followingPlayback: true
+    signal primaryRequested
+    signal secondaryRequested
 
     function followCurrentCue() {
         if (!followingPlayback)
@@ -66,9 +68,40 @@ Item {
                     pane.searchOpen = !pane.searchOpen;
                     if (pane.searchOpen)
                         search.forceActiveFocus();
-                    else
+                    else {
                         search.text = "";
+                        pane.forceActiveFocus();
+                    }
                 }
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.space4
+            Layout.rightMargin: Theme.space4
+            Layout.bottomMargin: Theme.space3
+            spacing: Theme.space2
+            ActionButton {
+                objectName: "loadPrimarySubtitlesButton"
+                text: "Primary…"
+                Layout.fillWidth: true
+                enabled: pane.session.hasMedia
+                onClicked: pane.primaryRequested()
+                Accessible.name: "Load primary subtitles"
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: pane.session.sourceSubtitleName.length ? "Replace primary subtitles: " + pane.session.sourceSubtitleName : "Load primary subtitles"
+            }
+            ActionButton {
+                objectName: "loadSecondarySubtitlesButton"
+                text: "Secondary…"
+                Layout.fillWidth: true
+                enabled: pane.session.hasMedia
+                onClicked: pane.secondaryRequested()
+                Accessible.name: "Load secondary subtitles"
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: pane.session.translationSubtitleName.length ? "Replace secondary subtitles: " + pane.session.translationSubtitleName : "Load secondary subtitles"
             }
         }
         ColumnLayout {
@@ -80,6 +113,7 @@ Item {
             spacing: Theme.space2
             SearchField {
                 id: search
+                objectName: "transcriptSearchField"
                 Layout.fillWidth: true
                 placeholderText: "Find a word or phrase…"
                 onTextChanged: pane.session.cueModel.search(text)
@@ -189,7 +223,7 @@ Item {
         }
         Label {
             visible: pane.session.cueModel.count === 0
-            text: pane.searchOpen && search.text.length ? "No matching subtitles." : "Load a primary track from the Subtitles menu."
+            text: pane.searchOpen && search.text.length ? "No matching subtitles." : "Load primary subtitles to follow along. Add a secondary track to see both languages."
             color: Theme.muted
             font.pixelSize: Theme.body
             wrapMode: Text.WordWrap

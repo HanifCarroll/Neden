@@ -86,8 +86,8 @@ void LearningSession::finishOpening(const QString &path) {
     }
 }
 
-void LearningSession::explainSelection(bool translate) {
-    if (studyTools) studyTools->explain(selectedText.isEmpty() ? subtitle() : selectedText, subtitle(), translate);
+void LearningSession::explainSelection() {
+    if (studyTools) studyTools->explain(selectedText.isEmpty() ? subtitle() : selectedText, subtitle());
 }
 
 void LearningSession::openTranslation(const QUrl &url) {
@@ -244,7 +244,7 @@ void LearningSession::select(const QString &text) {
     if (selectedText.isEmpty()) {
         resumeAfterDefinition = !paused();
     }
-    if (studyTools) studyTools->invalidateContext();
+    if (studyTools) studyTools->stop();
     selectedText = text.trimmed();
     emit selectionChanged();
     setPaused(true);
@@ -298,13 +298,11 @@ void LearningSession::seekSubtitle(double seconds) {
 }
 
 void LearningSession::previousSubtitle() {
-    const int index = previousSubtitleIndex();
-    if (index >= 0) seekSubtitle(model.cues[index].startMs / 1000.0);
+    playSubtitle(previousSubtitleIndex());
 }
 
 void LearningSession::nextSubtitle() {
-    const int index = nextSubtitleIndex();
-    if (index >= 0) seekSubtitle(model.cues[index].startMs / 1000.0);
+    playSubtitle(nextSubtitleIndex());
 }
 
 void LearningSession::replay() {
@@ -315,10 +313,14 @@ void LearningSession::replay() {
         return;
     }
     const int cueIndex = subtitleSeekIndex >= 0 ? subtitleSeekIndex : currentCue;
-    if (cueIndex < 0) return;
+    playSubtitle(cueIndex);
+}
 
-    // 2. Freeze the chosen cue before clearing any definition or prior interaction.
-    const Cue cue = model.cues[cueIndex];
+void LearningSession::playSubtitle(int index) {
+    if (index < 0 || index >= model.cues.size()) return;
+
+    // 1. Freeze the chosen cue before clearing any definition or prior interaction.
+    const Cue cue = model.cues[index];
     resetInteraction();
     restorePosition = -1;
     setPaused(true);
@@ -326,9 +328,14 @@ void LearningSession::replay() {
     replayEnd = cue.endMs / 1000.0;
     replayArmed = false;
     replayActive = true;
+    subtitleSeekTarget = replayStart;
+    subtitleSeekIndex = index;
     emit replayingChanged();
+
+    // 2. Play only this cue; syncPosition pauses at its end after the seek arrives.
     engine->seek(replayStart);
     setPaused(false);
+    emit cueChanged();
 }
 
 void LearningSession::stopReplay() {
@@ -348,7 +355,8 @@ void LearningSession::finishReplay() {
 
 void LearningSession::saveCard() {
     if (studyTools) {
-        studyTools->saveCard(selectedText.isEmpty() ? subtitle() : selectedText, subtitle(), translation(), position());
+        const auto front = studyTools->subject().isEmpty() ? (selectedText.isEmpty() ? subtitle() : selectedText) : studyTools->subject();
+        studyTools->saveCard(front, subtitle(), translation(), position());
     }
 }
 void LearningSession::syncPosition() {
@@ -372,7 +380,11 @@ void LearningSession::syncPosition() {
 
     // 2. Finish replay only after its requested start has been observed.
     if (replayActive) {
-        if (position() >= replayStart - 0.1 && position() < replayEnd) replayArmed = true;
+        if (position() >= replayStart - 0.1 && position() < replayEnd) {
+            replayArmed = true;
+            subtitleSeekTarget = -1;
+            subtitleSeekIndex = -1;
+        }
         if (replayArmed && position() >= replayEnd) finishReplay();
     }
 }

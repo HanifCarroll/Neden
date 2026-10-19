@@ -98,7 +98,7 @@ private:
         QCoreApplication::processEvents();
     }
 
-    void chooseFile(const char *pickerName, const QString &path) {
+    void chooseFile(const char *pickerName, const QString &path, const char *buttonName = nullptr) {
         auto *picker = window->findChild<QObject *>(pickerName);
         QVERIFY(picker);
         // Qt's own picker is controllable without granting OS Accessibility access.
@@ -112,7 +112,10 @@ private:
             QVERIFY(QMetaObject::invokeMethod(picker, "close"));
             accepted = true;
         });
-        QVERIFY(QMetaObject::invokeMethod(picker, "open"));
+        if (buttonName)
+            click(buttonName);
+        else
+            QVERIFY(QMetaObject::invokeMethod(picker, "open"));
         QTRY_VERIFY_WITH_TIMEOUT(accepted, 10000);
         QTRY_VERIFY(!picker->property("visible").toBool());
         qInfo("Completed file picker: %s", pickerName);
@@ -133,8 +136,8 @@ private slots:
         chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
         QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
         session->setPaused(true);
-        chooseFile("primaryPicker", qEnvironmentVariable("NEDEN_CHECK_PRIMARY"));
-        chooseFile("secondaryPicker", qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
+        chooseFile("primaryPicker", qEnvironmentVariable("NEDEN_CHECK_PRIMARY"), "loadPrimarySubtitlesButton");
+        chooseFile("secondaryPicker", qEnvironmentVariable("NEDEN_CHECK_SECONDARY"), "loadSecondarySubtitlesButton");
         QVERIFY(!session->model.cues.isEmpty());
         QVERIFY(session->translationCueCount() > 0);
 
@@ -201,7 +204,60 @@ private slots:
         QVERIFY(window->property("showRecent").toBool());
     }
 
-    void subtitleControlsPauseOnTheRealPlaybackAdapter() {
+    void speedSelectionPreservesPlayerShortcutsAndTextInput() {
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorTab", 0);
+        session->setPaused(true);
+
+        // 1. Select a speed with the mouse, then use the ordinary player shortcuts.
+        click("speedChoice");
+        click("speedChoiceOption2");
+        auto *speed = visualItem(window->contentItem(), "speedChoice");
+        QVERIFY(speed);
+        auto *popup = speed->property("popup").value<QObject *>();
+        QVERIFY(popup);
+        QTRY_VERIFY(!popup->property("visible").toBool());
+        QCOMPARE(speed->property("currentIndex").toInt(), 2);
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(!session->paused());
+        QVERIFY(!popup->property("visible").toBool());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(session->paused());
+        const double beforeSeek = session->position();
+        QTest::keyClick(window, Qt::Key_Right);
+        QTRY_VERIFY(std::abs(session->position() - beforeSeek - 5) < 0.15);
+        QTest::keyClick(window, Qt::Key_Left);
+        QTRY_VERIFY(std::abs(session->position() - beforeSeek) < 0.15);
+        const double beforeMute = session->volumeLevel();
+        QTest::keyClick(window, Qt::Key_M);
+        QCOMPARE(session->volumeLevel(), 0);
+        QTest::keyClick(window, Qt::Key_M);
+        QCOMPARE(session->volumeLevel(), beforeMute);
+
+        // 2. A closed, keyboard-focused speed control also treats Space as play/pause.
+        speed->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(!session->paused());
+        QVERIFY(!popup->property("visible").toBool());
+        QTest::keyClick(window, Qt::Key_Space);
+        QTRY_VERIFY(session->paused());
+
+        // 3. Single-letter and Space shortcuts must not consume text in search fields.
+        click("transcriptSearchButton");
+        auto *search = visualItem(window->contentItem(), "transcriptSearchField");
+        QVERIFY(search && search->hasActiveFocus());
+        QTest::keyClick(window, Qt::Key_M);
+        QTest::keyClick(window, Qt::Key_Space);
+        QTest::keyClick(window, Qt::Key_M);
+        QCOMPARE(search->property("text").toString(), QString("m m"));
+        QCOMPARE(session->volumeLevel(), beforeMute);
+        QVERIFY(session->paused());
+        click("transcriptSearchButton");
+        session->rate(1);
+        QVERIFY(speed->setProperty("currentIndex", 1));
+    }
+
+    void subtitleControlsPlayOneCueThenPauseOnTheRealAdapter() {
         window->setProperty("showRecent", false);
         session->seek(stoppedAt);
         QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
@@ -210,9 +266,21 @@ private slots:
         session->setPaused(false);
         click("previousSubtitleButton");
         QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial - 1].startMs / 1000.0) < 0.1);
+        QVERIFY(!session->paused());
+        QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
+        QVERIFY(session->paused());
+        QTest::keyClick(window, Qt::Key_Right, Qt::ControlModifier);
+        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial].startMs / 1000.0) < 0.1);
+        QVERIFY(!session->paused());
+        QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
+        QVERIFY(session->paused());
+        QTest::keyClick(window, Qt::Key_Left, Qt::ControlModifier);
+        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial - 1].startMs / 1000.0) < 0.1);
+        QVERIFY(!session->paused());
+        QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
         QVERIFY(session->paused());
         click("nextSubtitleButton");
-        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial].startMs / 1000.0) < 0.1);
+        QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
         QVERIFY(session->paused());
         click("replaySubtitleButton");
         QVERIFY(session->replaying());
@@ -340,6 +408,16 @@ private slots:
         auto *meaning = window->findChild<QObject *>("meaningLoader");
         QVERIFY(meaning && meaning->property("active").toBool());
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/explanation.png"));
+
+        // 4. Draft highlight changes leave the completed phrase and answer stable.
+        auto *subject = visualItem(window->contentItem(), "explanationSubject");
+        QVERIFY(subject);
+        QCOMPARE(subject->property("text").toString(), QString("ışık"));
+        session->select("ış");
+        QTest::qWait(100);
+        QCOMPARE(subject->property("text").toString(), QString("ışık"));
+        QCOMPARE(study->answer(), QString("### Natural meaning\nLight"));
+        QCOMPARE(requests, 2);
         click("transcriptTab");
         QTRY_VERIFY(session->selection().isEmpty());
     }
@@ -351,6 +429,11 @@ private slots:
         createWindow();
         QCOMPARE(recent->count(), 1);
         QVERIFY(!session->hasMedia());
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QTest::qWait(200);
+            QVERIFY(window->grabWindow().save(artifacts + "/recent-videos.png"));
+        }
         click("resumeVideoButton");
         QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(session->position() - stoppedAt) < 1, 10000);

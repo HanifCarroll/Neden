@@ -71,9 +71,10 @@ private slots:
         QVERIFY(!study.message().contains("HTTP 0"));
         QTest::qWait(200);
         QCOMPARE(requests, 1);
-        study.explain("ışık", "Bir ışık gördüm.");
+        study.retryExplanation();
         QTRY_COMPARE(study.state(), QString("complete"));
         QCOMPARE(requests, 2);
+        QCOMPARE(study.subject(), QString("ışık"));
         QCOMPARE(study.answer(), QString("Light"));
     }
     void dictionaryEncodingAndDestinationValidation() {
