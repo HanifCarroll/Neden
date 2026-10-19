@@ -1,4 +1,6 @@
 #include "study_tools.h"
+#include "network_error.h"
+#include <QSslSocket>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -156,6 +158,10 @@ QUrl StudyTools::dictionaryUrl(const QString &term) {
 }
 
 QNetworkRequest StudyTools::authenticatedRequest(const QUrl &url, const QString &credentialEndpoint, bool subtitles) {
+    if (url.scheme() == "https" && !QSslSocket::supportsSsl()) {
+        throw std::runtime_error("This installation is missing secure networking support. Reinstall Neden; no request was sent.");
+    }
+
     auto key = credentials(credentialEndpoint);
     if (key.isEmpty() || key.size() > 512 || key.contains('\r') || key.contains('\n')) {
         throw std::runtime_error("The saved credential is missing or Keychain access is unavailable. No request was sent.");
@@ -212,7 +218,7 @@ void StudyTools::explain(const QString &selection, const QString &context, bool 
             const auto code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() != QNetworkReply::NoError || code != 200) {
                 requestState = answerText.isEmpty() ? "failed" : "incomplete";
-                statusText = QString("Request failed (HTTP %1). No automatic retry was made.").arg(code);
+                statusText = networkFailureMessage(code, reply->error(), "Explanation failed");
             } else if (!sawDone || truncated || answerText.isEmpty()) {
                 requestState = "incomplete";
                 statusText = "The response ended before a complete answer arrived.";
@@ -431,7 +437,7 @@ void StudyTools::findSubtitles(const QString &language, bool autoDownload, const
             if (owner != subtitleOwner) return;
             subtitleReply = nullptr;
             if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
-                fail(QString("Subtitle search failed (HTTP %1, network %2). No retry was made.").arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()).arg(int(reply->error()))); return;
+                fail(networkFailureMessage(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error(), "Subtitle search failed")); return;
             }
 
             // 3. Offer valid file IDs; automatic downloads require an exact hash match.
@@ -484,7 +490,9 @@ void StudyTools::downloadSubtitle(int index) {
             if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200
                 || token.isEmpty() || token.size() > 8192 || token.contains('\r') || token.contains('\n')
                 || (!base.isEmpty() && base != QUrl(subtitleEndpoint).host())) {
-                fail("OpenSubtitles sign-in failed or returned an unsupported server. No retry was made."); return;
+                fail(reply->error() != QNetworkReply::NoError
+                    ? networkFailureMessage(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error(), "OpenSubtitles sign-in failed")
+                    : QString("OpenSubtitles returned an unsupported sign-in response. No retry was made.")); return;
             }
             subtitleToken = token;
 
@@ -509,7 +517,7 @@ void StudyTools::requestSubtitleDownload(int index, quint64 owner) {
             subtitleReply = nullptr;
             if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
                 if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 401) subtitleToken.clear();
-                fail("Subtitle download failed or your allowance is exhausted. No retry was made."); return;
+                fail(networkFailureMessage(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error(), "Subtitle download failed")); return;
             }
             const auto link = QUrl(QJsonDocument::fromJson(reply->readAll()).object().value("link").toString());
             const bool localTest = QUrl(subtitleEndpoint).scheme() == "http" && link.scheme() == "http"
@@ -536,7 +544,7 @@ void StudyTools::fetchSubtitle(const QUrl &url, quint64 owner) {
         if (owner != subtitleOwner) return;
         subtitleReply = nullptr;
         if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
-            fail("The subtitle file could not be downloaded."); return;
+            fail(networkFailureMessage(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error(), "Subtitle file download failed")); return;
         }
         try {
             QStringDecoder decoder(QStringDecoder::Utf8);

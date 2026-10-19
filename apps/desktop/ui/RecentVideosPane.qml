@@ -21,7 +21,7 @@ ColumnLayout {
     Label {
         text: "Open a video and add up to two subtitle tracks to watch and learn."
         color: Theme.muted
-        font.pixelSize: 14
+        font.pixelSize: Theme.body
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
     }
@@ -29,14 +29,14 @@ ColumnLayout {
         Label {
             text: "Recently played"
             color: Theme.ink
-            font.pixelSize: 18
+            font.pixelSize: Theme.title
             font.weight: Font.Medium
             Layout.fillWidth: true
         }
         Label {
             text: "Your place is saved locally"
             color: Theme.muted
-            font.pixelSize: 12
+            font.pixelSize: Theme.caption
         }
     }
     Label {
@@ -51,7 +51,7 @@ ColumnLayout {
         visible: pane.recentVideos.count === 0
         Layout.fillWidth: true
         Layout.fillHeight: true
-        radius: 14
+        radius: Theme.panelRadius
         color: Theme.surface
         border.color: Theme.border
         ColumnLayout {
@@ -83,7 +83,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
-        spacing: 12
+        spacing: Theme.space3
         model: pane.recentVideos
         ScrollBar.vertical: ScrollBar {}
         delegate: Rectangle {
@@ -96,7 +96,7 @@ ColumnLayout {
             required property bool fileAvailable
             width: recentList.width
             height: entryContents.implicitHeight + 36
-            radius: 12
+            radius: Theme.panelRadius
             color: Theme.surface
             border.color: Theme.border
             RowLayout {
@@ -106,12 +106,12 @@ ColumnLayout {
                 spacing: 24
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.space2
                     Label {
                         text: entry.mediaTitle
                         textFormat: Text.PlainText
                         color: Theme.ink
-                        font.pixelSize: 18
+                        font.pixelSize: Theme.title
                         font.weight: Font.Medium
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -120,14 +120,14 @@ ColumnLayout {
                         text: entry.filePath
                         textFormat: Text.PlainText
                         color: Theme.muted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.caption
                         elide: Text.ElideMiddle
                         Layout.fillWidth: true
                     }
                     Label {
                         text: !entry.fileAvailable ? "Video unavailable — reconnect its drive or open it again" : Theme.clock(entry.resumePosition) + " / " + Theme.clock(entry.durationSeconds)
                         color: Theme.muted
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.caption
                         textFormat: Text.PlainText
                     }
                 }

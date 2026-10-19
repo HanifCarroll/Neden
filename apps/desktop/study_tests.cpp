@@ -1,4 +1,6 @@
 #include "study_tools.h"
+#include "subtitle_appearance.h"
+#include "network_error.h"
 #include <QTcpServer>
 #include <QUrlQuery>
 #include <QTcpSocket>
@@ -10,6 +12,70 @@
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void appearanceIsBoundedAndPersistsSeparately() {
+        QTemporaryDir directory;
+        SubtitleAppearance style(directory.path());
+        QCOMPARE(style.primarySize(), 28);
+        QCOMPARE(style.secondarySize(), 24);
+        QVERIFY(style.outline());
+        QVERIFY(!style.background());
+        QVERIFY(!style.configure(0, 24, 36, true, false, true, "#ffffff"));
+        QVERIFY(!style.configure(28, 24, 36, true, false, true, "red;script"));
+        QVERIFY(style.configure(32, 26, 48, false, true, false, "#fff0cc"));
+        SubtitleAppearance restored(directory.path());
+        QCOMPARE(restored.primarySize(), 32);
+        QCOMPARE(restored.secondarySize(), 26);
+        QCOMPARE(restored.bottomMargin(), 48);
+        QCOMPARE(restored.textColor(), QString("#fff0cc"));
+        QVERIFY(restored.background());
+        QVERIFY(!restored.outline());
+        QVERIFY(!QFile::exists(directory.filePath("recent-videos.json")));
+        restored.reset();
+        QCOMPARE(restored.primarySize(), 28);
+        QVERIFY(!restored.background());
+    }
+    void networkErrorsGiveSpecificRecovery() {
+        QVERIFY(networkFailureMessage(0, QNetworkReply::HostNotFoundError, "Explanation failed").contains("server could not be found"));
+        QVERIFY(networkFailureMessage(0, QNetworkReply::SslHandshakeFailedError, "Explanation failed").contains("secure connection"));
+        QVERIFY(networkFailureMessage(401, QNetworkReply::AuthenticationRequiredError, "Explanation failed").contains("Settings"));
+        QVERIFY(networkFailureMessage(429, QNetworkReply::UnknownContentError, "Explanation failed").contains("allowance"));
+        QVERIFY(networkFailureMessage(503, QNetworkReply::ServiceUnavailableError, "Explanation failed").contains("temporarily unavailable"));
+    }
+    void failedRequestDoesNotRetryAndAnExplicitRetryCanSucceed() {
+        QTemporaryDir directory;
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int requests = 0;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            auto *socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                socket->readAll();
+                if (socket->property("sent").toBool()) return;
+
+                socket->setProperty("sent", true);
+                ++requests;
+                const auto body = requests == 1 ? QByteArray("{\"error\":\"private provider details\"}")
+                    : QByteArray("data: {\"choices\":[{\"delta\":{\"content\":\"Light\"}}]}\n\ndata: [DONE]\n\n");
+                const auto status = requests == 1 ? QByteArray("429 Too Many Requests") : QByteArray("200 OK");
+                socket->write("HTTP/1.1 " + status + "\r\nConnection: close\r\nContent-Length: "
+                    + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                socket->disconnectFromHost();
+            });
+        });
+        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        study.explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE(study.state(), QString("failed"));
+        QVERIFY(study.message().contains("allowance"));
+        QVERIFY(!study.message().contains("private provider details"));
+        QVERIFY(!study.message().contains("HTTP 0"));
+        QTest::qWait(200);
+        QCOMPARE(requests, 1);
+        study.explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE(study.state(), QString("complete"));
+        QCOMPARE(requests, 2);
+        QCOMPARE(study.answer(), QString("Light"));
+    }
     void dictionaryEncodingAndDestinationValidation() {
         const auto url = StudyTools::buildDictionaryUrl("https://example.org/?q=%s", "İstanbul & ışık?#");
         QCOMPARE(QUrlQuery(url).queryItemValue("q", QUrl::FullyDecoded), QString("İstanbul & ışık?#"));

@@ -34,7 +34,7 @@ MpvPlayback::MpvPlayback(QObject *parent) : PlaybackEngine(parent) {
 
     for (const auto &option : QList<QPair<const char *, const char *>>{
         {"config", "no"}, {"vo", "libmpv"}, {"hwdec", "auto-safe"}, {"pause", "yes"},
-        {"keep-open", "yes"}, {"volume", "0"}, {"sid", "no"},
+        {"keep-open", "yes"}, {"volume", "60"}, {"sid", "no"},
         // Paired with BLOCK_FOR_TARGET_TIME=0 in VideoRenderer.
         {"video-timing-offset", "0"},
         {"demuxer-max-bytes", "33554432"}, {"demuxer-max-back-bytes", "8388608"}}) {

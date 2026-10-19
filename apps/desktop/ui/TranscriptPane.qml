@@ -9,7 +9,7 @@ Rectangle {
     required property LearningSession session
     readonly property bool editing: search.activeFocus
     color: Theme.surface
-    radius: 14
+    radius: Theme.panelRadius
     border.color: Theme.border
     function searchFor(value) {
         search.text = value;
@@ -23,22 +23,16 @@ Rectangle {
     }
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 16
+        anchors.margins: Theme.space4
+        spacing: Theme.space4
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 8
-            Label {
-                text: "FOLLOW ALONG"
-                color: Theme.muted
-                font.pixelSize: 10
-                font.letterSpacing: 1.5
-            }
+            spacing: Theme.space2
             RowLayout {
                 Label {
                     text: "Transcript"
                     color: Theme.ink
-                    font.pixelSize: 21
+                    font.pixelSize: Theme.title
                     font.weight: Font.DemiBold
                 }
                 Item {
@@ -47,7 +41,7 @@ Rectangle {
                 Label {
                     text: pane.session.cueModel.count + " lines"
                     color: Theme.muted
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.caption
                 }
             }
         }
@@ -63,15 +57,14 @@ Rectangle {
             Label {
                 text: "Search language"
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
                 Layout.fillWidth: true
             }
-            ComboBox {
+            ChoiceBox {
                 id: language
                 model: ["Turkish", "Other languages"]
                 currentIndex: pane.session.cueModel.searchLanguage === CueModel.Turkish ? 0 : 1
-                onActivated: pane.session.cueModel.searchLanguage =
-                    currentIndex === 0 ? CueModel.Turkish : CueModel.Unicode
+                onActivated: pane.session.cueModel.searchLanguage = currentIndex === 0 ? CueModel.Turkish : CueModel.Unicode
                 Accessible.name: "Transcript search language"
             }
         }
@@ -80,7 +73,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: 8
+            spacing: Theme.space2
             model: pane.session.cueModel
             reuseItems: true
             ScrollBar.vertical: ScrollBar {}
@@ -92,7 +85,7 @@ Rectangle {
                 required property int cueIndex
                 readonly property bool current: pane.session.activeCue === cue.cueIndex
                 width: transcript.width
-                height: 136
+                height: cueContents.implicitHeight + Theme.space5
                 background: Rectangle {
                     radius: 9
                     color: cue.current ? "#263b31" : (cue.hovered ? Theme.elevated : Theme.surface)
@@ -107,6 +100,7 @@ Rectangle {
                 Accessible.name: cue.cueText
                 onClicked: pane.session.seek(startSeconds)
                 ColumnLayout {
+                    id: cueContents
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
@@ -115,7 +109,7 @@ Rectangle {
                     Label {
                         text: Theme.clock(cue.startSeconds)
                         color: cue.current ? Theme.accent : Theme.muted
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.caption
                     }
                     Label {
                         Layout.fillWidth: true
@@ -125,7 +119,7 @@ Rectangle {
                         textFormat: Text.PlainText
                         wrapMode: Text.WordWrap
                         color: Theme.ink
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.body
                     }
                     Label {
                         Layout.fillWidth: true
@@ -135,7 +129,7 @@ Rectangle {
                         textFormat: Text.PlainText
                         wrapMode: Text.WordWrap
                         color: Theme.muted
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.caption
                     }
                 }
             }
@@ -150,7 +144,7 @@ Rectangle {
             Label {
                 text: (pane.session.study ? pane.session.study.cards.length : 0) + " flashcards saved"
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
             }
         }
     }

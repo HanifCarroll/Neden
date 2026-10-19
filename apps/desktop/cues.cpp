@@ -3,6 +3,21 @@
 #include <algorithm>
 #include <stdexcept>
 
+QString subtitlePlainText(const QString &input) {
+    // SRT presentation tags do not belong in selections, search, or model context.
+    // Unknown tags remain literal text; no subtitle content is interpreted as HTML.
+    static const QRegularExpression formatting(
+        "</?(?:i|b|u|s)\\s*>|</?font(?:\\s+[^<>]*)?>",
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression lineBreak("<br\\s*/?>", QRegularExpression::CaseInsensitiveOption);
+    QString text = input;
+    text.replace(lineBreak, "\n");
+    text.remove(formatting);
+    text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+        .replace("&#39;", "'").replace("&nbsp;", " ").replace("&amp;", "&");
+    return text;
+}
+
 QVector<Cue> parseSrt(const QString &input) {
 
     // 1. Bound the input and split normalized subtitle blocks.
@@ -39,7 +54,7 @@ QVector<Cue> parseSrt(const QString &input) {
             return ((match.captured(offset).toLongLong() * 60 + minutes) * 60 + seconds) * 1000
                 + match.captured(offset + 3).toInt();
         };
-        Cue cue{milliseconds(1), milliseconds(5), lines.mid(2).join('\n').trimmed(), {}};
+        Cue cue{milliseconds(1), milliseconds(5), subtitlePlainText(lines.mid(2).join('\n')).trimmed(), {}};
         if (cue.endMs <= cue.startMs || cue.text.isEmpty() || cue.text.size() > 4000) {
             throw std::runtime_error("Invalid subtitle cue.");
         }

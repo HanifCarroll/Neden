@@ -8,7 +8,7 @@ Rectangle {
     id: pane
     required property LearningSession session
     color: Theme.surface
-    radius: 14
+    radius: Theme.panelRadius
     property string term: ""
     property string loadState: "Choose a word"
     signal dismissed
@@ -23,7 +23,7 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: Theme.space2
         RowLayout {
             Layout.leftMargin: 12
             Layout.rightMargin: 12

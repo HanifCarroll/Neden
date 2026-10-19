@@ -13,6 +13,7 @@ class LearningSession : public QObject {
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
     Q_PROPERTY(double duration READ duration NOTIFY durationChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY pausedChanged)
+    Q_PROPERTY(double volumeLevel READ volumeLevel WRITE volume NOTIFY volumeChanged)
     Q_PROPERTY(QString subtitle READ subtitle NOTIFY cueChanged)
     Q_PROPERTY(QString translation READ translation NOTIFY cueChanged)
     Q_PROPERTY(QString selection READ selection NOTIFY selectionChanged)
@@ -57,7 +58,9 @@ public:
     Q_INVOKABLE void toggle();
     Q_INVOKABLE void seek(double seconds);
     Q_INVOKABLE void rate(double speed);
+    double volumeLevel() const { return audioLevel; }
     Q_INVOKABLE void volume(double level);
+    Q_INVOKABLE void toggleMute();
     Q_INVOKABLE void select(const QString &text);
     Q_INVOKABLE void closeDefinition();
     Q_INVOKABLE void replay();
@@ -73,6 +76,7 @@ signals:
     void replayingChanged();
     void mediaChanged();
     void tracksChanged();
+    void volumeChanged();
 private:
     void syncPosition();
     void resetInteraction();
@@ -83,6 +87,8 @@ private:
     QString currentMediaPath;
     QString sourceSubtitlePath;
     QString translationSubtitlePath;
+    double audioLevel = 60;
+    double unmutedLevel = 60;
     double restorePosition = -1;
     bool mediaReady = false;
     bool rememberCurrent = true;

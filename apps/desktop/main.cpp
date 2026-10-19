@@ -1,3 +1,4 @@
+#include "subtitle_appearance.h"
 #include "credentials.h"
 #include "desktop_application.h"
 #include "recent_videos.h"
@@ -49,6 +50,7 @@ int main(int argc, char **argv) {
     // Retain existing study data while using Neden for every visible application name.
     const auto storage = parser.isSet("profile") ? QDir(parser.value("profile")).absolutePath()
         : QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Neden Qt Lab";
+    SubtitleAppearance appearance(storage);
     MpvPlayback playback;
     RecentVideos recentVideos(storage);
     StudyTools study(storage, readSavedCredential);
@@ -66,7 +68,7 @@ int main(int argc, char **argv) {
     session.cueModel()->setSearchLanguage(CueModel::Turkish);
     FullscreenController fullscreen;
     QQmlApplicationEngine engine;
-    engine.setInitialProperties({{"session", QVariant::fromValue(&session)},
+    engine.setInitialProperties({{"appearance", QVariant::fromValue(&appearance)},{"session", QVariant::fromValue(&session)},
         {"playback", QVariant::fromValue(&playback)},
         {"recentVideos", QVariant::fromValue(&recentVideos)},
         {"fullscreenController", QVariant::fromValue(&fullscreen)}});

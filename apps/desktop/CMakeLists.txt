@@ -17,7 +17,7 @@ add_test(NAME session_tests COMMAND session_tests)
 qt_add_executable(recent_videos_tests recent_videos_tests.cpp recent_videos.cpp recent_videos.h)
 target_link_libraries(recent_videos_tests PRIVATE Qt6::Test Qt6::Qml)
 add_test(NAME recent_videos_tests COMMAND recent_videos_tests)
-qt_add_executable(study_tests study_tests.cpp study_tools.cpp study_tools.h cues.cpp cues.h)
+qt_add_executable(study_tests subtitle_appearance.cpp subtitle_appearance.h study_tests.cpp study_tools.cpp study_tools.h cues.cpp cues.h)
 target_link_libraries(study_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Network)
 add_test(NAME study_tests COMMAND study_tests)
 qt_add_executable(video_geometry_tests video_geometry_tests.cpp)
@@ -48,11 +48,11 @@ if(APPLE)
     set_source_files_properties(macos/Neden.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set(NEDEN_UI_SOURCES media_path.h recent_videos.cpp recent_videos.h explanation_format.cpp explanation_format.h learning_session.cpp learning_session.h playback_engine.h mpv_playback.cpp mpv_playback.h video_render_lifetime.h
+set(NEDEN_UI_SOURCES subtitle_appearance.cpp subtitle_appearance.h media_path.h recent_videos.cpp recent_videos.h explanation_format.cpp explanation_format.h learning_session.cpp learning_session.h playback_engine.h mpv_playback.cpp mpv_playback.h video_render_lifetime.h
         cues.cpp cues.h study_tools.cpp study_tools.h video.cpp video.h video_geometry.h
         fullscreen_controller.h ${PLATFORM_SOURCES} credentials.h)
 set(NEDEN_QML_FILES ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml ui/PlayerHeader.qml
-        ui/VideoStage.qml ui/PlaybackControls.qml ui/SelectionPanel.qml ui/TranscriptPane.qml
+        ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml ui/Glyph.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
     SOURCES ${NEDEN_UI_SOURCES}
@@ -114,6 +114,9 @@ endif()
 option(NEDEN_NATIVE_UI_CHECKS "Build the opt-in native interaction check executable" OFF)
 if(NEDEN_NATIVE_UI_CHECKS)
     qt_add_executable(NedenNativeChecks native_ui_checks.cpp)
+    if(APPLE)
+        target_sources(NedenNativeChecks PRIVATE native_menu_checks.mm)
+    endif()
     qt_add_qml_module(NedenNativeChecks URI Neden VERSION 1.0
         OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/native-checks/Neden"
         SOURCES ${NEDEN_UI_SOURCES}

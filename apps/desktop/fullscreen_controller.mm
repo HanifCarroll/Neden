@@ -28,6 +28,7 @@ struct FullscreenController::NativeState {
     NedenFullscreenTarget *target = nil;
     NSMenuItem *settingsMenuItem = nil;
     NSMenuItem *viewMenuItem = nil;
+    bool ownsViewMenu = false;
     NSMenuItem *fullscreenMenuItem = nil;
     NSMutableArray *observers = [NSMutableArray new];
 };
@@ -48,7 +49,8 @@ void FullscreenController::setNativeMode(bool enabled) {
 
 FullscreenController::~FullscreenController() {
     [native->settingsMenuItem.menu removeItem:native->settingsMenuItem];
-    [native->viewMenuItem.menu removeItem:native->viewMenuItem];
+    [native->fullscreenMenuItem.menu removeItem:native->fullscreenMenuItem];
+    if (native->ownsViewMenu) [native->viewMenuItem.menu removeItem:native->viewMenuItem];
     for (id observer in native->observers) [[NSNotificationCenter defaultCenter] removeObserver:observer];
     native->target.controller = nullptr;
     if (fullscreenActive && !nativeSession) {
@@ -73,15 +75,20 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
     bindZoomButton();
 
     // 2. Expose the Mac's Fn/Globe-F shortcut through the selected fullscreen mode.
-    native->viewMenuItem = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
-    NSMenu *viewMenu = [[NSMenu alloc] initWithTitle:@"View"];
+    native->viewMenuItem = [NSApp.mainMenu itemWithTitle:@"View"];
+    if (!native->viewMenuItem) {
+        native->viewMenuItem = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
+        native->viewMenuItem.submenu = [[NSMenu alloc] initWithTitle:@"View"];
+        native->ownsViewMenu = true;
+        [NSApp.mainMenu addItem:native->viewMenuItem];
+    }
+    NSMenu *viewMenu = native->viewMenuItem.submenu;
     native->fullscreenMenuItem = [[NSMenuItem alloc] initWithTitle:@"Enter Full Screen"
         action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
     native->fullscreenMenuItem.keyEquivalentModifierMask = NSEventModifierFlagFunction;
     native->fullscreenMenuItem.target = native->target;
     [viewMenu addItem:native->fullscreenMenuItem];
-    native->viewMenuItem.submenu = viewMenu;
-    [NSApp.mainMenu addItem:native->viewMenuItem];
+
     native->settingsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(openSettings:) keyEquivalent:@","];
     native->settingsMenuItem.target = native->target;
     [NSApp.mainMenu.itemArray.firstObject.submenu insertItem:native->settingsMenuItem atIndex:1];

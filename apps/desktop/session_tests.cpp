@@ -14,12 +14,30 @@ public:
     void seek(double value) override { lastSeek = value; if (applySeekImmediately) advance(value); }
     void setPaused(bool value) override { isPaused = value; emit pausedChanged(); }
     void rate(double) override {}
-    void volume(double) override {}
+    double audioLevel = -1;
+    void volume(double value) override { audioLevel = value; }
 };
 
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void volumeIsBoundedAndUnmuteRestoresTheSliderLevel() {
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.volume(37);
+        QCOMPARE(session.volumeLevel(), 37);
+        QCOMPARE(playback.audioLevel, 37);
+        session.toggleMute();
+        QCOMPARE(session.volumeLevel(), 0);
+        session.toggleMute();
+        QCOMPARE(session.volumeLevel(), 37);
+        session.volume(150);
+        QCOMPARE(session.volumeLevel(), 100);
+        session.volume(-5);
+        QCOMPARE(session.volumeLevel(), 0);
+        session.volume(std::numeric_limits<double>::quiet_NaN());
+        QCOMPARE(session.volumeLevel(), 0);
+    }
     void dualSubtitlesAreSessionOnlyWhileVideoPositionsSurviveRestart() {
         QTemporaryDir directory;
         const auto videoPath = directory.filePath("Leyla.webm");

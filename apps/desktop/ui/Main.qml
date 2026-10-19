@@ -7,12 +7,15 @@ import Neden
 
 ApplicationWindow {
     id: root
+    required property SubtitleAppearance appearance
     required property LearningSession session
     required property RecentVideos recentVideos
     required property MpvPlayback playback
     required property FullscreenController fullscreenController
     property bool dictionaryOpen: false
     property bool showRecent: false
+    property bool transcriptOpen: true
+    property string requestedSelection: ""
     width: 1280
     height: 820
     minimumWidth: 1100
@@ -22,13 +25,18 @@ ApplicationWindow {
     onClosing: session.checkpoint()
     color: Theme.background
     font.family: "Inter"
-    font.pixelSize: 13
+    font.pixelSize: Theme.body
     palette.window: Theme.background
     palette.base: Theme.surface
     palette.text: Theme.ink
     palette.button: Theme.elevated
     palette.buttonText: Theme.ink
     palette.windowText: Theme.ink
+    palette.light: Theme.elevated
+    palette.midlight: Theme.elevated
+    palette.dark: Theme.border
+    palette.mid: Theme.border
+    palette.shadow: Theme.background
     palette.highlight: Theme.accent
     palette.highlightedText: Theme.background
 
@@ -46,17 +54,6 @@ ApplicationWindow {
             }
             MenuSeparator {}
             Action {
-                text: "Primary subtitles…"
-                enabled: root.session.hasMedia
-                onTriggered: subtitleDialog.open()
-            }
-            Action {
-                text: "Secondary subtitles…"
-                enabled: root.session.hasMedia
-                onTriggered: translationDialog.open()
-            }
-            MenuSeparator {}
-            Action {
                 text: "Close window"
                 shortcut: StandardKey.Close
                 onTriggered: root.close()
@@ -67,12 +64,144 @@ ApplicationWindow {
                 onTriggered: Qt.quit()
             }
         }
+        Menu {
+            title: "Playback"
+            Action {
+                text: root.session.paused ? "Play" : "Pause"
+                enabled: root.session.hasMedia
+                onTriggered: root.session.toggle()
+            }
+            Action {
+                text: "Replay sentence"
+                enabled: root.session.activeCue >= 0
+                onTriggered: root.session.replay()
+            }
+            MenuSeparator {}
+            Action {
+                text: "Seek forward 5 seconds"
+                enabled: root.session.hasMedia
+                onTriggered: root.session.seek(root.session.position + 5)
+            }
+            Action {
+                text: "Seek back 5 seconds"
+                enabled: root.session.hasMedia
+                onTriggered: root.session.seek(root.session.position - 5)
+            }
+            MenuSeparator {}
+            Action {
+                text: root.session.volumeLevel === 0 ? "Unmute" : "Mute"
+                onTriggered: root.session.toggleMute()
+            }
+            Action {
+                text: "Volume up"
+                shortcut: "Ctrl+Up"
+                onTriggered: root.session.volume(root.session.volumeLevel + 5)
+            }
+            Action {
+                text: "Volume down"
+                shortcut: "Ctrl+Down"
+                onTriggered: root.session.volume(root.session.volumeLevel - 5)
+            }
+        }
+        Menu {
+            title: "Subtitles"
+            Action {
+                text: "Load primary track…"
+                enabled: root.session.hasMedia
+                onTriggered: subtitleDialog.open()
+            }
+            Action {
+                text: "Load secondary track…"
+                enabled: root.session.hasMedia
+                onTriggered: translationDialog.open()
+            }
+            MenuSeparator {}
+            Action {
+                text: "Find subtitles…"
+                enabled: root.session.hasMedia
+                onTriggered: root.openStudy(2)
+            }
+            Action {
+                text: "Subtitle appearance…"
+                onTriggered: root.openSettings()
+            }
+        }
+        Menu {
+            title: "Study"
+            Action {
+                text: "Explain selection"
+                enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
+                onTriggered: {
+                    root.openStudy(0);
+                    root.session.explainSelection(false);
+                }
+            }
+            Action {
+                text: "Translate selection"
+                enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
+                onTriggered: {
+                    root.openStudy(0);
+                    root.session.explainSelection(true);
+                }
+            }
+            Action {
+                text: "Dictionary"
+                shortcut: "Ctrl+D"
+                onTriggered: root.openDictionary("")
+            }
+            MenuSeparator {}
+            Action {
+                text: "Flashcards"
+                onTriggered: root.openStudy(1)
+            }
+        }
+        Menu {
+            title: "View"
+            Action {
+                text: "Transcript"
+                checkable: true
+                checked: root.transcriptOpen
+                onTriggered: root.transcriptOpen = checked
+            }
+            Action {
+                text: "Recently played"
+                shortcut: "Ctrl+L"
+                onTriggered: root.showRecent = true
+            }
+            Action {
+                text: "Fullscreen"
+                shortcut: "Ctrl+Meta+F"
+                onTriggered: root.fullscreen()
+            }
+            MenuSeparator {}
+            Action {
+                text: "Settings…"
+                onTriggered: root.openSettings()
+            }
+        }
     }
     Connections {
         target: root.session
+        function onSelectionChanged() {
+            root.requestedSelection = "";
+        }
         function onMediaChanged() {
             root.showRecent = false;
         }
+    }
+    function openStudy(tab) {
+        studyLoader.active = true;
+        const pane = studyLoader.item as StudyPane;
+        pane.currentTab = tab;
+        studyDrawer.open();
+    }
+    function explainCommittedSelection() {
+        if (!session.selection.length || requestedSelection === session.selection)
+            return;
+
+        requestedSelection = session.selection;
+        openStudy(0);
+        session.explainSelection(false);
     }
     function openSettings() {
         if (studyDrawer.opened)
@@ -90,6 +219,8 @@ ApplicationWindow {
     }
     function openDictionary(term) {
         dictionaryOpen = true;
+        if (studyDrawer.opened)
+            studyDrawer.close();
         const pane = dictionaryLoader.item as DictionaryPane;
         pane.lookup(term || session.selection);
     }
@@ -126,26 +257,22 @@ ApplicationWindow {
         onActivated: root.fullscreen()
     }
     Shortcut {
-        sequence: "Ctrl+Meta+F"
-        onActivated: root.fullscreen()
-    }
-    Shortcut {
         sequence: "Escape"
         onActivated: root.escapeLayer()
     }
     Shortcut {
         sequence: "Space"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
         onActivated: root.session.toggle()
     }
     Shortcut {
         sequence: "Right"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
         onActivated: root.session.seek(root.session.position + 5)
     }
     Shortcut {
         sequence: "Left"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing
+        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !transcript.editing && !stage.editing && !playbackControls.editing
         onActivated: root.session.seek(root.session.position - 5)
     }
     FileDialog {
@@ -178,7 +305,28 @@ ApplicationWindow {
         width: Math.min(root.width - 48, 640)
         height: Math.min(root.height - 48, 700)
         modal: true
-        standardButtons: Dialog.Close
+        padding: Theme.space5
+        background: Rectangle {
+            color: Theme.background
+            border.color: Theme.border
+            radius: Theme.panelRadius
+        }
+        header: Label {
+            text: "Settings"
+            color: Theme.ink
+            font.pixelSize: Theme.heading
+            font.weight: Font.DemiBold
+            padding: Theme.space5
+        }
+        footer: Item {
+            implicitHeight: Theme.controlHeight + Theme.space5
+            ActionButton {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.space5
+                text: "Close"
+                onClicked: settingsDialog.close()
+            }
+        }
         contentItem: Loader {
             id: settingsLoader
             objectName: "settingsLoader"
@@ -187,6 +335,7 @@ ApplicationWindow {
             sourceComponent: SettingsPane {
                 session: root.session
                 fullscreenController: root.fullscreenController
+                appearance: root.appearance
             }
         }
         onClosed: root.contentItem.forceActiveFocus()
@@ -201,7 +350,8 @@ ApplicationWindow {
         onAboutToShow: studyLoader.active = true
         onClosed: {
             root.session.study.stop();
-            root.closeSelection();
+            if (!root.dictionaryOpen)
+                root.closeSelection();
         }
         Loader {
             id: studyLoader
@@ -211,14 +361,15 @@ ApplicationWindow {
             sourceComponent: StudyPane {
                 session: root.session
                 onDismissed: studyDrawer.close()
+                onDictionaryRequested: term => root.openDictionary(term)
             }
         }
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: 24
-        anchors.rightMargin: 24
+        anchors.leftMargin: Theme.space5
+        anchors.rightMargin: Theme.space5
         anchors.topMargin: 8
         anchors.bottomMargin: 16
         spacing: 0
@@ -229,16 +380,7 @@ ApplicationWindow {
             showingRecent: !root.session.hasMedia || root.showRecent
             onOpenRecent: root.showRecent = true
             onBackToVideo: root.showRecent = false
-            onOpenSettings: root.openSettings()
             onOpenVideo: videoDialog.open()
-            onOpenSubtitles: subtitleDialog.open()
-            onOpenTranslation: translationDialog.open()
-            onOpenStudy: {
-                if (!root.session.selection.length && root.session.subtitle.length)
-                    root.session.select(root.session.subtitle);
-                studyDrawer.open();
-            }
-            onOpenDictionary: root.openDictionary("")
         }
         Item {
             Layout.fillWidth: true
@@ -262,7 +404,7 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 24
+                spacing: Theme.space5
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -283,12 +425,6 @@ ApplicationWindow {
                         Item {
                             Layout.fillWidth: true
                         }
-                        Label {
-                            text: "LOCAL SESSION"
-                            color: Theme.muted
-                            font.pixelSize: 10
-                            font.letterSpacing: 1.4
-                        }
                     }
                     Item {
                         implicitHeight: 18
@@ -299,11 +435,14 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         session: root.session
                         playback: root.playback
+                        appearance: root.appearance
+                        onExplainSelection: root.explainCommittedSelection()
                         dictionaryOpen: root.dictionaryOpen
                         onOpenDictionary: root.openDictionary("")
                         onCloseSelection: root.closeSelection()
                     }
                     PlaybackControls {
+                        id: playbackControls
                         Layout.fillWidth: true
                         session: root.session
                         onFullscreen: root.fullscreen()
@@ -312,14 +451,14 @@ ApplicationWindow {
                         implicitHeight: 16
                     }
                     Label {
-                        text: "Select a word to explore its meaning. Keep a moment to revisit later."
+                        text: "Double-click a word or select a phrase for an explanation."
                         color: Theme.muted
                         font.pixelSize: 12
                     }
                 }
                 TranscriptPane {
                     id: transcript
-                    visible: !root.dictionaryOpen
+                    visible: !root.dictionaryOpen && root.transcriptOpen
                     Layout.preferredWidth: 352
                     Layout.fillHeight: true
                     session: root.session

@@ -1,3 +1,4 @@
+#include "subtitle_appearance.h"
 #include "fullscreen_controller.h"
 #include "learning_session.h"
 #include "mpv_playback.h"
@@ -12,15 +13,25 @@
 #include <QQuickWindow>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
+#include <QNetworkReply>
+#include <QSslSocket>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QDir>
 #include <QtTest>
 #include <QtWebView/QtWebView>
 #include <cmath>
 #include <memory>
 
+#ifdef Q_OS_MACOS
+bool nativeMenusAreAvailable();
+#endif
+
 class NativeUiChecks : public QObject {
     Q_OBJECT
 private:
     QTemporaryDir profile;
+    std::unique_ptr<SubtitleAppearance> appearance;
     std::unique_ptr<MpvPlayback> playback;
     std::unique_ptr<RecentVideos> recent;
     std::unique_ptr<StudyTools> study;
@@ -31,15 +42,18 @@ private:
     double stoppedAt = 0;
 
     void createWindow() {
+        appearance = std::make_unique<SubtitleAppearance>(profile.path());
         playback = std::make_unique<MpvPlayback>();
         recent = std::make_unique<RecentVideos>(profile.path());
-        study = std::make_unique<StudyTools>(profile.path(), [](const QString &) { return QByteArray{}; });
+        study = std::make_unique<StudyTools>(profile.path(), [](const QString &endpoint) {
+            return QUrl(endpoint).host() == "127.0.0.1" ? QByteArray("synthetic-test-key") : QByteArray();
+        });
         session = std::make_unique<LearningSession>(playback.get());
         session->setStudyTools(study.get());
         session->setRecentVideos(recent.get());
         fullscreen = std::make_unique<FullscreenController>();
         engine = std::make_unique<QQmlApplicationEngine>();
-        engine->setInitialProperties({{"session", QVariant::fromValue(session.get())},
+        engine->setInitialProperties({{"appearance", QVariant::fromValue(appearance.get())},{"session", QVariant::fromValue(session.get())},
             {"playback", QVariant::fromValue(playback.get())},
             {"recentVideos", QVariant::fromValue(recent.get())},
             {"fullscreenController", QVariant::fromValue(fullscreen.get())}});
@@ -108,6 +122,7 @@ private slots:
         for (const auto &name : {"NEDEN_CHECK_VIDEO", "NEDEN_CHECK_PRIMARY", "NEDEN_CHECK_SECONDARY"}) {
             QVERIFY2(QFile::exists(qEnvironmentVariable(name)), name);
         }
+        QDir().mkpath(qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS"));
         createWindow();
     }
 
@@ -141,24 +156,134 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(std::abs(session->position() - target) < 0.1, 10000);
         QVERIFY(!session->subtitle().isEmpty());
         QVERIFY(!session->translation().isEmpty());
+        QTest::qWait(300);
+        const auto earlyArtifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!earlyArtifacts.isEmpty()) window->grabWindow().save(earlyArtifacts + "/player-layout.png");
         for (const auto &name : {"primarySubtitleText", "secondarySubtitleText"}) {
-            auto *text = window->findChild<QQuickItem *>(name);
-            QVERIFY(text && text->isVisible() && text->width() > 0 && text->height() > 0);
+            auto *text = visualItem(window->contentItem(), name);
+            QVERIFY(text);
+            qInfo("Subtitle geometry: %s visible=%d width=%.1f height=%.1f", name, text->isVisible(), text->width(), text->height());
+            QTRY_VERIFY(text->isVisible() && text->width() > 0 && text->height() > 0);
             QVERIFY(!text->property("text").toString().isEmpty());
         }
         QVERIFY(!window->grabWindow().isNull());
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QDir().mkpath(artifacts);
+            QVERIFY(window->grabWindow().save(artifacts + "/player.png"));
+        }
         stoppedAt = session->position();
         session->checkpoint();
 
         // 3. Settings and the recent list use real QML controls and preserve the paused position.
-        click("settingsButton");
+#ifdef Q_OS_MACOS
+        QVERIFY(nativeMenusAreAvailable());
+#endif
+        QTest::keyClick(window, Qt::Key_Comma, Qt::ControlModifier);
         auto *settings = window->findChild<QObject *>("settingsDialog");
         QVERIFY(settings);
         QTRY_VERIFY(settings->property("opened").toBool());
+        if (!artifacts.isEmpty()) {
+            QTest::qWait(300);
+            QVERIFY(window->grabWindow().save(artifacts + "/settings.png"));
+        }
         QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         QTRY_VERIFY(!settings->property("opened").toBool());
         click("recentVideosButton");
         QVERIFY(window->property("showRecent").toBool());
+    }
+
+    void packagedHttpsBackendConnectsWithoutCredentials() {
+        QVERIFY(QSslSocket::supportsSsl());
+        QVERIFY(QSslSocket::availableBackends().contains("securetransport"));
+        QNetworkAccessManager network;
+        QNetworkRequest request(QUrl("https://api.deepseek.com/models"));
+        request.setTransferTimeout(15000);
+        auto *reply = network.get(request);
+        QSignalSpy finished(reply, &QNetworkReply::finished);
+        QVERIFY(finished.wait(20000));
+        // An unauthenticated API response proves TLS works; no paid request is sent.
+        QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 401);
+        QVERIFY(reply->error() != QNetworkReply::SslHandshakeFailedError);
+        reply->deleteLater();
+    }
+
+    void volumeSelectionAndExplanationUseTheActualControls() {
+        // 1. Move the real slider and verify the session, then restore the paused video.
+        window->setProperty("showRecent", false);
+        auto *volume = visualItem(window->contentItem(), "volumeSlider");
+        QVERIFY(volume);
+        QVERIFY(volume->isVisible());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+            volume->mapToScene(QPointF(volume->width() * 0.35, volume->height() / 2)).toPoint());
+        QVERIFY(session->volumeLevel() > 20 && session->volumeLevel() < 50);
+        session->volume(0);
+
+        // 2. Open the actual speed popup and verify the highlighted row remains readable.
+        click("speedChoice");
+        QTRY_VERIFY(visualItem(window->contentItem(), "speedChoiceOption1"));
+        auto *option = visualItem(window->contentItem(), "speedChoiceOption1");
+        QVERIFY(option->property("highlighted").toBool());
+        auto *label = option->property("contentItem").value<QQuickItem *>();
+        QVERIFY(label);
+        QCOMPARE(label->property("color").value<QColor>(), QColor("#101416"));
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/highlight.png"));
+        auto *speed = visualItem(window->contentItem(), "speedChoice");
+        auto *popup = speed->property("popup").value<QObject *>();
+        QVERIFY(popup && QMetaObject::invokeMethod(popup, "close"));
+
+        // 3. Double-click a synthetic Turkish word and serve an incremental answer locally.
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int requests = 0;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            auto *socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                socket->readAll();
+                if (socket->property("sent").toBool()) return;
+
+                socket->setProperty("sent", true);
+                ++requests;
+                if (requests == 1) {
+                    socket->write("HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+                    socket->disconnectFromHost();
+                    return;
+                }
+
+                socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n");
+                socket->write("data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nLight\"}}]}\n\n");
+                QTimer::singleShot(250, socket, [socket] {
+                    socket->write("data: [DONE]\n\n");
+                    socket->disconnectFromHost();
+                });
+            });
+        });
+        QVERIFY(study->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        const auto start = qRound64(session->position() * 1000) - 500;
+        session->replaceCues({{start, start + 10000, "ışık", {}}});
+        QTest::qWait(250);
+        auto *subtitle = visualItem(window->contentItem(), "primarySubtitleText");
+        QVERIFY(subtitle && subtitle->isVisible());
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier,
+            subtitle->mapToScene(QPointF(subtitle->width() / 2, subtitle->height() / 2)).toPoint());
+        QTRY_COMPARE(session->selection(), QString("ışık"));
+        QTRY_COMPARE_WITH_TIMEOUT(study->state(), QString("failed"), 5000);
+        QVERIFY(study->message().contains("allowance"));
+        QTest::qWait(300);
+        QCOMPARE(requests, 1);
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/network-error.png"));
+        click("explainButton");
+        QTRY_COMPARE_WITH_TIMEOUT(study->state(), QString("complete"), 5000);
+        QCOMPARE(requests, 2);
+        QCOMPARE(study->answer(), QString("### Natural meaning\nLight"));
+        auto *drawer = window->findChild<QObject *>("studyDrawer");
+        QVERIFY(drawer);
+        QTRY_VERIFY(drawer->property("opened").toBool());
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/explanation.png"));
+        QVERIFY(QMetaObject::invokeMethod(drawer, "close"));
+        QTRY_VERIFY(!drawer->property("opened").toBool());
+        QTRY_VERIFY(session->selection().isEmpty());
     }
 
     void closeReopenResumeAndRemoveThroughTheUi() {

@@ -208,7 +208,15 @@ void LearningSession::seek(double seconds) {
     engine->seek(qBound(0.0, seconds, duration()));
 }
 void LearningSession::volume(double level) {
-    engine->volume(level);
+    if (!std::isfinite(level)) return;
+
+    audioLevel = qBound(0.0, level, 100.0);
+    if (audioLevel > 0) unmutedLevel = audioLevel;
+    engine->volume(audioLevel);
+    emit volumeChanged();
+}
+void LearningSession::toggleMute() {
+    volume(audioLevel > 0 ? 0 : unmutedLevel);
 }
 void LearningSession::rate(double speed) {
     engine->rate(speed);
@@ -219,7 +227,7 @@ QString LearningSession::translation() const {
     return currentCue >= 0 ? model.cues[currentCue].translation : QString();
 }
 void LearningSession::select(const QString &text) {
-    if (text.trimmed().isEmpty()) {
+    if (text.trimmed().isEmpty() || text.trimmed() == selectedText) {
         return;
     }
 

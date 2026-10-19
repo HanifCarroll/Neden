@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Neden
 
@@ -8,19 +7,22 @@ Rectangle {
     id: stage
     required property LearningSession session
     required property MpvPlayback playback
+    required property SubtitleAppearance appearance
+    signal explainSelection
     property bool dictionaryOpen: false
-    readonly property bool editing: subtitle.activeFocus
+    readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
     signal openDictionary
     signal closeSelection
     color: "#080b0c"
     radius: 14
     clip: true
     function selectAll() {
-        subtitle.forceActiveFocus();
-        subtitle.selectAll();
+        subtitle.editor.forceActiveFocus();
+        subtitle.editor.selectAll();
     }
     function deselect() {
-        subtitle.deselect();
+        subtitle.editor.deselect();
+        translation.editor.deselect();
     }
     VideoSurface {
         objectName: "videoSurface"
@@ -50,62 +52,45 @@ Rectangle {
             }
         }
     }
-    SelectionPanel {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.margins: 20
-        width: 390
-        session: stage.session
-        visible: stage.session.selection.length > 0 && !stage.dictionaryOpen
-        onOpenDictionary: stage.openDictionary()
-        onDismissed: stage.closeSelection()
-    }
-    Rectangle {
+    Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 24
-        visible: stage.session.subtitle.length > 0 || stage.session.translation.length > 0
-        height: subtitleColumn.implicitHeight + 28
-        radius: 12
-        color: "#e6101416"
+        anchors.leftMargin: Theme.space6
+        anchors.rightMargin: Theme.space6
+        anchors.bottomMargin: stage.appearance.bottomMargin
+        height: subtitleColumn.implicitHeight
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width, Math.max(subtitle.paintedWidth, translation.paintedWidth) + 24)
+            height: parent.height + 16
+            radius: Theme.controlRadius
+            color: "#aa101416"
+            visible: stage.appearance.background && (subtitle.visible || translation.visible)
+        }
         ColumnLayout {
             id: subtitleColumn
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.margins: 18
-            spacing: 7
-            TextEdit {
+            width: parent.width
+            spacing: Theme.space3
+            SubtitleText {
                 id: subtitle
                 objectName: "primarySubtitleText"
                 Layout.fillWidth: true
                 text: stage.session.subtitle
-                visible: text.length > 0
-                textFormat: TextEdit.PlainText
-                readOnly: true
-                selectByMouse: true
-                wrapMode: TextEdit.Wrap
-                horizontalAlignment: TextEdit.AlignHCenter
-                font.pixelSize: 24
-                color: Theme.ink
-                selectionColor: "#467b68"
-                selectedTextColor: "white"
-                onSelectedTextChanged: {
-                    if (selectedText.length)
-                        stage.session.select(selectedText);
-                }
+                appearance: stage.appearance
+                pixelSize: stage.appearance.primarySize
+                onSelectionChanged: selection => stage.session.select(selection)
+                onSelectionCommitted: stage.explainSelection()
             }
-            Label {
-                Layout.fillWidth: true
+            SubtitleText {
+                id: translation
                 objectName: "secondarySubtitleText"
+                Layout.fillWidth: true
                 text: stage.session.translation
-                visible: text.length > 0
-                textFormat: Text.PlainText
-                color: Theme.muted
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
+                appearance: stage.appearance
+                pixelSize: stage.appearance.secondarySize
+                onSelectionChanged: selection => stage.session.select(selection)
+                onSelectionCommitted: stage.explainSelection()
             }
         }
     }
@@ -113,7 +98,9 @@ Rectangle {
         target: stage.session
         function onSelectionChanged() {
             if (!stage.session.selection.length)
-                subtitle.deselect();
+                subtitle.editor.deselect();
+            if (!stage.session.selection.length)
+                translation.editor.deselect();
         }
     }
 }

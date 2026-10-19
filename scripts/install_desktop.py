@@ -82,7 +82,8 @@ def stage_native_qml(bundle):
         raise SystemExit("QtWebView metadata changed; review its native deployment")
     metadata.write_text(text.replace(optional_dependency, ""))
     plugins = list(qml.rglob("*.dylib"))
-    for relative in ("platforms/libqcocoa.dylib", "webview/libqtwebview_darwin.dylib"):
+    for relative in ("platforms/libqcocoa.dylib", "webview/libqtwebview_darwin.dylib",
+                     "tls/libqsecuretransportbackend.dylib"):
         source = qt_directory("QT_INSTALL_PLUGINS") / relative
         destination = bundle / "Contents/PlugIns" / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

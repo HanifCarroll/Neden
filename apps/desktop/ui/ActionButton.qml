@@ -5,13 +5,14 @@ Button {
     id: control
     property bool primary: false
     property string glyph: ""
-    implicitHeight: 38
+    implicitHeight: Theme.controlHeight
     implicitWidth: label.implicitWidth + 28 + (glyph.length ? 24 : 0)
     hoverEnabled: true
-    font.pixelSize: 13
+    opacity: enabled ? 1 : 0.45
+    font.pixelSize: Theme.body
     background: Rectangle {
-        radius: 9
-        color: control.primary ? Theme.accent : (control.hovered ? "#2b3739" : (control.flat ? "transparent" : Theme.elevated))
+        radius: Theme.controlRadius
+        color: control.primary ? Theme.accent : (control.hovered ? Theme.hover : (control.flat ? "transparent" : Theme.elevated))
         opacity: control.down ? 0.75 : 1
         border.color: control.activeFocus ? Theme.accent : "transparent"
         border.width: 1

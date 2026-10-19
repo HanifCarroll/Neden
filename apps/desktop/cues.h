@@ -9,6 +9,7 @@ struct Cue {
     QString text;
     QString translation;
 };
+QString subtitlePlainText(const QString &input);
 QVector<Cue> parseSrt(const QString &input);
 int cueAt(const QVector<Cue> &cues, qint64 positionMs);
 

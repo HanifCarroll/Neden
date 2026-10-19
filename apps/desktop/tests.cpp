@@ -97,6 +97,13 @@ private slots:
         QCOMPARE(cueAt(cues, 1000), 0);
         QCOMPARE(cueAt(cues, 3000), -1);
     }
+    void recognizedFormattingIsPlainTextAndUnknownMarkupStaysInert() {
+        const auto cues = parseSrt("1\n00:00:01,000 --> 00:00:03,000\nOo <i>yeah</i>! <B>İstanbul</B><br/>ışık &amp; çay <font color=\"red\">şüphe</font>");
+        QCOMPARE(cues.first().text, QString("Oo yeah! İstanbul\nışık & çay şüphe"));
+        QCOMPARE(subtitlePlainText("<img src=\"https://evil.test/a\"> <script>bad</script>"),
+            QString("<img src=\"https://evil.test/a\"> <script>bad</script>"));
+        QCOMPARE(subtitlePlainText("日本語 <i>字幕</i> — <u>مرحبا</u> — río"), QString("日本語 字幕 — مرحبا — río"));
+    }
     void rejectsMalformedTimings() {
         QVERIFY_EXCEPTION_THROWN(parseSrt("1\n00:61:00,000 --> 00:62:00,000\nInvalid"), std::runtime_error);
         QVERIFY_EXCEPTION_THROWN(parseSrt("1\n00:00:03,000 --> 00:00:01,000\nInvalid"), std::runtime_error);

@@ -8,41 +8,27 @@ RowLayout {
     property bool showingRecent: true
     signal openRecent
     signal backToVideo
-    signal openSettings
-    signal openStudy
-    signal openTranslation
     signal openVideo
-    signal openSubtitles
-    signal openDictionary
-    implicitHeight: 64
-    spacing: 12
+    implicitHeight: 56
+    spacing: Theme.space3
     Rectangle {
-        implicitWidth: 38
-        implicitHeight: 38
-        radius: 12
+        implicitWidth: 32
+        implicitHeight: 32
+        radius: Theme.controlRadius
         color: Theme.accent
         Text {
             anchors.centerIn: parent
             text: "n"
             color: Theme.background
-            font.pixelSize: 28
+            font.pixelSize: 24
             font.bold: true
         }
     }
-    ColumnLayout {
-        spacing: 3
-        Label {
-            text: "Neden"
-            color: Theme.ink
-            font.pixelSize: 23
-            font.weight: Font.DemiBold
-            font.letterSpacing: -0.6
-        }
-        Label {
-            text: "Language learning player"
-            color: Theme.muted
-            font.pixelSize: 11
-        }
+    Label {
+        text: "Neden"
+        color: Theme.ink
+        font.pixelSize: Theme.title
+        font.weight: Font.DemiBold
     }
     Item {
         Layout.fillWidth: true
@@ -60,42 +46,8 @@ RowLayout {
         }
     }
     ActionButton {
-        text: "Load subtitles"
-        enabled: header.hasMedia
-        flat: true
-        onClicked: subtitleMenu.open()
-        Menu {
-            id: subtitleMenu
-            MenuItem {
-                text: "Primary subtitles…"
-                onTriggered: header.openSubtitles()
-            }
-            MenuItem {
-                text: "Secondary subtitles…"
-                onTriggered: header.openTranslation()
-            }
-        }
-    }
-    ActionButton {
-        text: "Study"
-        flat: true
-        onClicked: header.openStudy()
-    }
-    ActionButton {
-        text: "Dictionary"
-        flat: true
-        onClicked: header.openDictionary()
-    }
-    ActionButton {
-        objectName: "settingsButton"
-        text: "Settings"
-        flat: true
-        onClicked: header.openSettings()
-    }
-    ActionButton {
         objectName: "openVideoButton"
         text: "Open video"
-        primary: true
         onClicked: header.openVideo()
     }
 }
