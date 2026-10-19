@@ -23,6 +23,8 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 540
     visible: true
+    flags: Qt.platform.os === "osx" ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint : Qt.Window
+    topPadding: 0
     title: session.hasMedia && !showRecent ? session.mediaTitle + " — Neden" : "Neden"
     onClosing: session.checkpoint()
     color: Theme.background
@@ -287,12 +289,6 @@ ApplicationWindow {
         function onSettingsRequested() {
             root.openSettings();
         }
-        function onTranscriptRequested() {
-            root.toggleTranscript();
-        }
-        function onMeaningRequested() {
-            root.openMeaning();
-        }
     }
     Shortcut {
         sequence: "F11"
@@ -417,45 +413,8 @@ ApplicationWindow {
         }
     }
 
-    ToolBar {
-        id: playerToolbar
-        objectName: "playerToolbar"
-        width: parent.width
-        height: implicitHeight
-        visible: Qt.platform.os !== "osx" || root.fullscreenController.active
-        implicitHeight: visible ? 36 + root.fullscreenController.safeTopInset : 0
-        background: Rectangle {
-            color: Theme.surface
-        }
-        RowLayout {
-            anchors.fill: parent
-            anchors.topMargin: root.fullscreenController.safeTopInset
-            anchors.leftMargin: Theme.space3
-            anchors.rightMargin: Theme.space3
-            Label {
-                text: root.session.hasMedia ? root.session.mediaTitle : "Neden"
-                color: Theme.muted
-                font.pixelSize: Theme.caption
-                textFormat: Text.PlainText
-                elide: Text.ElideRight
-                Layout.fillWidth: true
-            }
-            IconButton {
-                objectName: "toolbarTranscriptButton"
-                name: "captions"
-                description: "Toggle transcript"
-                onClicked: root.toggleTranscript()
-            }
-            IconButton {
-                objectName: "toolbarMeaningButton"
-                name: "info"
-                description: "Show meaning"
-                onClicked: root.openMeaning()
-            }
-        }
-    }
     StackLayout {
-        anchors.top: playerToolbar.bottom
+        anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -481,6 +440,8 @@ ApplicationWindow {
                     appearance: root.appearance
                     onExplainSelection: root.explainCommittedSelection()
                     onFullscreenRequested: root.fullscreen()
+                    windowDragEnabled: Qt.platform.os === "osx" && !root.fullscreenController.active
+                    onMoveWindowRequested: root.startSystemMove()
                 }
                 Rectangle {
                     objectName: "learningInspector"
@@ -497,6 +458,40 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.leftMargin: 1
                         spacing: 0
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 44
+                            spacing: 0
+                            Layout.topMargin: Math.max(root.fullscreenController.safeTopInset, root.contentItem.SafeArea.margins.top)
+                            InspectorTab {
+                                objectName: "transcriptTab"
+                                text: "Transcript"
+                                Layout.fillWidth: true
+                                checked: root.inspectorTab === 0 && !root.dictionaryOpen
+                                onClicked: {
+                                    root.closeSelection();
+                                    root.dictionaryOpen = false;
+                                    root.inspectorTab = 0;
+                                }
+                            }
+                            InspectorTab {
+                                objectName: "meaningTab"
+                                text: "Meaning"
+                                Layout.fillWidth: true
+                                checked: root.inspectorTab === 1 && !root.dictionaryOpen
+                                onClicked: root.openMeaning()
+                            }
+                            IconButton {
+                                name: "x"
+                                description: "Close sidebar"
+                                objectName: "closeSidebarButton"
+                                onClicked: {
+                                    root.closeSelection();
+                                    root.dictionaryOpen = false;
+                                    root.transcriptOpen = false;
+                                }
+                            }
+                        }
                         StackLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -535,29 +530,6 @@ ApplicationWindow {
                             implicitHeight: 1
                             color: Theme.border
                         }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            spacing: 0
-                            InspectorTab {
-                                objectName: "transcriptTab"
-                                text: "Transcript"
-                                Layout.fillWidth: true
-                                checked: root.inspectorTab === 0 && !root.dictionaryOpen
-                                onClicked: {
-                                    root.closeSelection();
-                                    root.dictionaryOpen = false;
-                                    root.inspectorTab = 0;
-                                }
-                            }
-                            InspectorTab {
-                                objectName: "meaningTab"
-                                text: "Meaning"
-                                Layout.fillWidth: true
-                                checked: root.inspectorTab === 1 && !root.dictionaryOpen
-                                onClicked: root.openMeaning()
-                            }
-                        }
                     }
                 }
             }
@@ -565,6 +537,14 @@ ApplicationWindow {
                 id: playbackControls
                 Layout.fillWidth: true
                 session: root.session
+                sidebarOpen: root.transcriptOpen || root.dictionaryOpen
+                onToggleSidebar: {
+                    if (sidebarOpen) {
+                        root.closeSelection();
+                        root.dictionaryOpen = false;
+                        root.transcriptOpen = false;
+                    } else root.toggleTranscript();
+                }
                 onFullscreen: root.fullscreen()
             }
         }

@@ -27,8 +27,7 @@
 
 #ifdef Q_OS_MACOS
 bool nativeMenusAreAvailable();
-bool clickNativeInspectorButton(QQuickWindow *window, unsigned index);
-bool nativeInspectorControlsVisible(QQuickWindow *window);
+bool nativeVideoExtendsUnderTitlebar(QQuickWindow *window);
 #endif
 
 class NativeUiChecks : public QObject {
@@ -129,7 +128,8 @@ private:
 private slots:
     void init() {
         const QStringList headlessChecks{"explainHoverCoversBothTracksAndThePathToTheButton",
-            "explanationPhraseUsesThePluginCardStyle", "hoveringAndExplainingTheFullLineUseOneExplicitRequest"};
+            "explanationPhraseUsesThePluginCardStyle", "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
+            "singleClickShowsContextualWordCardWithoutChangingTheSidebar", "videoAndSidebarReachTheTopWithoutATitleStrip"};
         if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")
             && !headlessChecks.contains(QString::fromUtf8(QTest::currentTestFunction()))) {
             QSKIP("This check needs the real player and a visible native display.");
@@ -209,9 +209,10 @@ private slots:
         // 3. Settings and the recent list use real QML controls and preserve the paused position.
 #ifdef Q_OS_MACOS
         QVERIFY(nativeMenusAreAvailable());
-        QVERIFY(clickNativeInspectorButton(window, 1));
+        QVERIFY(nativeVideoExtendsUnderTitlebar(window));
+        click("meaningTab");
         QTRY_COMPARE(window->property("inspectorTab").toInt(), 1);
-        QVERIFY(clickNativeInspectorButton(window, 0));
+        click("transcriptTab");
         QTRY_COMPARE(window->property("inspectorTab").toInt(), 0);
 #endif
         QTest::keyClick(window, Qt::Key_Comma, Qt::ControlModifier);
@@ -376,21 +377,17 @@ private slots:
             QTRY_VERIFY(fullscreen->active());
             QTest::qWait(200);
             QVERIFY(visualItem(window->contentItem(), "volumeSlider")->isVisible());
-            auto *toolbar = visualItem(window->contentItem(), "playerToolbar");
-            auto *search = visualItem(window->contentItem(), "transcriptSearchButton");
-            QVERIFY(toolbar && search);
-            const auto toolbarBounds = toolbar->mapRectToScene(toolbar->boundingRect());
-            const auto searchBounds = search->mapRectToScene(search->boundingRect());
-            QVERIFY(searchBounds.top() >= toolbarBounds.bottom());
-#ifdef Q_OS_MACOS
-            QVERIFY(!nativeInspectorControlsVisible(window));
-#endif
+            auto *video = visualItem(window->contentItem(), "videoSurface");
+            auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+            QVERIFY(video && sidebar);
+            QVERIFY(std::abs(video->mapToScene(QPointF()).y()) < 1);
+            QVERIFY(std::abs(sidebar->mapToScene(QPointF()).y()) < 1);
             const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
             if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/fullscreen-controls.png"));
             fullscreen->toggle();
             QTRY_VERIFY(!fullscreen->active());
 #ifdef Q_OS_MACOS
-            QTRY_VERIFY(nativeInspectorControlsVisible(window));
+            QTRY_VERIFY(nativeVideoExtendsUnderTitlebar(window));
 #endif
             QTest::qWait(200);
         }
@@ -539,6 +536,123 @@ private slots:
         QTRY_VERIFY(session->paused());
         click("transcriptTab");
         QTRY_VERIFY(session->selection().isEmpty());
+    }
+
+    void videoAndSidebarReachTheTopWithoutATitleStrip() {
+        window->setProperty("showRecent", false);
+        window->setProperty("transcriptOpen", true);
+        window->setProperty("inspectorTab", 0);
+        const auto savedSize = window->size();
+        for (const QSize size : {QSize(900, 540), QSize(1280, 756)}) {
+            window->resize(size);
+            QTest::qWait(100);
+            auto *video = visualItem(window->contentItem(), "videoSurface");
+            auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+            auto *tabs = visualItem(window->contentItem(), "transcriptTab");
+            QVERIFY(video && sidebar && tabs);
+            QVERIFY(!visualItem(window->contentItem(), "playerToolbar"));
+            const auto content = window->property("contentItem").value<QQuickItem *>();
+            QVERIFY(content);
+            const auto top = content->mapToScene(QPointF()).y();
+            QVERIFY(std::abs(video->mapToScene(QPointF()).y() - top) < 1);
+            QVERIFY(std::abs(sidebar->mapToScene(QPointF()).y() - top) < 1);
+            const auto tabBounds = tabs->mapRectToScene(tabs->boundingRect());
+            QVERIFY(tabBounds.top() >= top && tabBounds.bottom() < top + 100);
+            for (const auto &name : {"volumeSlider", "speedChoice", "toggleSidebarButton"}) {
+                auto *control = visualItem(window->contentItem(), name);
+                QVERIFY(control && control->isVisible());
+                const auto bounds = control->mapRectToScene(control->boundingRect());
+                QVERIFY(bounds.left() >= 0 && bounds.right() <= window->width());
+            }
+            click("closeSidebarButton");
+            QTRY_VERIFY(!sidebar->isVisible());
+            click("toggleSidebarButton");
+            QTRY_VERIFY(sidebar->isVisible());
+        }
+        window->resize(savedSize);
+    }
+
+    void singleClickShowsContextualWordCardWithoutChangingTheSidebar() {
+        window->setProperty("showRecent", false);
+        session->closeDefinition();
+        session->setPaused(true);
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int requests = 0;
+        int wordRequests = 0;
+        QJsonObject sentContext;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            auto *socket = server.nextPendingConnection();
+            auto bytes = std::make_shared<QByteArray>();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket, bytes] {
+                *bytes += socket->readAll();
+                const int boundary = bytes->indexOf("\r\n\r\n");
+                if (boundary < 0 || socket->property("sent").toBool()) return;
+                int length = 0;
+                for (const auto &line : bytes->left(boundary).split('\n'))
+                    if (line.toLower().startsWith("content-length:")) length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
+                if (bytes->size() < boundary + 4 + length) return;
+                socket->setProperty("sent", true);
+                ++requests;
+                const auto request = QJsonDocument::fromJson(bytes->mid(boundary + 4, length)).object();
+                QByteArray answer;
+                if (!request.value("stream").toBool()) {
+                    ++wordRequests;
+                    sentContext = QJsonDocument::fromJson(request.value("messages").toArray().last().toObject().value("content").toString().toUtf8()).object();
+                    const QString card = R"({"lemma":"dalmak","meaning":"I became absorbed","explanation":"Here he is absorbed in watching television.","otherMeanings":["to dive into water","to fall asleep"]})";
+                    answer = QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{{"finish_reason", "stop"},
+                        {"message", QJsonObject{{"content", card}}}}}}}).toJson();
+                } else answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI became absorbed.\"}}]}\n\ndata: [DONE]\n\n";
+                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " + QByteArray::number(answer.size()) + "\r\n\r\n" + answer);
+                socket->disconnectFromHost();
+            });
+        });
+        QVERIFY(study->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        QVERIFY(study->configureLearning({{"wordProvider", "ai"}, {"sourceLanguage", "Turkish"},
+            {"explanationLanguage", "English"}, {"includeSecondary", true}, {"primaryProvider", "configured"}}));
+        const QString cue = "Ben televizyona dalmışım ya.";
+        session->replaceCues({{0, 7200000, cue, {}}});
+        auto *subtitle = visualItem(window->contentItem(), "primarySubtitleText");
+        QVERIFY(subtitle);
+        auto *editor = subtitle->property("editor").value<QQuickItem *>();
+        QVERIFY(editor);
+        QTest::qWait(100);
+        QRectF glyph;
+        QVERIFY(QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, glyph), Q_ARG(int, cue.indexOf("dalmışım") + 2)));
+        const auto point = editor->mapToScene(glyph.center() + QPointF(3, 0)).toPoint();
+        const auto originalSubject = study->subject();
+        QSignalSpy wordRequested(subtitle, SIGNAL(wordRequested(int)));
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE(study->words()->state(), QString("complete"));
+        QCOMPARE(wordRequested.count(), 1);
+        QCOMPARE(study->words()->word(), QString("dalmışım"));
+        QCOMPARE(study->subject(), originalSubject);
+        QCOMPARE(requests, 1);
+        QCOMPARE(wordRequests, 1);
+        QCOMPARE(sentContext.value("clickedSubtitle").toString(), cue);
+        QCOMPARE(sentContext.value("sourceCue").toString(), cue);
+        auto *card = visualItem(window->contentItem(), "wordMeaningCard");
+        QVERIFY(card && card->isVisible());
+        QVERIFY(card->height() < window->height());
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/contextual-word-card.png"));
+        click("closeWordCardButton");
+        QTRY_COMPARE(study->words()->state(), QString("idle"));
+        QVERIFY(session->paused());
+        // Double-click must produce a full explanation, without a second word-card charge.
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE(study->state(), QString("complete"));
+        QTest::qWait(450);
+        QCOMPARE(requests, 2);
+        QCOMPARE(wordRequests, 1);
+        QCOMPARE(study->subject(), QString("dalmışım"));
+        session->closeDefinition();
+        // A changed cue cancels a card, so it cannot explain a previous scene.
+        session->lookupWordAt(cue, cue.indexOf("dalmışım"));
+        session->replaceCues({{0, 7200000, "Başka bir sahne.", {}}});
+        QTest::qWait(450);
+        QCOMPARE(study->words()->state(), QString("idle"));
+        QVERIFY(!card->isVisible());
     }
 
     void explainHoverCoversBothTracksAndThePathToTheButton() {

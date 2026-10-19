@@ -21,6 +21,35 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void wordCardsOwnOnlyTheirPauseAndChangingCuesCancelsThem() {
+        QTemporaryDir directory;
+        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setStudyTools(&study);
+        session.replaceCues({{0, 10000, "Ben televizyona dalmışım ya.", {}}, {10000, 20000, "Başka bir sahne.", {}}});
+        playback.setPaused(false);
+        session.lookupWordAt(session.subtitle(), 18);
+        QVERIFY(playback.paused());
+        QCOMPARE(study.words()->word(), QString("dalmışım"));
+        QCOMPARE(study.words()->state(), QString("failed")); // No saved test credential; no network call.
+        session.closeWordCard();
+        QVERIFY(!playback.paused());
+        playback.setPaused(true);
+        session.lookupWordAt(session.subtitle(), 18);
+        session.closeWordCard();
+        QVERIFY(playback.paused());
+        session.lookupWordAt(session.subtitle(), 18);
+        playback.advance(12);
+        QCOMPARE(study.words()->state(), QString("idle"));
+        QVERIFY(playback.paused());
+        // An explicit Off remains effective, even though new profiles default to AI.
+        QVERIFY(study.configureLearning({{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"},
+            {"wordProvider", "off"}, {"primaryProvider", "configured"}}));
+        session.lookupWordAt(session.subtitle(), 2);
+        QCOMPARE(study.words()->state(), QString("idle"));
+    }
+
     void loadedTracksCanBeReusedOrDisabledIndependently() {
         QTemporaryDir directory;
         const auto first = directory.filePath("source.vtt");

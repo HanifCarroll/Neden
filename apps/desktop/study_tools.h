@@ -44,7 +44,11 @@ public:
     QString sourceLanguage() const { return learningPreferences.value("sourceLanguage").toString("Turkish"); }
     QString explanationLanguage() const { return learningPreferences.value("explanationLanguage").toString("English"); }
     bool includeSecondary() const { return learningPreferences.value("includeSecondary").toBool(true); }
-    QVariantMap learningSettings() const { return learningPreferences.toVariantMap(); }
+    QVariantMap learningSettings() const {
+        auto settings = learningPreferences.toVariantMap();
+        if (!settings.contains("wordProvider")) settings.insert("wordProvider", "ai");
+        return settings;
+    }
     QString state() const { return requestState; }
     QString message() const { return statusText; }
     QString endpoint() const { return endpointText; }
@@ -67,6 +71,7 @@ public:
     Q_INVOKABLE QUrl dictionaryUrl(const QString &term);
     Q_INVOKABLE void explain(const QString &selection, const QString &context);
     void explainContext(const QJsonObject &context);
+    void lookupWord(const QString &word, const QJsonObject &context);
     Q_INVOKABLE bool followUp(const QString &question);
     Q_INVOKABLE void retryExplanation();
     Q_INVOKABLE void stop();

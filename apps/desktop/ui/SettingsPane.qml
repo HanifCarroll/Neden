@@ -369,8 +369,8 @@ ColumnLayout {
             }
             ChoiceBox {
                 id: wordProvider
-                model: ["Off", "Google Cloud Translation", "Microsoft Translator"]
-                currentIndex: pane.study.learningSettings.wordProvider === "google" ? 1 : pane.study.learningSettings.wordProvider === "microsoft" ? 2 : 0
+                model: ["Contextual AI (configured model)", "Off", "Google Cloud Translation", "Microsoft Translator"]
+                currentIndex: pane.study.learningSettings.wordProvider === "off" ? 1 : pane.study.learningSettings.wordProvider === "google" ? 2 : pane.study.learningSettings.wordProvider === "microsoft" ? 3 : 0
                 Layout.fillWidth: true
                 Accessible.name: "Word translation provider"
             }
@@ -382,7 +382,7 @@ ColumnLayout {
                 Accessible.name: "Microsoft Translator region"
             }
             Label {
-                text: "When enabled, clicking a subtitle word sends it to this provider and may incur charges. Double-click or drag a phrase for an AI explanation."
+                text: "Contextual AI uses your configured AI model and saved key. A single click sends the word, its subtitle and nearby lines to show the meaning used in the scene, followed by other common meanings. Requests may incur charges. Double-click or drag a phrase for a full explanation."
                 color: Theme.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -396,7 +396,7 @@ ColumnLayout {
                     noKeyRequired: noKeyRequired.checked,
                     primaryProvider: primaryProvider.currentIndex === 1 ? "luna" : "configured",
                     fallbackEnabled: fallbackEnabled.checked,
-                    wordProvider: ["off", "google", "microsoft"][wordProvider.currentIndex],
+                    wordProvider: ["ai", "off", "google", "microsoft"][wordProvider.currentIndex],
                     wordRegion: wordRegion.text
                 })
             }

@@ -32,8 +32,6 @@ public:
     Q_INVOKABLE void setActive(bool enabled);
 signals:
     void settingsRequested();
-    void transcriptRequested();
-    void meaningRequested();
     void activeChanged();
     void nativeModeChanged();
 private:

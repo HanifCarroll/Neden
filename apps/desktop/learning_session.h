@@ -62,6 +62,7 @@ public:
     Q_INVOKABLE void explainSelection();
     Q_INVOKABLE void lookupWordAt(const QString &text, int offset);
     Q_INVOKABLE void translateWord();
+    Q_INVOKABLE void retryWordLookup();
     Q_INVOKABLE void closeWordCard(bool resume = true);
     Q_INVOKABLE bool followUp(const QString &question);
     Q_INVOKABLE void replayExplainedCue();
@@ -94,6 +95,7 @@ signals:
     void tracksChanged();
     void volumeChanged();
 private:
+    QJsonObject subtitleContext() const;
     int previousSubtitleIndex() const;
     int nextSubtitleIndex() const;
     void playSubtitle(int index);
@@ -128,6 +130,7 @@ private:
     bool resumeAfterDefinition = false;
     bool wordResume = false;
     bool wordActive = false;
+    QJsonObject wordContext;
     bool replayActive = false;
     bool replayArmed = false;
     double replayStart = 0;

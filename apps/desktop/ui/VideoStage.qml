@@ -9,8 +9,10 @@ Rectangle {
     required property LearningSession session
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
+    property bool windowDragEnabled: false
     signal explainSelection
     signal fullscreenRequested
+    signal moveWindowRequested
     readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
     color: "#080b0c"
     radius: 0
@@ -35,6 +37,17 @@ Rectangle {
         enabled: stage.session.hasMedia
         onClicked: stage.forceActiveFocus()
         onDoubleClicked: stage.fullscreenRequested()
+    }
+    Item {
+        width: parent.width
+        height: 28
+        visible: stage.windowDragEnabled
+        DragHandler {
+            target: null
+            onActiveChanged: {
+                if (active) stage.moveWindowRequested();
+            }
+        }
     }
     HoverHandler {
         id: videoHover
@@ -138,66 +151,123 @@ Rectangle {
         onTriggered: explainLine.hoverRetained = false
     }
     Rectangle {
+        id: wordCard
         objectName: "wordMeaningCard"
         visible: stage.session.study.words.state !== "idle"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Math.min(parent.height - height, 160)
-        width: Math.min(360, parent.width - 32)
-        height: wordContents.implicitHeight + 32
+        anchors.bottomMargin: Math.max(16, Math.min(parent.height - height - 16,
+            subtitleOverlay.height + subtitleOverlay.anchors.bottomMargin + 12))
+        width: Math.min(400, parent.width - 32)
+        height: Math.min(wordContents.implicitHeight + 32, parent.height - 32)
         radius: Theme.panelRadius
         color: Theme.surface
         border.color: Theme.border
-        ColumnLayout {
-            id: wordContents
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
+        // Keep clicks inside the floating card from reaching the video gestures.
+        MouseArea { anchors.fill: parent }
+        Flickable {
+            anchors.fill: parent
             anchors.margins: 16
-            spacing: Theme.space2
-            RowLayout {
+            contentHeight: wordContents.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar {}
+            ColumnLayout {
+                id: wordContents
+                width: parent.width
+                spacing: Theme.space2
+                RowLayout {
+                    Label {
+                        text: stage.session.study.words.word
+                        textFormat: Text.PlainText
+                        color: Theme.ink
+                        font.pixelSize: Theme.title
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    IconButton {
+                        name: "x"
+                        description: "Close word meaning"
+                        objectName: "closeWordCardButton"
+                        onClicked: stage.session.closeWordCard()
+                    }
+                }
                 Label {
-                    text: stage.session.study.words.word
+                    visible: text.length > 0 && text !== stage.session.study.words.word
+                    text: stage.session.study.words.lemma
                     textFormat: Text.PlainText
-                    color: Theme.accent
-                    font.pixelSize: Theme.title
+                    color: Theme.muted
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Repeater {
+                    model: stage.session.study.words.meanings
+                    delegate: Label {
+                        required property string modelData
+                        objectName: "wordContextMeaning"
+                        text: modelData
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        color: Theme.ink
+                        font.weight: Font.DemiBold
+                    }
+                }
+                Label {
+                    text: stage.session.study.words.contextNote
+                    visible: text.length > 0
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: Theme.muted
+                    Layout.fillWidth: true
+                }
+                Label {
+                    visible: stage.session.study.words.otherMeanings.length > 0
+                    text: "Other meanings"
+                    color: Theme.ink
+                    font.weight: Font.DemiBold
+                    Layout.topMargin: Theme.space2
+                }
+                Repeater {
+                    model: stage.session.study.words.otherMeanings
+                    delegate: Label {
+                        required property string modelData
+                        text: modelData
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        color: Theme.muted
+                    }
+                }
+                Label {
+                    visible: stage.session.study.words.state !== "complete"
+                    text: stage.session.study.words.state === "loading"
+                        ? (stage.session.study.words.contextual ? "Finding the meaning in this scene…" : "Looking up…")
+                        : stage.session.study.words.message
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: Theme.muted
                     Layout.fillWidth: true
                 }
                 ActionButton {
-                    text: "Close"
+                    text: "Try again"
+                    visible: stage.session.study.words.contextual && stage.session.study.words.state === "failed"
+                    onClicked: stage.session.retryWordLookup()
+                }
+                ActionButton {
+                    text: "Try word translation"
+                    visible: stage.session.study.learningSettings.wordProvider === "microsoft" && stage.session.study.words.state === "failed"
+                    onClicked: stage.session.translateWord()
+                }
+                ActionButton {
+                    text: "Full explanation"
+                    objectName: "wordFullExplanationButton"
                     flat: true
-                    onClicked: stage.session.closeWordCard()
-                }
-            }
-            Repeater {
-                model: stage.session.study.words.meanings
-                delegate: Label {
-                    required property string modelData
-                    text: modelData
-                    textFormat: Text.PlainText
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                    color: Theme.ink
-                }
-            }
-            Label {
-                visible: stage.session.study.words.state !== "complete"
-                text: stage.session.study.words.state === "loading" ? "Looking up…" : stage.session.study.words.message
-                textFormat: Text.PlainText
-                wrapMode: Text.WordWrap
-                color: Theme.muted
-                Layout.fillWidth: true
-            }
-            ActionButton {
-                text: "Try word translation"
-                visible: stage.session.study.learningSettings.wordProvider === "microsoft" && stage.session.study.words.state === "failed"
-                onClicked: stage.session.translateWord()
-            }
-            ActionButton {
-                text: "Explain in context"
-                onClicked: {
-                    stage.session.select(stage.session.study.words.word);
-                    stage.explainSelection();
+                    onClicked: {
+                        stage.session.select(stage.session.study.words.word);
+                        stage.explainSelection();
+                    }
                 }
             }
         }

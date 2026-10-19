@@ -6,8 +6,10 @@ import Neden
 Rectangle {
     id: controls
     required property LearningSession session
+    property bool sidebarOpen: false
     readonly property bool editing: timeline.activeFocus || speed.activeFocus || volume.activeFocus
     signal fullscreen
+    signal toggleSidebar
     implicitHeight: 72
     color: Theme.surface
     Rectangle {
@@ -126,6 +128,13 @@ Rectangle {
                     event.accepted = true;
             }
             Accessible.name: "Playback speed"
+        }
+        IconButton {
+            objectName: "toggleSidebarButton"
+            name: "captions"
+            description: controls.sidebarOpen ? "Hide sidebar" : "Show transcript"
+            checked: controls.sidebarOpen
+            onClicked: controls.toggleSidebar()
         }
         IconButton {
             name: "maximize"

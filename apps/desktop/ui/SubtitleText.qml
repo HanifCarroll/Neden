@@ -14,6 +14,7 @@ Item {
     signal selectionCommitted
     signal wordRequested(int offset)
     property int wordOffset: -1
+    property string wordText: ""
     readonly property bool selecting: selectionPointer.active
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
@@ -51,9 +52,10 @@ Item {
         selectedTextColor: "white"
         onTextChanged: wordDelay.stop()
         onSelectedTextChanged: {
-            wordDelay.stop();
-            if (selectedText.length)
+            if (selectedText.length) {
+                wordDelay.stop();
                 line.selectionChanged(selectedText);
+            }
         }
         PointHandler {
             id: selectionPointer
@@ -61,9 +63,13 @@ Item {
             onActiveChanged: {
                 if (active) {
                     wordDelay.stop();
+                    line.wordText = textEditor.text;
                     line.wordOffset = textEditor.positionAt(point.position.x, point.position.y);
                 } else if (line.selectable && !textEditor.selectedText.length)
-                    wordDelay.restart();
+                    Qt.callLater(() => {
+                        if (line.wordText === textEditor.text && !textEditor.selectedText.length)
+                            wordDelay.restart();
+                    });
                 if (!active && textEditor.selectedText.length)
                     Qt.callLater(line.selectionCommitted);
             }
@@ -75,7 +81,7 @@ Item {
     }
     Timer {
         id: wordDelay
-        interval: 350
+        interval: Math.max(350, Application.styleHints.mouseDoubleClickInterval + 25)
         onTriggered: {
             if (!textEditor.selectedText.length)
                 line.wordRequested(line.wordOffset);

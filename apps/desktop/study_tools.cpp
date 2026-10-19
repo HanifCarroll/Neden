@@ -130,6 +130,7 @@ bool StudyTools::configure(const QString &endpoint, const QString &model, const 
     }
 
     stop();
+    wordLookup.cancel();
     endpointText = url.toString(QUrl::StripTrailingSlash);
     modelText = model.trimmed();
     dictionaryPattern = dictionary;
@@ -690,6 +691,13 @@ void StudyTools::connectServiceKey(const QString &service) {
     fail(credentialAuthorizer(endpoint));
 }
 
+void StudyTools::lookupWord(const QString &word, const QJsonObject &context) {
+    const auto settings = learningSettings();
+    if (settings.value("wordProvider").toString() == "ai")
+        wordLookup.lookupContext(word, context, endpointText, modelText, learningPreferences.value("noKeyRequired").toBool());
+    else wordLookup.lookup(word, settings);
+}
+
 bool StudyTools::configureLearning(const QVariantMap &preferences) {
 
     // 1. Validate the small explicit settings schema; keys never belong in this document.
@@ -699,7 +707,7 @@ bool StudyTools::configureLearning(const QVariantMap &preferences) {
     const auto primary = preferences.value("primaryProvider").toString();
     const auto region = preferences.value("wordRegion").toString().trimmed();
     if (source.isEmpty() || explanation.isEmpty() || source.size() > 100 || explanation.size() > 100
-        || !QStringList{"off", "google", "microsoft"}.contains(provider)
+        || !QStringList{"off", "ai", "google", "microsoft"}.contains(provider)
         || !QStringList{"configured", "luna"}.contains(primary)
         || !QRegularExpression("^[a-zA-Z0-9-]{0,100}$").match(region).hasMatch()) {
         fail("Use language names or codes and a supported provider.");

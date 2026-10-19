@@ -117,12 +117,9 @@ QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
         + " subtitles. Reconnect their drive or choose replacement files above the transcript.";
 }
 
-void LearningSession::explainSelection() {
-    if (!studyTools || currentCue < 0) return;
-
-    // 1. Freeze the source cue and three neighbors on each side at the time of selection.
+QJsonObject LearningSession::subtitleContext() const {
+    if (!studyTools || currentCue < 0) return {};
     const Cue &cue = model.cues[currentCue];
-    if (selectedText.isEmpty()) select(cue.text);
     QJsonArray before;
     QJsonArray after;
     QJsonArray secondary;
@@ -134,12 +131,19 @@ void LearningSession::explainSelection() {
         }
     }
 
-    // 2. Keep the selected phrase, timing and optional translation clues together for all follow-ups.
-    explainedCueIndex = currentCue;
-    studyTools->explainContext(QJsonObject{{"selection", selectedText.isEmpty() ? cue.text : selectedText},
-        {"sourceCue", cue.text}, {"before", before}, {"after", after}, {"secondary", secondary},
+    return {{"sourceCue", cue.text}, {"before", before}, {"after", after}, {"secondary", secondary},
         {"sourceLanguage", studyTools->sourceLanguage()}, {"explanationLanguage", studyTools->explanationLanguage()},
-        {"cueIndex", currentCue}, {"cueStartMs", cue.startMs}, {"cueEndMs", cue.endMs}});
+        {"cueIndex", currentCue}, {"cueStartMs", cue.startMs}, {"cueEndMs", cue.endMs}};
+}
+
+void LearningSession::explainSelection() {
+    if (!studyTools || currentCue < 0) return;
+    const Cue &cue = model.cues[currentCue];
+    if (selectedText.isEmpty()) select(cue.text);
+    auto context = subtitleContext();
+    context.insert("selection", selectedText.isEmpty() ? cue.text : selectedText);
+    explainedCueIndex = currentCue;
+    studyTools->explainContext(context);
 }
 
 bool LearningSession::followUp(const QString &question) {
@@ -516,7 +520,7 @@ void LearningSession::clearTrack(bool secondary) {
 }
 
 void LearningSession::lookupWordAt(const QString &text, int offset) {
-    if (!studyTools || studyTools->learningSettings().value("wordProvider", "off").toString() == "off") return;
+    if (!studyTools || studyTools->learningSettings().value("wordProvider").toString() == "off") return;
 
     const QString word = WordLookup::wordAt(text, offset);
     if (word.isEmpty()) return;
@@ -525,8 +529,12 @@ void LearningSession::lookupWordAt(const QString &text, int offset) {
     closeWordCard(false);
     wordResume = resume;
     wordActive = true;
+    wordContext = subtitleContext();
+    wordContext.insert("clickedSubtitle", text);
+    wordContext.insert("explanationLanguage", studyTools->explanationLanguage());
+    wordContext.insert("sourceLanguage", studyTools->sourceLanguage());
     setPaused(true);
-    studyTools->words()->lookup(word, studyTools->learningSettings());
+    studyTools->lookupWord(word, wordContext);
 }
 
 void LearningSession::closeWordCard(bool resume) {
@@ -534,9 +542,15 @@ void LearningSession::closeWordCard(bool resume) {
 
     const bool shouldResume = resume && wordResume;
     wordActive = false;
+    wordContext = {};
     wordResume = false;
     if (studyTools) studyTools->words()->cancel();
     if (shouldResume) setPaused(false);
+}
+
+void LearningSession::retryWordLookup() {
+    if (!wordActive || !studyTools || studyTools->words()->state() != "failed") return;
+    studyTools->lookupWord(studyTools->words()->word(), wordContext);
 }
 
 void LearningSession::translateWord() {
