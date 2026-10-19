@@ -1,0 +1,182 @@
+#include "fullscreen_controller.h"
+#include <QScreen>
+#include <QSettings>
+#import <AppKit/AppKit.h>
+
+@interface NedenFullscreenTarget : NSObject
+@property(nonatomic, assign) FullscreenController *controller;
+- (void)toggleFullScreen:(id)sender;
+- (void)openSettings:(id)sender;
+@end
+
+@implementation NedenFullscreenTarget
+- (void)openSettings:(id)sender {
+    Q_UNUSED(sender);
+    if (self.controller) emit self.controller->settingsRequested();
+}
+- (void)toggleFullScreen:(id)sender {
+    Q_UNUSED(sender);
+    if (self.controller) self.controller->toggle();
+}
+@end
+
+struct FullscreenController::NativeState {
+    NSApplicationPresentationOptions savedPresentation = NSApplicationPresentationDefault;
+    __weak NSButton *zoomButton = nil;
+    __weak id savedTarget = nil;
+    SEL savedAction = nullptr;
+    NedenFullscreenTarget *target = nil;
+    NSMenuItem *settingsMenuItem = nil;
+    NSMenuItem *viewMenuItem = nil;
+    NSMenuItem *fullscreenMenuItem = nil;
+    NSMutableArray *observers = [NSMutableArray new];
+};
+
+FullscreenController::FullscreenController(QObject *parent)
+    : QObject(parent), native(std::make_unique<NativeState>()) {
+    preferredNativeMode = QSettings("Neden", "QtPlayer").value("nativeFullscreen", false).toBool();
+}
+
+void FullscreenController::setNativeMode(bool enabled) {
+    if (preferredNativeMode == enabled) return;
+
+    preferredNativeMode = enabled;
+    QSettings("Neden", "QtPlayer").setValue("nativeFullscreen", enabled);
+    if (window && !fullscreenActive && !transitioning) bindZoomButton();
+    emit nativeModeChanged();
+}
+
+FullscreenController::~FullscreenController() {
+    [native->settingsMenuItem.menu removeItem:native->settingsMenuItem];
+    [native->viewMenuItem.menu removeItem:native->viewMenuItem];
+    for (id observer in native->observers) [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    native->target.controller = nullptr;
+    if (fullscreenActive && !nativeSession) {
+        NSApp.presentationOptions = native->savedPresentation;
+    }
+
+    if (native->zoomButton.target == native->target) {
+        native->zoomButton.target = native->savedTarget;
+        native->zoomButton.action = native->savedAction;
+    }
+}
+
+void FullscreenController::attach(QQuickWindow *targetWindow) {
+    if (window) {
+        return;
+    }
+
+    // 1. Route the native window button through the shared fullscreen controller.
+    window = targetWindow;
+    native->target = [NedenFullscreenTarget new];
+    native->target.controller = this;
+    bindZoomButton();
+
+    // 2. Expose the Mac's Fn/Globe-F shortcut through the selected fullscreen mode.
+    native->viewMenuItem = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
+    NSMenu *viewMenu = [[NSMenu alloc] initWithTitle:@"View"];
+    native->fullscreenMenuItem = [[NSMenuItem alloc] initWithTitle:@"Enter Full Screen"
+        action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
+    native->fullscreenMenuItem.keyEquivalentModifierMask = NSEventModifierFlagFunction;
+    native->fullscreenMenuItem.target = native->target;
+    [viewMenu addItem:native->fullscreenMenuItem];
+    native->viewMenuItem.submenu = viewMenu;
+    [NSApp.mainMenu addItem:native->viewMenuItem];
+    native->settingsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Settings…" action:@selector(openSettings:) keyEquivalent:@","];
+    native->settingsMenuItem.target = native->target;
+    [NSApp.mainMenu.itemArray.firstObject.submenu insertItem:native->settingsMenuItem atIndex:1];
+
+    // 3. Reconcile native exits initiated by macOS, and ignore toggles during animation.
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    for (NSNotificationName name in @[NSWindowWillEnterFullScreenNotification, NSWindowWillExitFullScreenNotification]) {
+        [native->observers addObject:[center addObserverForName:name object:view.window queue:nil usingBlock:^(NSNotification *) {
+            transitioning = true;
+        }]];
+    }
+    for (NSNotificationName name in @[NSWindowDidEnterFullScreenNotification, NSWindowDidExitFullScreenNotification]) {
+        [native->observers addObject:[center addObserverForName:name object:view.window queue:nil usingBlock:^(NSNotification *) {
+            transitioning = false;
+            fullscreenActive = (view.window.styleMask & NSWindowStyleMaskFullScreen) != 0;
+            nativeSession = fullscreenActive;
+            native->fullscreenMenuItem.title = fullscreenActive ? @"Exit Full Screen" : @"Enter Full Screen";
+            bindZoomButton();
+            emit activeChanged();
+        }]];
+    }
+}
+
+void FullscreenController::bindZoomButton() {
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    NSWindow *nativeWindow = view.window;
+    nativeWindow.collectionBehavior = (nativeWindow.collectionBehavior
+        & ~(NSWindowCollectionBehaviorFullScreenPrimary | NSWindowCollectionBehaviorFullScreenAuxiliary)
+        & ~NSWindowCollectionBehaviorFullScreenNone)
+        | ((fullscreenActive ? nativeSession : preferredNativeMode)
+            ? NSWindowCollectionBehaviorFullScreenPrimary : NSWindowCollectionBehaviorFullScreenNone);
+    native->zoomButton = [view.window standardWindowButton:NSWindowZoomButton];
+    if (native->zoomButton.target != native->target) {
+        native->savedTarget = native->zoomButton.target;
+        native->savedAction = native->zoomButton.action;
+    }
+
+    native->zoomButton.target = native->target;
+    native->zoomButton.action = @selector(toggleFullScreen:);
+}
+
+void FullscreenController::toggle() {
+    setActive(!fullscreenActive);
+}
+
+void FullscreenController::setActive(bool enabled) {
+    if (!window || transitioning || enabled == fullscreenActive) {
+        return;
+    }
+
+    // 1. Select the mode on entry; changing the preference never changes an active session.
+    if (enabled) nativeSession = preferredNativeMode;
+    if (nativeSession) {
+        transitioning = true;
+        if (enabled) {
+            savedVisibility = window->visibility();
+            bindZoomButton();
+            window->showFullScreen();
+        } else if (savedVisibility == QWindow::Maximized) {
+            window->showMaximized();
+        } else {
+            window->showNormal();
+        }
+        return;
+    }
+
+    // 2. Save the complete window state before covering its current screen.
+    if (enabled) {
+        savedGeometry = window->geometry();
+        savedFlags = window->flags();
+        savedVisibility = window->visibility();
+        native->savedPresentation = NSApp.presentationOptions;
+        NSApp.presentationOptions = NSApplicationPresentationAutoHideMenuBar
+            | NSApplicationPresentationAutoHideDock;
+        window->setFlag(Qt::FramelessWindowHint, true);
+        QRect fullscreenGeometry = window->screen()->geometry();
+        window->setGeometry(fullscreenGeometry);
+    } else {
+
+        // 3. Restore the original chrome, location, size, and system presentation.
+        window->setFlags(savedFlags);
+        window->setGeometry(savedGeometry);
+        if (savedVisibility == QWindow::Maximized) {
+            window->showMaximized();
+        }
+        NSApp.presentationOptions = native->savedPresentation;
+    }
+
+    // 4. Keep every application fullscreen control on this same transition path.
+    fullscreenActive = enabled;
+    // Qt resets the standard button action when window flags change.
+    bindZoomButton();
+    native->fullscreenMenuItem.title = enabled ? @"Exit Full Screen" : @"Enter Full Screen";
+    window->raise();
+    window->requestActivate();
+    emit activeChanged();
+}

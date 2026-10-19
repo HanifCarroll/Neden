@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
-cd "$(dirname "$0")/.."
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root/apps/iina-plugin"
 
 bun run lint
 bun run format:check
@@ -10,13 +11,15 @@ bun run package
 python3 - <<'PY'
 import json
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
 info = json.loads(Path("Info.json").read_text())
 name = f"{info['identifier']}.iinaplugin"
-folder = Path("dist") / name
-archive = Path("dist") / f"{name}-{info['version']}.iinaplgz"
+distribution = Path("../../dist").resolve()
+folder = distribution / name
+archive = distribution / f"{name}-{info['version']}.iinaplgz"
 
 assert info.get("ghRepo"), "ghRepo must identify the GitHub repository"
 assert isinstance(info.get("ghVersion"), int), "ghVersion must be an integer"
@@ -33,10 +36,16 @@ with zipfile.ZipFile(archive) as package:
     }
     assert required <= entries, f"Missing package members: {required - entries}"
     assert json.loads(package.read("Info.json")) == info, "Archive metadata differs from source"
+    expected_files = {str(path.relative_to(folder)) for path in folder.rglob("*") if path.is_file()}
+    archived_files = {name for name in entries if not name.endswith("/")}
+    assert archived_files == expected_files, "Archive file list differs from the built plugin"
+    for member in sorted(expected_files):
+        assert package.read(member) == (folder / member).read_bytes(), f"Archive bytes differ: {member}"
 
-subprocess.run(
-    ["python3", "tests/test_stream_helper.py", str(folder / "native/stream-helper")],
-    check=True,
-)
+    with tempfile.TemporaryDirectory(prefix="neden-package-check-") as temporary:
+        helper = Path(temporary) / "stream-helper"
+        helper.write_bytes(package.read("native/stream-helper"))
+        helper.chmod(0o755)
+        subprocess.run(["python3", "tests/test_stream_helper.py", str(helper)], check=True)
 print(f"Release checks passed: {archive}")
 PY

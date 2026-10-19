@@ -1,24 +1,24 @@
 {
+  "name": "neden",
   "private": true,
+  "workspaces": [
+    "apps/iina-plugin"
+  ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "evals": "bun tests/eval_runner.ts",
-    "build": "sh scripts/build.sh",
-    "package": "sh scripts/package.sh",
-    "release:check": "sh scripts/release-check.sh",
-    "lint": "oxlint --deny-warnings src tests ui",
-    "format": "oxfmt --write src tests ui",
-    "format:check": "oxfmt --check src tests ui"
-  },
-  "dependencies": {
-    "markdown-it": "15.0.2"
-  },
-  "devDependencies": {
-    "@types/bun": "1.3.14",
-    "happy-dom": "20.8.3",
-    "oxfmt": "0.70.0",
-    "oxlint": "1.85.0",
-    "typescript": "5.9.3"
+    "typecheck": "bun run --cwd apps/iina-plugin typecheck",
+    "test": "bun run --cwd apps/iina-plugin test",
+    "evals": "bun run --cwd apps/iina-plugin evals",
+    "lint": "bun run --cwd apps/iina-plugin lint",
+    "format": "bun run --cwd apps/iina-plugin format",
+    "format:check": "bun run --cwd apps/iina-plugin format:check",
+    "build": "bun run --cwd apps/iina-plugin build",
+    "package": "bun run --cwd apps/iina-plugin package",
+    "release:check": "bun run --cwd apps/iina-plugin release:check",
+    "build:desktop": "sh scripts/desktop.sh build",
+    "run:desktop": "sh scripts/desktop.sh run",
+    "test:desktop": "sh scripts/desktop.sh test",
+    "test:desktop:core": "sh scripts/desktop.sh core-test",
+    "lint:desktop": "sh scripts/desktop.sh lint",
+    "check:layout": "python3 scripts/check_layout.py"
   }
 }

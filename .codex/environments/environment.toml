@@ -1,15 +1,15 @@
 version = 1
-name = "Neden desktop comparison"
+name = "Neden"
 
 [setup]
 script = ""
 
 [[actions]]
-name = "Run"
+name = "Run desktop"
 icon = "run"
-command = "./script/build_and_run.sh qt"
+command = "bun run run:desktop"
 
 [[actions]]
-name = "Run Flutter"
-icon = "run"
-command = "./script/build_and_run.sh flutter"
+name = "Check IINA plugin"
+icon = "test"
+command = "bun run release:check"

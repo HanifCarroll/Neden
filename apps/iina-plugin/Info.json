@@ -1,0 +1,37 @@
+{
+  "name": "Neden",
+  "description": "Click subtitle words for quick meanings or select phrases for contextual explanations.",
+  "identifier": "io.github.hanifcarroll.iina-language-learning",
+  "version": "0.1.22",
+  "ghRepo": "hanifcarroll/iina-language-learning-plugin",
+  "ghVersion": 1,
+  "author": { "name": "Hanif Carroll" },
+  "entry": "main.js",
+  "sidebarTab": { "name": "Neden" },
+  "permissions": ["video-overlay", "file-system"],
+  "allowedDomains": [],
+  "preferenceDefaults": {
+    "subtitleTrackChoices": {},
+    "settings": {
+      "endpoint": "",
+      "model": "",
+      "sourceLanguage": "Turkish",
+      "explanationLanguage": "English",
+      "includeSecondary": true,
+      "noKeyRequired": false,
+      "fallbackEnabled": false,
+      "primaryProvider": "configured",
+      "secondaryBelowSource": false,
+      "wordProvider": "off",
+      "wordRegion": "",
+      "appearance": {
+        "sourceSize": 28,
+        "sourceColor": "#ffffff",
+        "sourceBottom": 8,
+        "translationSize": 25,
+        "translationColor": "#ffffff",
+        "translationGap": 12
+      }
+    }
+  }
+}

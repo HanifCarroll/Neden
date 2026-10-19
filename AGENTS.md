@@ -1,5 +1,11 @@
 # Development instructions
 
+## Repository layout
+
+`apps/desktop` is the selected Qt Quick player; `apps/iina-plugin` is the existing plugin. Shared assets live in `shared`, current documentation in `docs`, and build/check tools in `scripts`. Keep comparison results, post drafts, alternate desktop implementations, and generated artifacts out of the tracked tree.
+
+The IINA runtime and Keychain rules below apply to the plugin. Preserve the desktop app's existing native Keychain adapter and signing identity; do not introduce plaintext credential storage. The approved Qt application supersedes the earlier restriction on future desktop packages.
+
 ## Code readability
 
 - All generated code should focus on readability as its highest value. Do not be clever or terse.

@@ -1,7 +1,0 @@
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "rules": {
-    "curly": ["error", "all"],
-    "no-nested-ternary": "error"
-  }
-}

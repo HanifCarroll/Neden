@@ -1,48 +1,40 @@
 # Neden
 
-A pre-release IINA plugin that lets you click a subtitle word for a quick meaning or select a phrase for an AI explanation and follow-up chat without leaving the video.
+Language learning while watching local video, with selectable subtitles, contextual explanations, and dictionary lookup.
 
-Subtitle preparation and review live in the separate [Subtitle Bench](https://github.com/HanifCarroll/subtitle-bench) project.
+- `apps/desktop/` — Qt Quick desktop player: dual SRT subtitles, Turkish-aware transcript search, sentence replay, dictionary WebView, streamed AI explanations/translations, study cards, subtitle downloads, and settings.
+- `apps/iina-plugin/` — existing macOS IINA integration, with its own [usage guide](apps/iina-plugin/README.md).
+- `shared/` — shared assets and their required notices.
+- `docs/` — current architecture, platform limits, dependency notes, and plugin specification.
+- `scripts/` — build, packaging, and validation tools.
 
-Tested on **macOS 27.0** and **IINA 1.5.0-beta2**. The packaged helper was built and tested on Apple silicon. Other combinations have not been tested.
+## Desktop development
 
-## Install the current local build
+Use Qt 6.8 or newer with Quick, Quick Controls 2, Qml, Network, OpenGL, WebView, and Test; CMake 3.21 or newer; Python 3.12 or newer; a C++17 compiler; and libmpv development headers. The current Mac build uses Qt 6.12. macOS builds also require command-line developer tools and the existing Apple Development signing identity.
 
-Install [Bun](https://bun.sh/), Swift/Xcode command-line tools, and IINA. From a clean checkout:
+Prepare the reviewed macOS playback frameworks with `python3 scripts/fetch_macos_runtime.py`, then:
+
+```sh
+bun run build:desktop
+bun run test:desktop
+bun run run:desktop
+```
+
+The launcher defaults to `.cache/playback-frameworks`; set `NEDEN_MPV_FRAMEWORKS` to use another reviewed copy. It deliberately refuses an unreviewed system mpv. Use `CMAKE_PREFIX_PATH` for a Qt installation outside the compiler's normal search path. `bun run test:desktop:core` checks portable logic without a playback runtime. Desktop commands can also be run directly through `scripts/desktop.sh` without Bun.
+
+Open your own video and source/translation SRT files through the player. No media or commercial subtitle tracks are bundled. Settings opens with Command–comma on macOS or Ctrl–comma elsewhere. Instant fullscreen is the Mac default; native fullscreen is optional. Existing bundle identifiers and saved-data locations are retained so prior Keychain approvals and study data remain usable.
+
+See [desktop architecture](docs/desktop/ARCHITECTURE.md), [platform limits](docs/desktop/PLATFORMS.md), and [dependency and distribution requirements](docs/desktop/DEPENDENCIES.md). These are developer builds, not redistributable installers.
+
+## IINA plugin development
+
+From the repository root:
 
 ```sh
 bun install --frozen-lockfile
 bun run release:check
 ```
 
-In IINA's plugin settings, choose **Install Local Package** and select `dist/io.github.hanifcarroll.iina-language-learning.iinaplugin-0.1.21.iinaplgz`. Restart IINA after an update; hot plugin reload crashed in one test of IINA 1.5.0-beta2. The GitHub repository installation route will be available only after a public release with an archive asset is published.
+The check builds an installable package in ignored `dist/`, verifies its contents, and exercises streaming against controlled local endpoints. It does not install or enable the plugin in IINA. The root `Info.json` is required by IINA's GitHub update discovery; it mirrors `apps/iina-plugin/Info.json` and is checked during packaging.
 
-## Use it
-
-1. Open a video and the Neden sidebar. In **Subtitles**, choose **Add SRT/VTT file…** for a user-supplied UTF-8 source subtitle file, then choose it under **Source subtitle**. Add and choose an optional translation under **Secondary subtitle**. The **Plugin → Neden** menu offers the same track controls. Selectable explanations require an external SRT or VTT source track.
-2. For phrase explanations, enter an OpenAI-compatible HTTPS API base URL and exact model ID in **AI settings**. Enter a key if that endpoint requires one. The plugin appends `/chat/completions` to the base URL. You can leave these fields empty if you only want word lookup. Saving settings does not send a request.
-   Under **AI settings → Provider order**, choose the configured provider (such as DeepSeek) or GPT-6 Luna as **Primary**. **Fallback** is always the other provider; changing either selector swaps both. Save your OpenAI key in the Luna field; the configured connection keeps its own endpoint-bound key. Enable **Use fallback** to send the same context once to the other provider if the primary produces no answer text within five seconds. An early error waits for the same deadline; an answer already underway never switches. Each turn starts with the chosen primary. Chat labels the answering provider and any fallback. Luna always uses no thinking (`reasoning_effort: none`). Both providers may charge despite cancellation. Stop, Hide/Resume, source-track/media changes, settings changes, and teardown cancel pending fallback.
-3. Optionally choose **Google Cloud Translation** or **Microsoft Translator** under **AI settings → Word lookup** and enter your own service key. Microsoft regional resources also need their resource region. Select **Save settings** to save both AI and word lookup settings together. Word lookup uses the source and explanation languages above. Saving does not send a request.
-4. Click a source word to pause the video and open its meaning on the video. Google shows one translation. Microsoft adds alternative meanings when its English dictionary has an entry; otherwise it uses ordinary translation. The card has no part-of-speech label. Close the card to return to the previous pause state. Each lookup can use provider quota.
-5. Double-click a source word or drag across a phrase to open the AI explanation in the sidebar. Completing the selection pauses playback and **immediately sends one request**. It may incur a provider charge.
-6. Read the streamed explanation and ask follow-ups in the same chat. **Replay line** plays the selected cue once without another AI request, then returns to your previous position and pause state; **Stop replay** returns early. **Stop** marks a partial answer incomplete. **Escape** or the **×** beside Neden hides the sidebar, retains the chat in that player window, and resumes eligible playback. **⌥⌘G** hides or reopens the sidebar. Selecting another phrase replaces the chat.
-
-The sidebar separates **Chat**, **Subtitles**, and **AI settings**. Neden remembers external source and secondary track choices for each movie when selected through its controls, and restores them after reopening that movie. Restoration waits for both choices and the loaded track list to settle, so IINA's startup subtitle selection can finish without immediately replacing the saved pair. Choosing **Off** is remembered too. When both tracks are selected and the source overlay is usable, Neden stacks the secondary and selectable source lines. **Swap positions** reverses their order and saves that choice. Under **Subtitles → Appearance**, size, color, and vertical spacing can be adjusted separately. Appearance edits preview on the video; **Apply appearance** saves them, while leaving Subtitles restores the saved values. Saving AI settings alone does not save an appearance preview. The **Include secondary subtitle text in AI context** setting controls requests independently of display. To put plugin sidebars on the right in the tested IINA version, use **Video → Show Video Panel → Layout → Sidebar Position → Plugins**; that IINA setting affects all plugin sidebars.
-
-## Privacy and limits
-
-An AI explanation request sends the selected phrase, its complete cue, up to three earlier and three later source cues, optional secondary subtitle context, and chat turns directly to the configured endpoint. If enabled, fallback sends that identical context to the other selected provider once after five seconds without answer text. Luna requests go to `https://api.openai.com/v1/chat/completions`; configured-provider requests go to the saved connection. A word lookup sends only the clicked word to the chosen translation service. Neither sends the video or complete subtitle file. API keys are stored through IINA's macOS Keychain integration, not in plugin preferences. There is no project-operated server, account, telemetry, or retry beyond the explicitly enabled fallback. The plugin makes no provider request until a word is clicked, a nonempty phrase selection is completed, or a follow-up or manual retry is sent.
-
-The bundled Swift helper performs real incremental HTTPS streaming. It needs IINA's **video-overlay** and **file-system** permissions; the latter permits the helper to make network requests outside IINA's own HTTP domain checks. It accepts HTTP only for explicit loopback test endpoints. System TLS validation and same-origin redirect restrictions apply. The helper has first-byte, idle, and total request timeouts of 20, 30, and 120 seconds. Cancellation invalidates late UI results, but it cannot guarantee that a provider stops work or billing immediately.
-
-Turn **Selectable subtitle overlay** off under **Subtitles → Overlay control** before disabling the plugin. Turning it off cancels active work, clears the chat, resumes eligible playback, and restores native subtitles. Raw disable in IINA Preferences has no teardown callback in the tested version: a helper can run until its total timeout, subtitles can remain hidden, and playback can remain paused. If needed, recover with **Subtitles → Show Subtitles**, **Subtitles → Show Secondary Subtitles**, and **Playback → Resume**.
-
-Each subtitle file is limited to 8 MiB and 50,000 cues; each cue or selection to 4,000 characters; each follow-up to 2,000 characters; chat to 20 turns; request JSON to 128 KiB; and an answer or SSE event to 64 KiB. Limits fail visibly. Full-length user-supplied SRT/VTT files within these limits are valid inputs. Complete commercial subtitle tracks are not included in this repository.
-
-## Development and evidence
-
-`bun run format` formats `src/`, `tests/`, and `ui/` with Oxfmt. `bun run lint` checks TypeScript with Oxlint, including explicit braces and no nested ternaries.
-
-`bun run release:check` checks lint and formatting, runs the TypeScript and DOM tests, typechecks, compiles the Swift helper, packages the plugin, checks the archive, and exercises the helper against local controlled endpoints. [The acceptance report](ACCEPTANCE_REPORT.md) distinguishes automated, installed-IINA, and still-outstanding checks. The [specification](docs/SPEC.md) defines behavior; the [evaluation plan](docs/EVAL_PLAN.md) describes the synthetic language cases. No real provider key or user media is committed.
-
-The source is MIT licensed. The package includes notices for `markdown-it` and its bundled dependencies. The ignored `.references/` clones were used for research; no substantial reference implementation was copied. See [the release checklist](docs/RELEASE.md) before publishing or proposing an IINA community-list entry.
+The project source is MIT licensed; dependency licenses still apply. Generated builds, caches, and test output are ignored. Previous implementations are available through Git history.
