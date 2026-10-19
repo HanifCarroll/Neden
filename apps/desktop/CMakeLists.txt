@@ -48,7 +48,7 @@ if(APPLE)
     set_source_files_properties(macos/Neden.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set(NEDEN_UI_SOURCES recent_videos.cpp recent_videos.h explanation_format.cpp explanation_format.h learning_session.cpp learning_session.h playback_engine.h mpv_playback.cpp mpv_playback.h video_render_lifetime.h
+set(NEDEN_UI_SOURCES media_path.h recent_videos.cpp recent_videos.h explanation_format.cpp explanation_format.h learning_session.cpp learning_session.h playback_engine.h mpv_playback.cpp mpv_playback.h video_render_lifetime.h
         cues.cpp cues.h study_tools.cpp study_tools.h video.cpp video.h video_geometry.h
         fullscreen_controller.h ${PLATFORM_SOURCES} credentials.h)
 set(NEDEN_QML_FILES ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml ui/PlayerHeader.qml

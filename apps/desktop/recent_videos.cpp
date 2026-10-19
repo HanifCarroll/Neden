@@ -1,4 +1,5 @@
 #include "recent_videos.h"
+#include "media_path.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -55,8 +56,9 @@ QHash<int, QByteArray> RecentVideos::roleNames() const {
 }
 
 std::optional<RecentVideo> RecentVideos::find(const QString &path) const {
+    const auto identity = mediaPathIdentity(path);
     for (const auto &video : videos) {
-        if (video.path == path) return video;
+        if (video.path == identity) return video;
     }
     return std::nullopt;
 }
@@ -89,10 +91,13 @@ void RecentVideos::load() {
             const auto item = entry.toObject();
             RecentVideo video{item.value("path").toString(), item.value("position").toDouble(-1),
                 item.value("duration").toDouble(-1)};
-            if (!entry.isObject() || !validVideo(video) || paths.contains(video.path)) {
+            if (!entry.isObject() || !validVideo(video)) {
                 validStorage = false;
                 break;
             }
+            video.path = mediaPathIdentity(video.path);
+            if (paths.contains(video.path)) continue;
+
             paths.insert(video.path);
             videos.append(video);
         }
@@ -128,8 +133,11 @@ bool RecentVideos::persist(const QList<RecentVideo> &next) {
     return true;
 }
 
-bool RecentVideos::remember(const RecentVideo &video, bool promote) {
-    if (!validVideo(video)) return false;
+bool RecentVideos::remember(const RecentVideo &requested, bool promote) {
+    if (!validVideo(requested)) return false;
+
+    auto video = requested;
+    video.path = mediaPathIdentity(video.path);
 
     // 1. Update an existing row in place unless an explicit open promotes it.
     auto next = videos;
@@ -162,9 +170,10 @@ bool RecentVideos::remember(const RecentVideo &video, bool promote) {
 void RecentVideos::remove(const QUrl &url) {
     if (!url.isLocalFile()) return;
 
+    const auto identity = mediaPathIdentity(url.toLocalFile());
     auto next = videos;
     for (int row = 0; row < next.size(); ++row) {
-        if (next[row].path != url.toLocalFile()) continue;
+        if (next[row].path != identity) continue;
 
         next.removeAt(row);
         if (!persist(next)) return;
@@ -173,7 +182,7 @@ void RecentVideos::remove(const QUrl &url) {
         videos = next;
         endRemoveRows();
         emit countChanged();
-        emit removed(url.toLocalFile());
+        emit removed(identity);
         return;
     }
 }

@@ -70,6 +70,31 @@ private slots:
         QVERIFY(session.subtitle().isEmpty());
         QVERIFY(session.translation().isEmpty());
     }
+    void finderUnicodePathResumesTheExistingMacVideo() {
+#ifndef Q_OS_MACOS
+        QSKIP("This regression concerns the Mac filesystem's Unicode-equivalent paths.");
+#else
+        QTemporaryDir directory;
+        const QString composed = directory.filePath(QString::fromUtf8("Bölüm.webm"));
+        const QString decomposed = composed.normalized(QString::NormalizationForm_D);
+        QFile file(composed);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+        QVERIFY(QFile::exists(decomposed));
+        RecentVideos recent(directory.path());
+        QVERIFY(recent.remember({composed, 12.345, 24}, true));
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setRecentVideos(&recent);
+        session.openVideo(QUrl::fromLocalFile(decomposed));
+        QCOMPARE(playback.lastSeek, 12.345);
+        QCOMPARE(recent.count(), 1);
+        QCOMPARE(recent.find(decomposed)->position, 12.345);
+        recent.remove(QUrl::fromLocalFile(decomposed));
+        session.checkpoint();
+        QCOMPARE(recent.count(), 0);
+#endif
+    }
     void removingCurrentVideoDoesNotReinsertItOnClose() {
         QTemporaryDir directory;
         QFile file(directory.filePath("video.webm"));

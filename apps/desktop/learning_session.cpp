@@ -1,4 +1,5 @@
 #include "learning_session.h"
+#include "media_path.h"
 #include <QFile>
 #include <QFileInfo>
 #include <cmath>
@@ -143,7 +144,7 @@ void LearningSession::openVideo(const QUrl &url) {
     rememberCurrent = true;
     resetInteraction();
     setPaused(true);
-    currentMediaPath = file.absoluteFilePath();
+    currentMediaPath = mediaPathIdentity(file.absoluteFilePath());
     currentCue = -1;
     model.replace({});
     translationCues.clear();

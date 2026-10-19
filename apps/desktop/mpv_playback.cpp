@@ -1,4 +1,5 @@
 #include "mpv_playback.h"
+#include "media_path.h"
 #include "video_geometry.h"
 #include <stdexcept>
 
@@ -83,8 +84,8 @@ void MpvPlayback::open(const QString &path, bool loop) {
     emit positionChanged();
     emit durationChanged();
     setPaused(true);
-    requestedPath = path;
-    pendingPath = path;
+    requestedPath = mediaPathIdentity(path);
+    pendingPath = requestedPath;
     pendingLoop = loop;
     outputRequested = true;
 
@@ -143,7 +144,7 @@ void MpvPlayback::drainEvents() {
 
         if (event->event_id == MPV_EVENT_FILE_LOADED) {
             char *path = mpv_get_property_string(mpv, "path");
-            const auto loadedPath = QString::fromUtf8(path ? path : "");
+            const auto loadedPath = mediaPathIdentity(QString::fromUtf8(path ? path : ""));
             mpv_free(path);
             if (loadedPath == requestedPath) {
                 mpv_get_property(mpv, "duration", MPV_FORMAT_DOUBLE, &durationSeconds);
