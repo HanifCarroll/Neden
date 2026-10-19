@@ -320,7 +320,7 @@ Automate pure context/conversation/parser/prompt logic and DOM/bridge behavior w
 
 ## 12. Development sequence and definition of done
 
-Follow `AGENTS.md`. The implementation plan and installed-IINA milestone have been reviewed and the owner approved remaining feature implementation under their architecture, boundaries, and Swift-helper permissions. Preserve the historical observations while distinguishing them from product acceptance evidence.
+The [development guide](../development.md) documents runtime boundaries and verification. The implementation plan and installed-IINA milestone have been reviewed and the owner approved remaining feature implementation under their architecture, boundaries, and Swift-helper permissions. Preserve the historical observations while distinguishing them from product acceptance evidence.
 
 Build and verify in thin local commits:
 

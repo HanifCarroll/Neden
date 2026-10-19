@@ -8,6 +8,8 @@ Language learning while watching local video, with selectable subtitles, context
 - `docs/` — current architecture, platform limits, dependency notes, and plugin specification.
 - `scripts/` — build, packaging, and validation tools.
 
+The [development guide](docs/development.md) covers runtime boundaries, credentials, lifecycle ownership, and verification across the desktop app and IINA plugin.
+
 ## Desktop development
 
 Use Qt 6.8 or newer with Quick, Quick Controls 2, Qml, Network, OpenGL, WebView, and Test; CMake 3.21 or newer; Python 3.12 or newer; a C++17 compiler; and libmpv development headers. The current Mac build uses Qt 6.12. macOS builds also require command-line developer tools and the existing Apple Development signing identity.
