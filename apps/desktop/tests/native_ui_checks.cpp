@@ -9,6 +9,7 @@
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -155,7 +156,7 @@ private:
 
 private slots:
     void init() {
-        const QStringList headlessChecks{"explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -1042,6 +1043,57 @@ private slots:
         QTest::qWait(450);
         QCOMPARE(study->words()->state(), QString("idle"));
         QVERIFY(!card->isVisible());
+    }
+
+    void sidebarSlidesWithoutResizingVideoPerFrame() {
+        QQmlComponent component(engine.get());
+        component.setData(R"(
+            import QtQuick
+            import Neden
+            Item {
+                width: 1000; height: 500
+                Rectangle { objectName: "video"; width: parent.width - sidebar.reservedWidth }
+                SlidingSidebar { id: sidebar; objectName: "sidebar"; width: 320 }
+            }
+        )", QUrl());
+        std::unique_ptr<QObject> fixture(component.create());
+        QVERIFY2(fixture, qPrintable(component.errorString()));
+        auto *sidebar = fixture->findChild<QQuickItem *>("sidebar");
+        auto *video = fixture->findChild<QQuickItem *>("video");
+        QVERIFY(sidebar && video);
+        QSignalSpy widthChanges(video, &QQuickItem::widthChanged);
+        QCOMPARE(video->width(), 1000.0);
+        sidebar->setProperty("expanded", true);
+        QTRY_COMPARE(video->width(), 680.0);
+        QTest::qWait(60);
+        const double partial = sidebar->property("revealProgress").toDouble();
+        QVERIFY(partial > 0 && partial < 1);
+        QTRY_COMPARE(sidebar->x(), 680.0);
+        QCOMPARE(widthChanges.count(), 1);
+        sidebar->setProperty("expanded", false);
+        QTest::qWait(60);
+        QCOMPARE(video->width(), 680.0);
+        sidebar->setProperty("expanded", true); // Reverse a closing slide immediately.
+        QTRY_COMPARE(sidebar->x(), 680.0);
+        QCOMPARE(widthChanges.count(), 1);
+        sidebar->setProperty("expanded", false);
+        QTRY_COMPARE(video->width(), 1000.0);
+        QCOMPARE(widthChanges.count(), 2);
+        QVERIFY(!sidebar->isVisible());
+        sidebar->setProperty("reduceMotion", true);
+        sidebar->setProperty("expanded", true);
+        QCOMPARE(sidebar->x(), 680.0);
+        sidebar->setProperty("expanded", false);
+        QCOMPARE(sidebar->x(), 1000.0);
+        QCOMPARE(video->width(), 1000.0);
+        sidebar->setProperty("reduceMotion", false);
+        sidebar->setProperty("expanded", true);
+        QTest::qWait(40);
+        sidebar->setProperty("reduceMotion", true); // A live preference change settles immediately.
+        QCOMPARE(sidebar->x(), 680.0);
+        auto *tab = visualItem(window->contentItem(), "meaningTab");
+        QVERIFY(tab);
+        QCOMPARE(tab->property("text").toString(), QString("Explanation"));
     }
 
     void pausedVideoHidesControlsAndCursorUntilPointerMoves() {

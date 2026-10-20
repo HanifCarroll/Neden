@@ -62,4 +62,9 @@ Group content with headings, spacing and occasional single separators rather tha
 
 The shortcut editor uses searchable command rows, direct key recording, explicit conflict messages and per-command/all-command reset. Only overrides are persisted. This follows the discoverability and conflict-resolution patterns in [VS Code's keyboard editor](https://code.visualstudio.com/docs/configure/keybindings) and [IntelliJ's keymap editor](https://www.jetbrains.com/help/idea/configuring-keyboard-and-mouse-shortcuts.html). Native editing shortcuts remain available in text fields.
 
-Floating word cards show the clicked form, a compact part-of-speech/base-form row, the meaning in this sentence, one usage note and useful alternative senses. Explain line is a separate, filled video-overlay action: either caption words or the button's footprint reveals it. The Meaning sidebar has a single close action in its top navigation.
+Floating word cards show the clicked form, a compact part-of-speech/base-form row, the meaning in this sentence, one usage note and useful alternative senses. Explain line is a separate, filled video-overlay action: either caption words or the button's footprint reveals it. The Explanation sidebar has a single close action in its top navigation.
+
+
+## Sidebar motion
+
+`SlidingSidebar` slides horizontally for 180 ms with cubic ease-out. Reserve the sidebar width immediately when opening and release it after closing, so the video resizes once per transition instead of on every frame. Reversing the command interrupts the slide at its current position. `MotionPreferences` reads macOS Reduce Motion and observes live accessibility changes; reduced motion settles immediately. Other platforms default to no animation until their accessibility preference is integrated.

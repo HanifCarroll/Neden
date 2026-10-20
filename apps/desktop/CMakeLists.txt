@@ -62,10 +62,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(AUDITED_MPV_PREFIX "" CACHE PATH "Explicit source-built LGPL runtime on Linux")
 find_path(MPV_INCLUDE_DIR mpv/client.h HINTS "${AUDITED_MPV_PREFIX}/include" /opt/homebrew/include REQUIRED)
 if(APPLE)
-    set(PLATFORM_SOURCES platform/fullscreen_controller.mm platform/credentials_mac.mm)
+    set(PLATFORM_SOURCES platform/motion_preferences_mac.mm platform/fullscreen_controller.mm platform/credentials_mac.mm)
     set(MEDIA_PLATFORM_SOURCE platform/platform_media_session_mac.mm)
 else()
-    set(PLATFORM_SOURCES platform/fullscreen_controller.cpp platform/credentials_unavailable.cpp)
+    set(PLATFORM_SOURCES platform/motion_preferences.cpp platform/fullscreen_controller.cpp platform/credentials_unavailable.cpp)
     if(WIN32)
         set(MEDIA_PLATFORM_SOURCE platform/platform_media_session_windows.cpp)
     else()
@@ -80,10 +80,10 @@ if(APPLE)
     set_source_files_properties(macos/Neden.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set(NEDEN_UI_SOURCES app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
+set(NEDEN_UI_SOURCES platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
     playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp)
-set(NEDEN_QML_FILES ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
+set(NEDEN_QML_FILES ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
         ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/MeaningPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
@@ -104,7 +104,7 @@ qt_add_resources(NedenQt branding PREFIX "/branding" BASE "../../shared/branding
 target_include_directories(NedenQt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(NedenQt PRIVATE qt6keychain Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView)
 if(APPLE)
-    set_source_files_properties(platform/fullscreen_controller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    set_source_files_properties(platform/motion_preferences_mac.mm platform/fullscreen_controller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_source_files_properties(platform/platform_media_session_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_source_files_properties(platform/credentials_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     target_link_libraries(NedenQt PRIVATE "-framework MediaPlayer" "-framework IOKit" "-framework CoreAudio" "-framework AppKit" "-framework Security" "-framework Foundation" "-framework LocalAuthentication")

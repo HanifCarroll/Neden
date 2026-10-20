@@ -7,6 +7,7 @@ import Neden
 
 ApplicationWindow {
     id: root
+    readonly property MotionPreferences motionPreferences: MotionPreferences {}
     property ThumbnailService thumbnails: null
     property ShortcutMap keymap: ShortcutMap {}
     readonly property bool commandShortcutsEnabled: !root.meaningEditing && !transcript.editing && !root.dictionaryOpen && !keymap.recording && !settingsDialog.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !studyDrawer.opened
@@ -779,14 +780,14 @@ ApplicationWindow {
         }
         ColumnLayout {
             spacing: 0
-            RowLayout {
-                spacing: 0
+            Item {
+                clip: true
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 VideoStage {
                     id: stage
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    anchors.fill: parent
+                    anchors.rightMargin: inspector.reservedWidth
                     session: root.session
                     playback: root.playback
                     appearance: root.appearance
@@ -807,12 +808,13 @@ ApplicationWindow {
                     windowDragEnabled: Qt.platform.os === "osx" && !root.fullscreenController.active
                     onMoveWindowRequested: root.startSystemMove()
                 }
-                Rectangle {
+                SlidingSidebar {
+                    id: inspector
                     objectName: "learningInspector"
                     color: Theme.surface
-                    visible: root.dictionaryOpen || root.transcriptOpen
-                    Layout.preferredWidth: Math.max(280, Math.min(352, root.width * 0.275))
-                    Layout.fillHeight: true
+                    expanded: root.dictionaryOpen || root.transcriptOpen
+                    reduceMotion: root.motionPreferences.reducedMotion
+                    width: Math.max(280, Math.min(352, root.width * 0.275))
                     Rectangle {
                         width: 1
                         height: parent.height
@@ -839,7 +841,7 @@ ApplicationWindow {
                             }
                             InspectorTab {
                                 objectName: "meaningTab"
-                                text: "Meaning"
+                                text: "Explanation"
                                 Layout.fillWidth: true
                                 checked: root.inspectorTab === 1 && !root.dictionaryOpen
                                 onClicked: root.openMeaning()
