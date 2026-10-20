@@ -412,9 +412,12 @@ private slots:
         auto *options = window->findChild<QObject *>("playerOptions");
         QVERIFY(dialog && options);
         QTRY_VERIFY(dialog->property("opened").toBool());
+        // The popup is open before its nested layouts have finished positioning controls.
+        QTest::qWait(300);
         session->preferences()->resetPicture();
         click("rotateRightButton");
         QCOMPARE(session->preferences()->rotation(), 90);
+        QTest::qWait(300);
         click("resetPictureButton");
         QCOMPARE(session->preferences()->rotation(), 0);
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
@@ -453,6 +456,7 @@ private slots:
         if (!artifacts.isEmpty())
             QVERIFY(window->grabWindow().save(artifacts + "/study-tabs.png"));
         QVERIFY(QMetaObject::invokeMethod(studyDrawer, "close"));
+        QTRY_VERIFY(!studyDrawer->property("visible").toBool());
     }
 
     void trackDropdownsDisplayTheirNamedRolesAndReadableSelection() {

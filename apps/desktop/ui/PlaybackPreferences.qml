@@ -43,8 +43,10 @@ Item {
         modal: true
         anchors.centerIn: parent
         width: Math.min(440, pane.width)
+        contentHeight: confirmationText.implicitHeight
         standardButtons: Dialog.Ok | Dialog.Cancel
         contentItem: Label {
+            id: confirmationText
             text: "Saved positions, subtitle choices and per-video settings will be removed. Your files are kept."
             wrapMode: Text.WordWrap
             color: Theme.ink
