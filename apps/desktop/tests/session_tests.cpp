@@ -8,7 +8,10 @@
 
 class FakePlayback : public PlaybackEngine {
 public:
-    FakePlayback() { durationSeconds = 24; }
+    FakePlayback() {
+        durationSeconds = 24;
+        canSeek = true;
+    }
     double lastSeek = -1;
     bool completeImmediately = true;
     bool applySeekImmediately = true;
@@ -30,6 +33,15 @@ public:
         isPaused = value;
         emit pausedChanged();
     }
+    QMap<Option, QVariant> options;
+    QStringList nativeSubtitlePaths;
+    void configure(Option option, const QVariant &value) override { options[option] = value; }
+    void addSubtitle(const QString &path, bool) override { nativeSubtitlePaths << path; }
+    void finish() {
+        playbackState = "finished";
+        emit stateChanged();
+        emit finished();
+    }
     void rate(double) override {}
     double audioLevel = -1;
     void volume(double value) override { audioLevel = value; }
@@ -38,6 +50,112 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void folderQueueUsesNaturalOrderAndPreservesCurrentDuringReorder() {
+        QTemporaryDir directory;
+        for (const auto &name : {"Episode 10.mp4", "Episode 2.mp4", "notes.txt"}) {
+            QFile file(directory.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+        MediaQueue queue;
+        queue.replace({QUrl::fromLocalFile(directory.path())});
+        QCOMPARE(queue.entries().size(), 2);
+        QCOMPARE(queue.entries()[0].toMap()["title"].toString(), QString("Episode 2.mp4"));
+        queue.play(0);
+        queue.move(0, 1);
+        QCOMPARE(queue.currentIndex(), 1);
+        QVERIFY(queue.hasPrevious());
+        QVERIFY(!queue.hasNext());
+        queue.remove(0);
+        QCOMPARE(queue.currentIndex(), 0);
+        queue.clear();
+        QCOMPARE(queue.currentIndex(), -1);
+        QVERIFY(!queue.hasNext());
+    }
+    void endOfFileAdvancesOnlyWhenAutoplayIsEnabled() {
+        QTemporaryDir directory;
+        QList<QUrl> videos;
+        for (const auto &name : {"first.mp4", "second.mp4"}) {
+            QFile file(directory.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            videos << QUrl::fromLocalFile(file.fileName());
+        }
+        FakePlayback engine;
+        LearningSession session(&engine);
+        session.openVideos(videos);
+        engine.finish();
+        QCOMPARE(session.queue()->currentIndex(), 0);
+        QVERIFY(session.paused());
+        session.queue()->setAutoplay(true);
+        engine.finish();
+        QCOMPARE(session.queue()->currentIndex(), 1);
+        QVERIFY(!session.paused());
+    }
+    void mixedDropDefersNativeSubtitlesUntilVideoIsReady() {
+        QTemporaryDir directory;
+        QList<QUrl> files;
+        for (const auto &name : {"video.mp4", "primary.ass", "secondary.ssa"}) {
+            QFile file(directory.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            files << QUrl::fromLocalFile(file.fileName());
+        }
+        FakePlayback engine;
+        engine.completeImmediately = false;
+        LearningSession session(&engine);
+        session.acceptDrop(files);
+        QVERIFY(engine.nativeSubtitlePaths.isEmpty());
+        emit engine.loaded(session.mediaPath());
+        QCOMPARE(engine.nativeSubtitlePaths, QStringList({files[1].toLocalFile(), files[2].toLocalFile()}));
+    }
+    void scrubUndoRestoresThePositionBeforeTheFirstPreview() {
+        FakePlayback engine;
+        LearningSession session(&engine);
+        engine.advance(3);
+        session.previewSeek(10);
+        session.previewSeek(15);
+        session.finishSeek(18);
+        QCOMPARE(engine.position(), 18);
+        session.undoSeek();
+        QCOMPARE(engine.position(), 3);
+        session.undoSeek();
+        QCOMPARE(engine.position(), 18);
+        QVERIFY(!session.jumpToTime("99:99"));
+        QVERIFY(!session.jumpToTime("nan"));
+        QVERIFY(session.jumpToTime("00:12.5"));
+        QCOMPARE(engine.position(), 12.5);
+    }
+    void preferencesKeepGlobalChoicesSeparateFromPerMediaChoices() {
+        QTemporaryDir directory;
+        FakePlayback engine;
+        {
+            PlayerPreferences preferences(&engine);
+            preferences.initialize(directory.path());
+            preferences.beginMedia(directory.filePath("first.mp4"));
+            preferences.chooseAudio("2");
+            preferences.setAudioDelay(0.4);
+            preferences.setRotation(90);
+            preferences.setAspect("4:3");
+            preferences.saveVolume(37);
+            preferences.saveSpeed(1.5);
+            preferences.setRememberSpeed(true);
+            preferences.beginMedia(directory.filePath("second.mp4"));
+            preferences.applyMedia();
+            QCOMPARE(engine.options[PlaybackEngine::Option::AudioDelay].toDouble(), 0);
+            QCOMPARE(engine.options[PlaybackEngine::Option::AudioTrack].toString(), QString("auto"));
+        }
+        PlayerPreferences restored(&engine);
+        restored.initialize(directory.path());
+        QCOMPARE(restored.savedVolume(), 37);
+        QCOMPARE(restored.savedSpeed(), 1.5);
+        restored.beginMedia(directory.filePath("first.mp4"));
+        restored.applyMedia();
+        QCOMPARE(engine.options[PlaybackEngine::Option::AudioDelay].toDouble(), 0.4);
+        QCOMPARE(engine.options[PlaybackEngine::Option::Rotation].toInt(), 90);
+        QCOMPARE(engine.options[PlaybackEngine::Option::AudioTrack].toString(), QString("2"));
+        restored.setRememberHistory(false);
+        restored.beginMedia(directory.filePath("first.mp4"));
+        restored.applyMedia();
+        QCOMPARE(engine.options[PlaybackEngine::Option::AudioDelay].toDouble(), 0);
+    }
     void independentSubtitleDelaysPreserveOriginalTimestamps() {
         SubtitleTimeline timeline;
         timeline.publish({{1000, 2000, "ışık", {}}}, "/primary.srt", SubtitleRole::Primary);
@@ -62,7 +180,7 @@ private slots:
         const auto url = QUrl::fromLocalFile(file.fileName());
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, SubtitleTimeline::read(url));
         const auto cues = SubtitleTimeline::read(url, "windows-1254");
-        QCOMPARE(cues.first().text, QString("Işık Işık ĞŞğş").replace("Işık I", "Işık İ"));
+        QCOMPARE(cues.first().text, QString("Işık İşık ĞŞğş"));
     }
     void studyTargetRetainsIntegerTimestampsWithoutFloatingPointConversion() {
         constexpr qint64 start = 9007199254740993; // The first integer a double cannot represent exactly.

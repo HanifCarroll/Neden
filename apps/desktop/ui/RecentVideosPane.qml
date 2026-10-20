@@ -8,6 +8,7 @@ Item {
     id: pane
     required property RecentVideos recentVideos
     required property LearningSession session
+    signal locateVideo(url oldUrl)
     signal openVideo
 
     ColumnLayout {
@@ -112,6 +113,11 @@ Item {
                         text: entry.fileAvailable ? Theme.clock(entry.resumePosition) : "Unavailable"
                         color: Theme.muted
                         font.pixelSize: Theme.caption
+                    }
+                    ActionButton {
+                        text: "Locate…"
+                        visible: !entry.fileAvailable
+                        onClicked: pane.locateVideo(entry.mediaUrl)
                     }
                     ActionButton {
                         objectName: "removeRecentButton"

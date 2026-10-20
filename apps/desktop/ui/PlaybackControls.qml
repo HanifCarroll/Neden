@@ -5,8 +5,14 @@ import Neden
 
 Rectangle {
     id: controls
+    property ThumbnailService thumbnails: null
     required property LearningSession session
     property bool sidebarOpen: false
+    readonly property bool compact: width < 760
+    readonly property bool hovered: controlsHover.hovered
+    HoverHandler {
+        id: controlsHover
+    }
     readonly property bool editing: timeline.activeFocus || speed.activeFocus || volume.activeFocus
     signal fullscreen
     signal toggleSidebar
@@ -23,6 +29,7 @@ Rectangle {
         anchors.rightMargin: Theme.space4
         spacing: Theme.space2
         IconButton {
+            visible: !controls.compact
             objectName: "previousSubtitleButton"
             name: "skip-back"
             description: "Play previous subtitle · pause at end"
@@ -37,6 +44,7 @@ Rectangle {
             onClicked: controls.session.toggle()
         }
         IconButton {
+            visible: !controls.compact
             objectName: "nextSubtitleButton"
             name: "skip-forward"
             description: "Play next subtitle · pause at end"
@@ -44,6 +52,7 @@ Rectangle {
             onClicked: controls.session.nextSubtitle()
         }
         IconButton {
+            visible: !controls.compact
             objectName: "replaySubtitleButton"
             name: "rotate-ccw"
             description: controls.session.replaying ? "Stop replay" : "Replay subtitle once · pause at end"
@@ -66,10 +75,56 @@ Rectangle {
             from: 0
             to: Math.max(1, controls.session.duration)
             value: controls.session.position
-            onMoved: controls.session.seek(value)
+            enabled: controls.session.seekable
+            onMoved: {
+                if (pressed)
+                    controls.session.previewSeek(value);
+                else
+                    controls.session.finishSeek(value);
+            }
+            onPressedChanged: {
+                if (!pressed)
+                    controls.session.finishSeek(value);
+            }
+            readonly property real hoverTime: Math.max(0, Math.min(to, from + timelineHover.point.position.x / width * (to - from)))
+            HoverHandler {
+                id: timelineHover
+                onPointChanged: previewDelay.restart()
+                onHoveredChanged: {
+                    if (!hovered && controls.thumbnails)
+                        controls.thumbnails.clear();
+                }
+            }
+            Timer {
+                id: previewDelay
+                interval: 150
+                onTriggered: {
+                    if (timelineHover.hovered && controls.thumbnails)
+                        controls.thumbnails.request(controls.session.mediaFile, timeline.hoverTime);
+                }
+            }
+            ToolTip {
+                visible: timeline.hovered || timeline.pressed
+                contentItem: Column {
+                    spacing: 6
+                    Image {
+                        source: controls.thumbnails ? controls.thumbnails.imageUrl : ""
+                        visible: source.toString().length > 0
+                        width: 240
+                        height: visible ? 135 : 0
+                        fillMode: Image.PreserveAspectFit
+                        cache: false
+                    }
+                    Label {
+                        text: Theme.clock(timeline.hoverTime)
+                        color: Theme.ink
+                    }
+                }
+            }
             Accessible.name: "Playback position"
         }
         Label {
+            visible: !controls.compact
             text: "−" + Theme.clock(Math.max(0, controls.session.duration - controls.session.position))
             color: Theme.muted
             font.pixelSize: Theme.caption
@@ -83,6 +138,7 @@ Rectangle {
         }
         ControlSlider {
             id: volume
+            visible: !controls.compact
             objectName: "volumeSlider"
             Layout.preferredWidth: Math.min(140, controls.width * 0.1)
             from: 0
@@ -95,6 +151,7 @@ Rectangle {
             ToolTip.text: Math.round(value) + "%"
         }
         Rectangle {
+            visible: !controls.compact
             implicitWidth: 1
             implicitHeight: 24
             color: Theme.border
@@ -103,8 +160,9 @@ Rectangle {
         ChoiceBox {
             id: speed
             objectName: "speedChoice"
-            model: ["0.75×", "1.0×", "1.25×", "1.5×"]
-            currentIndex: 1
+            model: ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×", "1.75×", "2.0×"]
+            displayText: controls.session.playbackSpeed.toFixed(2).replace(/0$/, "") + "×"
+            currentIndex: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].indexOf(controls.session.playbackSpeed)
             implicitWidth: 78
             background: Rectangle {
                 color: speed.hovered ? Theme.hover : "transparent"
@@ -112,7 +170,7 @@ Rectangle {
                 border.color: speed.activeFocus ? Theme.accent : "transparent"
             }
             onActivated: {
-                controls.session.rate([0.75, 1, 1.25, 1.5][currentIndex]);
+                controls.session.rate([0.5, 0.75, 1, 1.25, 1.5, 1.75, 2][currentIndex]);
                 controls.forceActiveFocus();
             }
             Keys.onSpacePressed: event => {

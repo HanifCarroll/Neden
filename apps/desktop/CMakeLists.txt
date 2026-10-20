@@ -14,7 +14,7 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_AUTOMOC ON)
 option(NEDEN_CORE_ONLY "Build portable learning logic tests without playback or a WebView" OFF)
-find_package(Qt6 REQUIRED COMPONENTS Test Qml Network)
+find_package(Qt6 REQUIRED COMPONENTS Test Qml Network Gui)
 enable_testing()
 set(NEDEN_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/app" "${CMAKE_CURRENT_SOURCE_DIR}/study"
     "${CMAKE_CURRENT_SOURCE_DIR}/subtitles" "${CMAKE_CURRENT_SOURCE_DIR}/playback"
@@ -23,7 +23,7 @@ include_directories(${NEDEN_INCLUDE_DIRS})
 set(NEDEN_STUDY_SOURCES app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h study/ai_client.cpp study/ai_client.h
     study/flashcard_deck.cpp study/flashcard_deck.h study/explanation_session.cpp study/explanation_session.h subtitles/subtitle_service.cpp subtitles/subtitle_service.h
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/conversation.cpp study/conversation.h study/study_target.h)
-set(NEDEN_SESSION_SOURCES app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
+set(NEDEN_SESSION_SOURCES playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
     subtitles/subtitle_timeline.cpp subtitles/subtitle_timeline.h app/recent_videos.cpp app/recent_videos.h playback/playback_engine.h subtitles/cues.cpp subtitles/cues.h)
 
 qt_add_executable(conversation_tests tests/conversation_tests.cpp study/conversation.cpp study/conversation.h)
@@ -33,7 +33,7 @@ qt_add_executable(cue_tests tests/cue_tests.cpp subtitles/cues.cpp subtitles/cue
 target_link_libraries(cue_tests PRIVATE Qt6::Test Qt6::Qml)
 add_test(NAME cue_tests COMMAND cue_tests)
 qt_add_executable(session_tests tests/session_tests.cpp ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES})
-target_link_libraries(session_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Network)
+target_link_libraries(session_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Network Qt6::Gui)
 add_test(NAME session_tests COMMAND session_tests)
 qt_add_executable(recent_videos_tests tests/recent_videos_tests.cpp app/recent_videos.cpp app/recent_videos.h)
 target_link_libraries(recent_videos_tests PRIVATE Qt6::Test Qt6::Qml)
@@ -59,20 +59,27 @@ set(AUDITED_MPV_PREFIX "" CACHE PATH "Explicit source-built LGPL runtime on Linu
 find_path(MPV_INCLUDE_DIR mpv/client.h HINTS "${AUDITED_MPV_PREFIX}/include" /opt/homebrew/include REQUIRED)
 if(APPLE)
     set(PLATFORM_SOURCES platform/fullscreen_controller.mm platform/credentials_mac.mm)
+    set(MEDIA_PLATFORM_SOURCE platform/platform_media_session_mac.mm)
 else()
     set(PLATFORM_SOURCES platform/fullscreen_controller.cpp platform/credentials_unavailable.cpp)
+    if(WIN32)
+        set(MEDIA_PLATFORM_SOURCE platform/platform_media_session_windows.cpp)
+    else()
+        find_package(Qt6 REQUIRED COMPONENTS DBus)
+        set(MEDIA_PLATFORM_SOURCE platform/platform_media_session_linux.cpp)
+    endif()
 endif()
 qt_standard_project_setup(REQUIRES 6.9)
-qt_add_executable(NedenQt MACOSX_BUNDLE app/main.cpp app/desktop_application.cpp app/desktop_application.h)
+qt_add_executable(NedenQt MACOSX_BUNDLE app/main.cpp app/desktop_application.cpp app/desktop_application.h platform/platform_media_session.h ${MEDIA_PLATFORM_SOURCE})
 if(APPLE)
     target_sources(NedenQt PRIVATE macos/Neden.icns)
     set_source_files_properties(macos/Neden.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set(NEDEN_UI_SOURCES ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
+set(NEDEN_UI_SOURCES playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
     playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h)
-set(NEDEN_QML_FILES ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
+set(NEDEN_QML_FILES ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
         ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/MeaningPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
@@ -88,8 +95,14 @@ target_include_directories(NedenQt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(NedenQt PRIVATE Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView)
 if(APPLE)
     set_source_files_properties(platform/fullscreen_controller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    set_source_files_properties(platform/platform_media_session_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_source_files_properties(platform/credentials_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-    target_link_libraries(NedenQt PRIVATE "-framework AppKit" "-framework Security" "-framework Foundation" "-framework LocalAuthentication")
+    target_link_libraries(NedenQt PRIVATE "-framework MediaPlayer" "-framework IOKit" "-framework CoreAudio" "-framework AppKit" "-framework Security" "-framework Foundation" "-framework LocalAuthentication")
+endif()
+if(WIN32)
+    target_link_libraries(NedenQt PRIVATE windowsapp)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(NedenQt PRIVATE Qt6::DBus)
 endif()
 set(NEDEN_MPV_FRAMEWORKS "" CACHE PATH "Path to reviewed LGPL macOS playback frameworks")
 if(APPLE AND NEDEN_MPV_FRAMEWORKS)

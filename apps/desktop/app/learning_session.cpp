@@ -6,9 +6,12 @@
 #include <algorithm>
 #include <stdexcept>
 #include <QStringDecoder>
+#include <QDesktopServices>
+#include <QRegularExpression>
 
 LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
-    : QObject(parent), studyInteraction(*playback, subtitleTimeline, this), playbackEngine(playback) {
+    : QObject(parent), playerPreferences(playback, this), studyInteraction(*playback, subtitleTimeline, this),
+      playbackEngine(playback) {
     connect(playbackEngine, &PlaybackEngine::positionChanged, this, &LearningSession::positionChanged);
     connect(playbackEngine, &PlaybackEngine::durationChanged, this, &LearningSession::durationChanged);
     connect(playbackEngine, &PlaybackEngine::pausedChanged, this, &LearningSession::pausedChanged);
@@ -22,11 +25,42 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
         statusText = message;
         emit statusChanged();
     });
+    connect(&mediaQueue, &MediaQueue::openRequested, this, &LearningSession::openVideo);
+    connect(playbackEngine, &PlaybackEngine::metadataChanged, this, &LearningSession::mediaMetadataChanged);
+    connect(playbackEngine, &PlaybackEngine::metadataChanged, this, &LearningSession::tracksChanged);
+    connect(playbackEngine, &PlaybackEngine::stateChanged, this, &LearningSession::playbackStateChanged);
+    connect(playbackEngine, &PlaybackEngine::finished, this, [this] {
+        checkpoint();
+        setPaused(true);
+        if (mediaQueue.autoplay() && mediaQueue.hasNext())
+            mediaQueue.next();
+    });
+    connect(playbackEngine, &PlaybackEngine::outputDeviceRemoved, this, [this] {
+        setPaused(true);
+        const auto selected = playerPreferences.audioDevice();
+        bool available = selected == "auto";
+        for (const auto &device : playbackEngine->audioDevices()) {
+            if (device.toMap().value("name").toString() == selected)
+                available = true;
+        }
+        if (!available)
+            playerPreferences.setAudioDevice("auto");
+        statusText = "An audio device disconnected. Playback is paused.";
+        emit statusChanged();
+    });
+    connect(playbackEngine, &PlaybackEngine::operationFailed, this, [this](const QString &message) {
+        statusText = message;
+        emit statusChanged();
+    });
+    connect(playbackEngine, &PlaybackEngine::screenshotSaved, this, [this](const QString &) {
+        statusText = "Screenshot saved";
+        emit statusChanged();
+    });
     checkpointTimer.setInterval(5000);
     connect(&checkpointTimer, &QTimer::timeout, this, &LearningSession::checkpoint);
     checkpointTimer.start();
     connect(playbackEngine, &PlaybackEngine::failed, this, [this] {
-        statusText = "Cannot play this file.";
+        statusText = playbackEngine->error().isEmpty() ? "Cannot play this file." : playbackEngine->error();
         emit statusChanged();
     });
 }
@@ -59,17 +93,32 @@ void LearningSession::setRecentVideos(RecentVideos *videos) {
 }
 
 QString LearningSession::mediaTitle() const {
-    return QFileInfo(currentMediaPath).completeBaseName();
+    const QUrl url(currentMediaPath);
+    return url.scheme().startsWith("http") ? url.fileName() : QFileInfo(currentMediaPath).completeBaseName();
 }
 QString LearningSession::sourceSubtitleName() const {
+    if (!rememberedSourceSubtitlePath.isEmpty())
+        return QFileInfo(rememberedSourceSubtitlePath).fileName();
+    for (const auto &entry : playbackEngine->tracks()) {
+        const auto track = entry.toMap();
+        if (track.value("type") == "sub" && track.value("id").toString() == nativePrimary)
+            return track.value("label").toString();
+    }
     return subtitleTimeline.name(SubtitleRole::Primary);
 }
 QString LearningSession::translationSubtitleName() const {
+    if (!rememberedTranslationSubtitlePath.isEmpty())
+        return QFileInfo(rememberedTranslationSubtitlePath).fileName();
+    for (const auto &entry : playbackEngine->tracks()) {
+        const auto track = entry.toMap();
+        if (track.value("type") == "sub" && track.value("id").toString() == nativeSecondary)
+            return track.value("label").toString();
+    }
     return subtitleTimeline.name(SubtitleRole::Secondary);
 }
 
 void LearningSession::checkpoint() {
-    if (!recentVideos || !mediaReady || !rememberCurrent)
+    if (!recentVideos || !mediaReady || !rememberCurrent || !playerPreferences.rememberHistory())
         return;
 
     // 1. Save the current viewing position, preserving a pending resume target.
@@ -79,12 +128,19 @@ void LearningSession::checkpoint() {
     if (!std::isfinite(seconds) || seconds < 0)
         return;
 
-    const RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration()), rememberedSourceSubtitlePath,
-                            rememberedTranslationSubtitlePath};
+    RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration()), rememberedSourceSubtitlePath,
+                      rememberedTranslationSubtitlePath};
+    video.primaryDelay = primaryDelaySeconds;
+    video.secondaryDelay = secondaryDelaySeconds;
+    video.primaryNativeTrack = nativePrimary;
+    video.secondaryNativeTrack = nativeSecondary;
     const auto previous = recentVideos->find(currentMediaPath);
     if (previous && previous->position == video.position && previous->duration == video.duration &&
         previous->primarySubtitlePath == video.primarySubtitlePath &&
-        previous->secondarySubtitlePath == video.secondarySubtitlePath)
+        previous->secondarySubtitlePath == video.secondarySubtitlePath &&
+        previous->primaryDelay == video.primaryDelay && previous->secondaryDelay == video.secondaryDelay &&
+        previous->primaryNativeTrack == video.primaryNativeTrack &&
+        previous->secondaryNativeTrack == video.secondaryNativeTrack)
         return;
 
     // 2. Commit only changed positions or track associations to local history.
@@ -96,11 +152,20 @@ void LearningSession::finishOpening(const QString &path) {
         return;
 
     // 1. Restore each track independently before checkpoints can replace its saved association.
-    const auto saved = recentVideos ? recentVideos->find(path) : std::nullopt;
+    playerPreferences.applyMedia();
+    const auto saved =
+        recentVideos && playerPreferences.rememberHistory() ? recentVideos->find(path) : std::nullopt;
     const QString trackWarning = saved ? restoreSubtitleTracks(*saved) : QString();
 
     // 2. Restore the precise position and start playback even if a subtitle file is unavailable.
     mediaReady = true;
+    const auto droppedSubtitles = std::exchange(pendingDroppedSubtitles, {});
+    for (int index = 0; index < droppedSubtitles.size(); ++index) {
+        if (index == 0)
+            openSubtitles(droppedSubtitles[index]);
+        else
+            openTranslation(droppedSubtitles[index]);
+    }
     pendingResumeSeconds = saved ? saved->position : -1;
     if (pendingResumeSeconds > 0) {
         if (duration() > 0)
@@ -114,28 +179,35 @@ void LearningSession::finishOpening(const QString &path) {
     emit statusChanged();
 
     // 3. Promote only successful opens, retaining the target until playback reaches it.
-    if (recentVideos && rememberCurrent) {
+    if (recentVideos && rememberCurrent && playerPreferences.rememberHistory()) {
         recentVideos->remember(
             {currentMediaPath, pendingResumeSeconds >= 0 ? pendingResumeSeconds : position(),
              qMax(0.0, duration()), rememberedSourceSubtitlePath, rememberedTranslationSubtitlePath},
             true);
+        checkpoint();
     }
 }
 
 QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
     QStringList unavailable;
+    setSubtitleDelay(saved.primaryDelay, false);
+    setSubtitleDelay(saved.secondaryDelay, true);
+    if (!saved.primaryNativeTrack.isEmpty())
+        selectNativeSubtitle(saved.primaryNativeTrack, false);
+    if (!saved.secondaryNativeTrack.isEmpty())
+        selectNativeSubtitle(saved.secondaryNativeTrack, true);
 
     // 1. Keep unavailable associations so reconnecting a drive can restore them on the next open.
     if (rememberedSourceSubtitlePath.isEmpty() && !saved.primarySubtitlePath.isEmpty()) {
         rememberedSourceSubtitlePath = saved.primarySubtitlePath;
         openSubtitles(QUrl::fromLocalFile(saved.primarySubtitlePath));
-        if (subtitleTimeline.path(SubtitleRole::Primary).isEmpty())
+        if (!QFileInfo(saved.primarySubtitlePath).isReadable())
             unavailable.append("primary");
     }
     if (rememberedTranslationSubtitlePath.isEmpty() && !saved.secondarySubtitlePath.isEmpty()) {
         rememberedTranslationSubtitlePath = saved.secondarySubtitlePath;
         openTranslation(QUrl::fromLocalFile(saved.secondarySubtitlePath));
-        if (subtitleTimeline.path(SubtitleRole::Secondary).isEmpty())
+        if (!QFileInfo(saved.secondarySubtitlePath).isReadable())
             unavailable.append("secondary");
     }
 
@@ -169,9 +241,13 @@ void LearningSession::replayExplainedCue() {
 void LearningSession::openTranslation(const QUrl &url) {
     if (!url.isLocalFile())
         return;
+    if (loadNativeSubtitle(url, true))
+        return;
     try {
-        subtitleTimeline.load(url,
-                              SubtitleRole::Secondary); // Validation completes before replacing the track.
+        subtitleTimeline.load(url, SubtitleRole::Secondary, playerPreferences.subtitleEncoding());
+        nativeSecondary.clear();
+        playbackEngine->configure(PlaybackEngine::Option::SecondarySubtitle,
+                                  "no"); // Validation completes before replacing the track.
         stopReplay();
         closeDefinition();
         resetInteraction(true);
@@ -213,7 +289,9 @@ void LearningSession::openVideo(const QUrl &url) {
 
     // 1. Validate the local media before replacing the current playable session.
     const QFileInfo file(url.toLocalFile());
-    if (!url.isLocalFile() || !file.isFile() || !file.isReadable()) {
+    const bool remote =
+        url.isValid() && (url.scheme() == "https" || url.scheme() == "http") && !url.host().isEmpty();
+    if (!remote && (!url.isLocalFile() || !file.isFile() || !file.isReadable())) {
         statusText = "This video is unavailable. Choose an existing local video file.";
         emit statusChanged();
         return;
@@ -222,25 +300,37 @@ void LearningSession::openVideo(const QUrl &url) {
     // 2. Checkpoint the old video before clearing its interaction and subtitle state.
     checkpoint();
     mediaReady = false;
+    pendingDroppedSubtitles.clear();
     pendingResumeSeconds = -1;
-    rememberCurrent = true;
+    rememberCurrent = !remote;
+    previousSeekPosition = scrubStart = -1;
+    clearLoop();
     resetInteraction(true);
     setPaused(true);
-    currentMediaPath = mediaPathIdentity(file.absoluteFilePath());
+    currentMediaPath = remote ? url.toString(QUrl::FullyEncoded) : mediaPathIdentity(file.absoluteFilePath());
+    mediaQueue.setCurrent(remote ? url : QUrl::fromLocalFile(currentMediaPath));
+    playerPreferences.beginMedia(currentMediaPath);
+    if (!playerPreferences.rememberSpeed())
+        rate(1);
+    nativePrimary.clear();
+    nativeSecondary.clear();
+    primaryDelaySeconds = secondaryDelaySeconds = 0;
     currentPrimaryCueIndex = -1;
     subtitleTimeline.reset();
     studyInteraction.setMedia(currentMediaPath);
     currentSecondaryCueIndex = -1;
     rememberedSourceSubtitlePath.clear();
     rememberedTranslationSubtitlePath.clear();
-    statusText = "Loading local video…";
+    statusText = remote ? "Opening network video…" : "Loading local video…";
     emit mediaChanged();
     emit tracksChanged();
     emit statusChanged();
     emit cueChanged();
 
     // 3. Bind study requests to this media before the adapter can finish loading it.
-    if (studyServices) {
+    if (studyServices && remote)
+        studyServices->subtitles()->cancel();
+    if (studyServices && !remote) {
         const auto saved = recentVideos ? recentVideos->find(currentMediaPath) : std::nullopt;
         studyServices->subtitles()->setMedia(currentMediaPath,
                                              !saved || saved->primarySubtitlePath.isEmpty());
@@ -250,8 +340,12 @@ void LearningSession::openVideo(const QUrl &url) {
 void LearningSession::openSubtitles(const QUrl &url) {
     if (!url.isLocalFile())
         return;
+    if (loadNativeSubtitle(url, false))
+        return;
     try {
-        subtitleTimeline.load(url, SubtitleRole::Primary);
+        subtitleTimeline.load(url, SubtitleRole::Primary, playerPreferences.subtitleEncoding());
+        nativePrimary.clear();
+        playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitle, "no");
         stopReplay();
         closeDefinition();
         resetInteraction(true);
@@ -276,9 +370,16 @@ void LearningSession::toggle() {
     }
 
     resetInteraction();
+    if (playbackState() == "finished") {
+        startOver();
+        return;
+    }
     setPaused(!paused());
 }
 void LearningSession::seek(double seconds) {
+    if (!std::isfinite(seconds))
+        return;
+    previousSeekPosition = position();
     resetInteraction();
     pendingResumeSeconds = -1;
     playbackEngine->seek(qBound(0.0, seconds, duration()));
@@ -291,13 +392,19 @@ void LearningSession::volume(double level) {
     if (volumePercent > 0)
         unmutedVolumePercent = volumePercent;
     playbackEngine->volume(volumePercent);
+    playerPreferences.saveVolume(volumePercent);
     emit volumeChanged();
 }
 void LearningSession::toggleMute() {
     volume(volumePercent > 0 ? 0 : unmutedVolumePercent);
 }
 void LearningSession::rate(double speed) {
-    playbackEngine->rate(speed);
+    if (!std::isfinite(speed))
+        return;
+    speedMultiplier = qBound(0.25, speed, 3.0);
+    playbackEngine->rate(speedMultiplier);
+    playerPreferences.saveSpeed(speedMultiplier);
+    emit speedChanged();
 }
 QString LearningSession::subtitle() const {
     return subtitleTimeline.text(qRound64(position() * 1000), SubtitleRole::Primary);
@@ -429,10 +536,32 @@ void LearningSession::syncPosition() {
 }
 
 QVariantList LearningSession::subtitleTracks() const {
-    return subtitleTimeline.tracks();
+    auto tracks = subtitleTimeline.tracks();
+    for (const auto &entry : playbackEngine->tracks()) {
+        const auto track = entry.toMap();
+        if (track.value("type") == "sub") {
+            const QString id = track.value("id").toString();
+            tracks.append(QVariantMap{
+                {"path", "embedded:" + id},
+                {"name", track.value("label")},
+                {"primary",
+                 nativePrimary == id || (track.value("external").toBool() &&
+                                         mediaPathIdentity(track.value("external-filename").toString()) ==
+                                             rememberedSourceSubtitlePath)},
+                {"secondary",
+                 nativeSecondary == id || (track.value("external").toBool() &&
+                                           mediaPathIdentity(track.value("external-filename").toString()) ==
+                                               rememberedTranslationSubtitlePath)}});
+        }
+    }
+    return tracks;
 }
 
 void LearningSession::chooseTrack(const QString &path, bool secondary) {
+    if (path.startsWith("embedded:")) {
+        selectNativeSubtitle(path.mid(9), secondary);
+        return;
+    }
     if (!subtitleTimeline.knows(path))
         return;
 
@@ -443,6 +572,13 @@ void LearningSession::chooseTrack(const QString &path, bool secondary) {
 }
 
 void LearningSession::clearTrack(bool secondary) {
+    if (secondary)
+        nativeSecondary.clear();
+    else
+        nativePrimary.clear();
+    playbackEngine->configure(secondary ? PlaybackEngine::Option::SecondarySubtitle
+                                        : PlaybackEngine::Option::PrimarySubtitle,
+                              "no");
     closeWordCard();
     closeDefinition();
     resetInteraction(true);
@@ -486,4 +622,238 @@ void LearningSession::explainWord() {
 }
 void LearningSession::invalidateStudy() {
     studyInteraction.dismiss();
+}
+
+void LearningSession::initializePreferences(const QString &directory) {
+    playerPreferences.initialize(directory);
+    volume(playerPreferences.savedVolume());
+    rate(playerPreferences.savedSpeed());
+}
+void LearningSession::openVideos(const QList<QUrl> &urls) {
+    mediaQueue.replace(urls);
+    if (!mediaQueue.entries().isEmpty())
+        mediaQueue.play(0);
+}
+void LearningSession::acceptDrop(const QList<QUrl> &urls) {
+    QList<QUrl> videos, subtitles;
+    for (const auto &url : urls) {
+        const auto suffix = QFileInfo(url.toLocalFile()).suffix().toLower();
+        if (QStringList{"srt", "vtt", "ass", "ssa", "sup", "sub", "idx"}.contains(suffix))
+            subtitles << url;
+        else
+            videos << url;
+    }
+    if (!videos.isEmpty())
+        openVideos(videos);
+    if (!mediaReady && !videos.isEmpty()) {
+        pendingDroppedSubtitles = subtitles.mid(0, 2);
+        return;
+    }
+    // Drop loads primary then secondary; explicit dialogs remain available for replacement.
+    for (int index = 0; index < subtitles.size() && index < 2; ++index) {
+        if (index == 0)
+            openSubtitles(subtitles[index]);
+        else
+            openTranslation(subtitles[index]);
+    }
+}
+bool LearningSession::loadNativeSubtitle(const QUrl &url, bool secondary) {
+    const auto suffix = QFileInfo(url.toLocalFile()).suffix().toLower();
+    if (!QStringList{"ass", "ssa", "sup", "sub", "idx"}.contains(suffix))
+        return false;
+    if (!QFileInfo(url.toLocalFile()).isReadable()) {
+        statusText = "This subtitle file is unavailable.";
+        emit statusChanged();
+        return true;
+    }
+    clearTrack(secondary);
+    if (secondary)
+        rememberedTranslationSubtitlePath = url.toLocalFile();
+    else
+        rememberedSourceSubtitlePath = url.toLocalFile();
+    playbackEngine->addSubtitle(url.toLocalFile(), secondary);
+    applyNativeSubtitleTiming();
+    statusText = "Styled or bitmap subtitles use the original track appearance.";
+    emit tracksChanged();
+    emit statusChanged();
+    checkpoint();
+    return true;
+}
+void LearningSession::selectNativeSubtitle(const QString &id, bool secondary) {
+    bool found = id == "no";
+    for (const auto &entry : playbackEngine->tracks()) {
+        const auto track = entry.toMap();
+        if (track.value("type") == "sub" && track.value("id").toString() == id) {
+            if (track.value("external").toBool()) {
+                const QUrl url = QUrl::fromLocalFile(track.value("external-filename").toString());
+                if (secondary)
+                    openTranslation(url);
+                else
+                    openSubtitles(url);
+                return;
+            }
+            found = true;
+        }
+    }
+    if (!found)
+        return;
+    clearTrack(secondary);
+    if (id != "no") {
+        if (secondary)
+            nativeSecondary = id;
+        else
+            nativePrimary = id;
+        playbackEngine->configure(secondary ? PlaybackEngine::Option::SecondarySubtitle
+                                            : PlaybackEngine::Option::PrimarySubtitle,
+                                  id);
+    }
+    applyNativeSubtitleTiming();
+    emit tracksChanged();
+    checkpoint();
+}
+void LearningSession::setSubtitleDelay(double seconds, bool secondary) {
+    if (!std::isfinite(seconds))
+        return;
+    seconds = qBound(-600.0, seconds, 600.0);
+    if (secondary)
+        secondaryDelaySeconds = seconds;
+    else
+        primaryDelaySeconds = seconds;
+    stopReplay();
+    if (!independentNativeSubtitleTiming() && usesNativeSubtitles(false) && usesNativeSubtitles(true)) {
+        primaryDelaySeconds = secondaryDelaySeconds = seconds;
+    }
+    subtitleTimeline.setDelay(qRound64(seconds * 1000),
+                              secondary ? SubtitleRole::Secondary : SubtitleRole::Primary);
+    applyNativeSubtitleTiming();
+    syncPosition();
+    emit cueChanged();
+    emit tracksChanged();
+    checkpoint();
+}
+void LearningSession::previewSeek(double seconds) {
+    if (!std::isfinite(seconds) || !seekable())
+        return;
+    if (scrubStart < 0) {
+        scrubStart = position();
+        resetInteraction();
+    }
+    playbackEngine->previewSeek(seconds);
+}
+void LearningSession::finishSeek(double seconds) {
+    const double origin = scrubStart >= 0 ? scrubStart : position();
+    seek(seconds);
+    previousSeekPosition = origin;
+    scrubStart = -1;
+}
+void LearningSession::undoSeek() {
+    if (previousSeekPosition < 0)
+        return;
+    const double target = previousSeekPosition;
+    seek(target);
+}
+void LearningSession::startOver() {
+    seek(0);
+    setPaused(false);
+}
+void LearningSession::frameStep(bool forward) {
+    resetInteraction();
+    setPaused(true);
+    playbackEngine->execute(forward ? PlaybackEngine::Command::FrameForward
+                                    : PlaybackEngine::Command::FrameBackward);
+}
+QString LearningSession::loopLabel() const {
+    return loopStart < 0 ? "Set loop start" : loopEnd < 0 ? "Set loop end" : "Clear A–B loop";
+}
+void LearningSession::cycleLoop() {
+    if (!seekable())
+        return;
+    if (loopStart < 0) {
+        loopStart = position();
+        playbackEngine->configure(PlaybackEngine::Option::LoopStart, loopStart);
+    } else if (loopEnd < 0 && position() > loopStart) {
+        loopEnd = position();
+        playbackEngine->configure(PlaybackEngine::Option::LoopEnd, loopEnd);
+    } else
+        clearLoop();
+    emit loopChanged();
+}
+void LearningSession::clearLoop() {
+    loopStart = loopEnd = -1;
+    playbackEngine->configure(PlaybackEngine::Option::LoopStart, "no");
+    playbackEngine->configure(PlaybackEngine::Option::LoopEnd, "no");
+    emit loopChanged();
+}
+void LearningSession::jumpToChapter(int index) {
+    const auto chapters = playbackEngine->chapters();
+    if (index >= 0 && index < chapters.size())
+        seek(chapters[index].toMap().value("time").toDouble());
+}
+void LearningSession::chapterStep(int direction) {
+    const auto chapters = playbackEngine->chapters();
+    if (direction > 0) {
+        for (const auto &chapter : chapters) {
+            const double time = chapter.toMap().value("time").toDouble();
+            if (time > position() + 0.1) {
+                seek(time);
+                return;
+            }
+        }
+    } else {
+        for (auto chapter = chapters.crbegin(); chapter != chapters.crend(); ++chapter) {
+            const double time = chapter->toMap().value("time").toDouble();
+            if (time < position() - 3) {
+                seek(time);
+                return;
+            }
+        }
+        seek(0);
+    }
+}
+bool LearningSession::jumpToTime(const QString &time) {
+    static const QRegularExpression pattern("^(?:(\\d+):)?([0-5]?\\d):([0-5]\\d(?:\\.\\d+)?)$");
+    const auto match = pattern.match(time.trimmed());
+    bool valid = false;
+    double seconds = time.trimmed().toDouble(&valid);
+    if (match.hasMatch()) {
+        seconds = match.captured(1).toDouble() * 3600 + match.captured(2).toDouble() * 60 +
+                  match.captured(3).toDouble();
+        valid = true;
+    }
+    if (!valid || !std::isfinite(seconds) || seconds < 0 || !seekable())
+        return false;
+    seek(seconds);
+    return true;
+}
+void LearningSession::revealFile() {
+    const QFileInfo file(currentMediaPath);
+    if (file.isAbsolute() && file.exists())
+        QDesktopServices::openUrl(QUrl::fromLocalFile(file.absolutePath()));
+}
+void LearningSession::clearHistory() {
+    if (recentVideos)
+        recentVideos->clear();
+    playerPreferences.clearMedia();
+    rememberCurrent = false;
+}
+void LearningSession::saveScreenshot(const QUrl &url) {
+    if (url.isLocalFile())
+        playbackEngine->screenshot(url.toLocalFile(), false);
+}
+
+bool LearningSession::usesNativeSubtitles(bool secondary) const {
+    const auto native = secondary ? nativeSecondary : nativePrimary;
+    const auto path = secondary ? rememberedTranslationSubtitlePath : rememberedSourceSubtitlePath;
+    return !native.isEmpty() ||
+           QStringList{"ass", "ssa", "sup", "sub", "idx"}.contains(QFileInfo(path).suffix().toLower());
+}
+void LearningSession::applyNativeSubtitleTiming() {
+    if (independentNativeSubtitleTiming()) {
+        playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitleDelay, primaryDelaySeconds);
+        playbackEngine->configure(PlaybackEngine::Option::SecondarySubtitleDelay, secondaryDelaySeconds);
+    } else {
+        // Older mpv has one delay for both native tracks. QML text timelines remain independent.
+        const double delay = usesNativeSubtitles(false) ? primaryDelaySeconds : secondaryDelaySeconds;
+        playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitleDelay, delay);
+    }
 }

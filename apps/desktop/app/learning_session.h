@@ -4,6 +4,8 @@
 #include "study_interaction.h"
 #include "subtitle_timeline.h"
 #include "recent_videos.h"
+#include "media_queue.h"
+#include "player_preferences.h"
 #include <QTimer>
 #include <QUrl>
 #include "playback_engine.h"
@@ -20,6 +22,7 @@ class LearningSession : public QObject {
     Q_PROPERTY(QString translation READ translation NOTIFY cueChanged)
     Q_PROPERTY(QString selection READ selection NOTIFY selectionChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
+    Q_PROPERTY(QString mediaFile READ mediaPath NOTIFY mediaChanged)
     Q_PROPERTY(bool hasMedia READ hasMedia NOTIFY mediaChanged)
     Q_PROPERTY(QString mediaTitle READ mediaTitle NOTIFY mediaChanged)
     Q_PROPERTY(QString sourceSubtitleName READ sourceSubtitleName NOTIFY tracksChanged)
@@ -29,7 +32,61 @@ class LearningSession : public QObject {
     Q_PROPERTY(int activeCue READ activeCue NOTIFY cueChanged)
     Q_PROPERTY(bool canPreviousSubtitle READ canPreviousSubtitle NOTIFY cueChanged)
     Q_PROPERTY(bool canNextSubtitle READ canNextSubtitle NOTIFY cueChanged)
+    Q_PROPERTY(MediaQueue *queue READ queue CONSTANT)
+    Q_PROPERTY(PlayerPreferences *preferences READ preferences CONSTANT)
+    Q_PROPERTY(bool independentNativeSubtitleTiming READ independentNativeSubtitleTiming CONSTANT)
+    Q_PROPERTY(QVariantList mediaTracks READ mediaTracks NOTIFY mediaMetadataChanged)
+    Q_PROPERTY(QVariantList chapters READ chapters NOTIFY mediaMetadataChanged)
+    Q_PROPERTY(QVariantList audioDevices READ audioDevices NOTIFY mediaMetadataChanged)
+    Q_PROPERTY(QVariantMap mediaInformation READ mediaInformation NOTIFY mediaMetadataChanged)
+    Q_PROPERTY(QString playbackState READ playbackState NOTIFY playbackStateChanged)
+    Q_PROPERTY(bool seekable READ seekable NOTIFY mediaMetadataChanged)
+    Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY speedChanged)
+    Q_PROPERTY(double primaryDelay READ primaryDelay NOTIFY tracksChanged)
+    Q_PROPERTY(double secondaryDelay READ secondaryDelay NOTIFY tracksChanged)
+    Q_PROPERTY(QString primaryNativeTrack READ primaryNativeTrack NOTIFY tracksChanged)
+    Q_PROPERTY(QString secondaryNativeTrack READ secondaryNativeTrack NOTIFY tracksChanged)
+    Q_PROPERTY(QString loopLabel READ loopLabel NOTIFY loopChanged)
 public:
+    MediaQueue *queue() { return &mediaQueue; }
+    PlayerPreferences *preferences() { return &playerPreferences; }
+    bool independentNativeSubtitleTiming() const {
+        return playbackEngine->supportsIndependentNativeSubtitleTiming();
+    }
+    QVariantList mediaTracks() const { return playbackEngine->tracks(); }
+    QVariantList chapters() const { return playbackEngine->chapters(); }
+    QVariantList audioDevices() const { return playbackEngine->audioDevices(); }
+    QVariantMap mediaInformation() const { return playbackEngine->information(); }
+    QString playbackState() const { return playbackEngine->state(); }
+    bool seekable() const { return playbackEngine->seekable(); }
+    double playbackSpeed() const { return speedMultiplier; }
+    double primaryDelay() const { return primaryDelaySeconds; }
+    double secondaryDelay() const { return secondaryDelaySeconds; }
+    QString primaryNativeTrack() const { return nativePrimary; }
+    QString secondaryNativeTrack() const { return nativeSecondary; }
+    QString loopLabel() const;
+    void initializePreferences(const QString &directory);
+    QString mediaPath() const { return currentMediaPath; }
+    Q_INVOKABLE void openVideos(const QList<QUrl> &urls);
+    Q_INVOKABLE void acceptDrop(const QList<QUrl> &urls);
+    Q_INVOKABLE void selectNativeSubtitle(const QString &id, bool secondary);
+    Q_INVOKABLE void setSubtitleDelay(double seconds, bool secondary);
+    Q_INVOKABLE void previewSeek(double seconds);
+    Q_INVOKABLE void finishSeek(double seconds);
+    Q_INVOKABLE void undoSeek();
+    Q_INVOKABLE void startOver();
+    Q_INVOKABLE void frameStep(bool forward);
+    Q_INVOKABLE void cycleLoop();
+    Q_INVOKABLE void clearLoop();
+    Q_INVOKABLE void jumpToChapter(int index);
+    Q_INVOKABLE void chapterStep(int direction);
+    Q_INVOKABLE bool jumpToTime(const QString &time);
+    Q_INVOKABLE void revealFile();
+    Q_INVOKABLE void clearHistory();
+    Q_INVOKABLE QString localFilePath(const QUrl &url) const {
+        return url.isLocalFile() ? url.toLocalFile() : QString();
+    }
+    Q_INVOKABLE void saveScreenshot(const QUrl &url);
     Q_PROPERTY(StudyServices *study READ study CONSTANT)
     StudyServices *study() const { return studyServices; }
     void setStudyServices(StudyServices *providedStudyServices);
@@ -73,6 +130,13 @@ public:
     Q_INVOKABLE void replayExplainedCue();
     Q_INVOKABLE void openSubtitles(const QUrl &url);
     Q_INVOKABLE void toggle();
+    Q_INVOKABLE void setPlaying() {
+        resetInteraction();
+        if (playbackState() == "finished")
+            startOver();
+        else
+            setPaused(false);
+    }
     Q_INVOKABLE void seek(double seconds);
     Q_INVOKABLE void rate(double speed);
     double volumeLevel() const { return volumePercent; }
@@ -100,6 +164,10 @@ signals:
     void tracksChanged();
     void volumeChanged();
     void explanationRequested();
+    void mediaMetadataChanged();
+    void playbackStateChanged();
+    void speedChanged();
+    void loopChanged();
 
 private:
     void playSpan(double start, double end);
@@ -111,6 +179,16 @@ private:
     void resetInteraction(bool clearConversation = false);
     void finishOpening(const QString &path);
     QString restoreSubtitleTracks(const RecentVideo &saved);
+    bool loadNativeSubtitle(const QUrl &url, bool secondary);
+    bool usesNativeSubtitles(bool secondary) const;
+    void applyNativeSubtitleTiming();
+    MediaQueue mediaQueue;
+    PlayerPreferences playerPreferences;
+    double speedMultiplier = 1;
+    double primaryDelaySeconds = 0, secondaryDelaySeconds = 0;
+    double previousSeekPosition = -1, scrubStart = -1;
+    double loopStart = -1, loopEnd = -1;
+    QString nativePrimary, nativeSecondary;
     SubtitleTimeline subtitleTimeline;
     StudyInteraction studyInteraction;
     StudyServices *studyServices = nullptr;
@@ -125,6 +203,7 @@ private:
     double pendingSubtitleSeekSeconds = -1;
     int pendingSubtitleCueIndex = -1;
     bool mediaReady = false;
+    QList<QUrl> pendingDroppedSubtitles;
     bool rememberCurrent = true;
     int currentSecondaryCueIndex = -1;
     PlaybackEngine *playbackEngine;

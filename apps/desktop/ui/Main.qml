@@ -7,6 +7,7 @@ import Neden
 
 ApplicationWindow {
     id: root
+    property ThumbnailService thumbnails: null
     required property SubtitleAppearance appearance
     required property LearningSession session
     required property RecentVideos recentVideos
@@ -23,11 +24,56 @@ ApplicationWindow {
     readonly property bool transcriptOpen: inspectorMode !== Main.Hidden
     readonly property int inspectorTab: inspectorMode === Main.Meaning ? 1 : 0
     property bool showRecent: false
+    property bool appendToQueue: false
+    property bool screenshotWithSubtitles: true
+    property bool floatingMode: false
+    property bool controlsIdle: false
+    readonly property bool hidePlaybackControls: fullscreenController.active && controlsIdle && !session.paused && !transcriptOpen && !dictionaryOpen
+    HoverHandler {
+        onPointChanged: {
+            root.controlsIdle = false;
+            controlsIdleTimer.restart();
+        }
+    }
+    Timer {
+        id: controlsIdleTimer
+        interval: 2500
+        onTriggered: {
+            if (!playbackControls.hovered && !playbackControls.editing)
+                root.controlsIdle = true;
+        }
+    }
+    property size normalSize: Qt.size(1280, 756)
+    property point normalPosition: Qt.point(0, 0)
+    function openPlayerOptions(page) {
+        playerOptions.page = page;
+        playerOptionsDialog.open();
+    }
+    function toggleFloating() {
+        if (fullscreenController.active)
+            fullscreenController.setActive(false);
+        floatingMode = !floatingMode;
+        if (floatingMode) {
+            normalSize = Qt.size(width, height);
+            normalPosition = Qt.point(x, y);
+            inspectorMode = Main.Hidden;
+            flags = flags | Qt.WindowStaysOnTopHint;
+            width = 640;
+            height = 390;
+        } else {
+            flags = flags & ~Qt.WindowStaysOnTopHint;
+            width = normalSize.width;
+            height = normalSize.height;
+            x = normalPosition.x;
+            y = normalPosition.y;
+        }
+        show();
+    }
     readonly property bool meaningEditing: transcriptOpen && inspectorTab === 1 && meaningLoader.item !== null && (meaningLoader.item as MeaningPane).editing
     width: 1280
     height: 756
-    minimumWidth: 900
-    minimumHeight: 540
+    minimumWidth: floatingMode ? 480 : 900
+    minimumHeight: floatingMode ? 300 : 540
     visible: true
     flags: Qt.platform.os === "osx" ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint : Qt.Window
     topPadding: 0
@@ -65,6 +111,27 @@ ApplicationWindow {
                 text: "Open video…"
                 shortcut: StandardKey.Open
                 onTriggered: videoDialog.open()
+            }
+            Action {
+                text: "Open folder…"
+                onTriggered: folderDialog.open()
+            }
+            Action {
+                text: "Open URL…"
+                shortcut: "Ctrl+Shift+O"
+                onTriggered: urlDialog.open()
+            }
+            Action {
+                text: "Add files to queue…"
+                onTriggered: {
+                    root.appendToQueue = true;
+                    videoDialog.open();
+                }
+            }
+            Action {
+                text: "Show file in folder"
+                enabled: root.session.hasMedia
+                onTriggered: root.session.revealFile()
             }
             Action {
                 text: "Recently played"
@@ -109,6 +176,91 @@ ApplicationWindow {
             }
             MenuSeparator {}
             Action {
+                text: "Previous video"
+                shortcut: "Ctrl+Shift+Left"
+                enabled: root.session.queue.hasPrevious
+                onTriggered: root.session.queue.previous()
+            }
+            Action {
+                text: "Next video"
+                shortcut: "Ctrl+Shift+Right"
+                enabled: root.session.queue.hasNext
+                onTriggered: root.session.queue.next()
+            }
+            Action {
+                text: "Queue…"
+                onTriggered: root.openPlayerOptions(3)
+            }
+            Action {
+                text: "Start over"
+                enabled: root.session.hasMedia
+                onTriggered: root.session.startOver()
+            }
+            Action {
+                text: "Jump to time…"
+                shortcut: "Ctrl+J"
+                enabled: root.session.seekable
+                onTriggered: timeDialog.open()
+            }
+            Action {
+                text: "Undo last seek"
+                enabled: root.session.seekable
+                onTriggered: root.session.undoSeek()
+            }
+            Menu {
+                id: chapterMenu
+                title: "Chapters"
+                enabled: root.session.chapters.length > 0
+                Action {
+                    text: "Previous chapter"
+                    onTriggered: root.session.chapterStep(-1)
+                }
+                Action {
+                    text: "Next chapter"
+                    onTriggered: root.session.chapterStep(1)
+                }
+                MenuSeparator {}
+                Instantiator {
+                    model: root.session.chapters
+                    delegate: MenuItem {
+                        required property int index
+                        required property var modelData
+                        text: Theme.clock(modelData.time) + "  " + (modelData.title || "Chapter " + (index + 1))
+                        onTriggered: root.session.jumpToChapter(index)
+                    }
+                    onObjectAdded: (index, object) => chapterMenu.insertItem(index + 3, object)
+                    onObjectRemoved: (index, object) => chapterMenu.removeItem(object)
+                }
+            }
+            Action {
+                text: "Previous frame"
+                enabled: root.session.seekable
+                onTriggered: root.session.frameStep(false)
+            }
+            Action {
+                text: "Next frame"
+                enabled: root.session.seekable
+                onTriggered: root.session.frameStep(true)
+            }
+            Action {
+                text: root.session.loopLabel
+                enabled: root.session.seekable
+                onTriggered: root.session.cycleLoop()
+            }
+            Action {
+                text: "Slower by 0.05×"
+                onTriggered: root.session.rate(root.session.playbackSpeed - 0.05)
+            }
+            Action {
+                text: "Faster by 0.05×"
+                onTriggered: root.session.rate(root.session.playbackSpeed + 0.05)
+            }
+            Action {
+                text: "Reset playback speed"
+                onTriggered: root.session.rate(1)
+            }
+            MenuSeparator {}
+            Action {
                 text: "Seek forward 5 seconds"
                 enabled: root.session.hasMedia
                 onTriggered: root.session.seek(root.session.position + 5)
@@ -135,7 +287,64 @@ ApplicationWindow {
             }
         }
         Menu {
+            title: "Audio"
+            Action {
+                text: "Tracks and output…"
+                onTriggered: root.openPlayerOptions(0)
+            }
+            Action {
+                text: "Audio earlier by 0.1 s"
+                onTriggered: root.session.preferences.audioDelay -= 0.1
+            }
+            Action {
+                text: "Audio later by 0.1 s"
+                onTriggered: root.session.preferences.audioDelay += 0.1
+            }
+            Action {
+                text: "Reset audio delay"
+                onTriggered: root.session.preferences.audioDelay = 0
+            }
+        }
+        Menu {
+            title: "Video"
+            Action {
+                text: "Picture options…"
+                onTriggered: root.openPlayerOptions(1)
+            }
+            Action {
+                text: "Save screenshot with subtitles…"
+                enabled: root.session.hasMedia
+                onTriggered: {
+                    root.screenshotWithSubtitles = true;
+                    screenshotDialog.open();
+                }
+            }
+            Action {
+                text: "Save clean screenshot…"
+                enabled: root.session.hasMedia
+                onTriggered: {
+                    root.screenshotWithSubtitles = false;
+                    screenshotDialog.open();
+                }
+            }
+            Action {
+                text: "Media information…"
+                enabled: root.session.hasMedia
+                onTriggered: root.openPlayerOptions(4)
+            }
+            Action {
+                text: "Floating player"
+                checkable: true
+                checked: root.floatingMode
+                onTriggered: root.toggleFloating()
+            }
+        }
+        Menu {
             title: "Subtitles"
+            Action {
+                text: "Tracks, timing and encoding…"
+                onTriggered: root.openPlayerOptions(2)
+            }
             Action {
                 text: "Load primary track…"
                 enabled: root.session.hasMedia
@@ -197,6 +406,10 @@ ApplicationWindow {
                 onTriggered: root.fullscreen()
             }
             MenuSeparator {}
+            Action {
+                text: "Playback preferences…"
+                onTriggered: root.openPlayerOptions(5)
+            }
             MenuItem {
                 text: "Settings…"
                 visible: Qt.platform.os !== "osx"
@@ -292,7 +505,7 @@ ApplicationWindow {
     }
     PlayerShortcuts {
         session: root.session
-        available: !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen
+        available: !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !root.dictionaryOpen
         textEntryActive: root.meaningEditing || transcript.editing
         controlKeysActive: playbackControls.editing
         subtitleSelectionActive: stage.editing
@@ -300,15 +513,23 @@ ApplicationWindow {
     FileDialog {
         id: videoDialog
         objectName: "videoPicker"
-        title: "Open local video"
+        title: root.appendToQueue ? "Add videos to queue" : "Open videos"
+        fileMode: FileDialog.OpenFiles
         nameFilters: ["Video files (*.mp4 *.mkv *.webm *.mov *.m4v *.avi *.mpg *.mpeg *.ts *.wmv)", "All files (*)"]
-        onAccepted: root.session.openVideo(selectedFile)
+        onAccepted: {
+            if (root.appendToQueue)
+                root.session.queue.append(selectedFiles);
+            else
+                root.session.openVideos(selectedFiles);
+            root.appendToQueue = false;
+        }
+        onRejected: root.appendToQueue = false
     }
     FileDialog {
         id: subtitleDialog
         objectName: "primaryPicker"
         title: "Choose Primary subtitles"
-        nameFilters: ["Subtitle files (*.srt *.vtt)"]
+        nameFilters: ["Subtitle files (*.srt *.vtt *.ass *.ssa *.sup *.sub *.idx)"]
         onAccepted: root.session.openSubtitles(selectedFile)
     }
 
@@ -316,8 +537,120 @@ ApplicationWindow {
         id: translationDialog
         objectName: "secondaryPicker"
         title: "Choose Secondary subtitles"
-        nameFilters: ["Subtitle files (*.srt *.vtt)"]
+        nameFilters: ["Subtitle files (*.srt *.vtt *.ass *.ssa *.sup *.sub *.idx)"]
         onAccepted: root.session.openTranslation(selectedFile)
+    }
+    DropArea {
+        anchors.fill: parent
+        onDropped: drop => {
+            if (drop.hasUrls) {
+                root.session.acceptDrop(drop.urls);
+                drop.acceptProposedAction();
+            }
+        }
+    }
+    FileDialog {
+        id: locateDialog
+        property url oldUrl
+        title: "Locate moved video"
+        onAccepted: root.recentVideos.relocate(oldUrl, selectedFile)
+    }
+    FolderDialog {
+        id: folderDialog
+        title: "Open video folder"
+        onAccepted: root.session.openVideos([selectedFolder])
+    }
+    FileDialog {
+        id: screenshotDialog
+        title: "Save screenshot"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["PNG image (*.png)"]
+        defaultSuffix: "png"
+        onAccepted: {
+            if (root.screenshotWithSubtitles)
+                stage.saveScreenshot(root.session.localFilePath(selectedFile));
+            else
+                root.session.saveScreenshot(selectedFile);
+        }
+    }
+    Dialog {
+        id: playerOptionsDialog
+        title: "Playback options"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(root.width - 40, 780)
+        height: Math.min(root.height - 40, 620)
+        standardButtons: Dialog.Close
+        contentItem: PlayerOptions {
+            id: playerOptions
+            session: root.session
+            onAddFiles: {
+                root.appendToQueue = true;
+                videoDialog.open();
+            }
+        }
+        onClosed: root.contentItem.forceActiveFocus()
+    }
+    Dialog {
+        id: timeDialog
+        title: "Jump to time"
+        anchors.centerIn: parent
+        modal: true
+        standardButtons: Dialog.Cancel
+        ColumnLayout {
+            SearchField {
+                id: timeField
+                placeholderText: "HH:MM:SS or seconds"
+                Accessible.name: "Jump to time"
+                onAccepted: jumpButton.clicked()
+            }
+            Label {
+                id: timeError
+                color: Theme.muted
+                text: ""
+            }
+            ActionButton {
+                id: jumpButton
+                text: "Go"
+                onClicked: {
+                    if (root.session.jumpToTime(timeField.text))
+                        timeDialog.close();
+                    else
+                        timeError.text = "Enter a valid playback time.";
+                }
+            }
+        }
+        onOpened: timeField.forceActiveFocus()
+        onClosed: root.contentItem.forceActiveFocus()
+    }
+    Dialog {
+        id: urlDialog
+        title: "Open media URL"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(root.width - 40, 560)
+        standardButtons: Dialog.Cancel
+        ColumnLayout {
+            width: parent.width
+            SearchField {
+                id: urlField
+                Layout.fillWidth: true
+                placeholderText: "https://…"
+                Accessible.name: "Media URL"
+            }
+            Label {
+                text: "Use a direct HTTP or HTTPS media URL."
+                color: Theme.muted
+            }
+            ActionButton {
+                text: "Open"
+                onClicked: {
+                    root.session.openVideos([urlField.text]);
+                    urlDialog.close();
+                }
+            }
+        }
+        onClosed: root.contentItem.forceActiveFocus()
     }
     Dialog {
         id: settingsDialog
@@ -403,6 +736,10 @@ ApplicationWindow {
             recentVideos: root.recentVideos
             session: root.session
             onOpenVideo: videoDialog.open()
+            onLocateVideo: oldUrl => {
+                locateDialog.oldUrl = oldUrl;
+                locateDialog.open();
+            }
         }
         ColumnLayout {
             spacing: 0
@@ -417,7 +754,20 @@ ApplicationWindow {
                     session: root.session
                     playback: root.playback
                     appearance: root.appearance
+                    hideCursor: root.hidePlaybackControls
+                    onScreenshotFinished: saved => {
+                        screenshotResult.text = saved ? "Screenshot saved" : "The screenshot could not be saved. Choose a writable folder.";
+                        screenshotResult.open();
+                    }
                     onFullscreenRequested: root.fullscreen()
+                    onVideoClicked: {
+                        if (root.session.paused && root.transcriptOpen) {
+                            root.session.closeWordCard(false);
+                            root.closeSelection();
+                            root.inspectorMode = Main.Hidden;
+                            root.session.setPlaying();
+                        }
+                    }
                     windowDragEnabled: Qt.platform.os === "osx" && !root.fullscreenController.active
                     onMoveWindowRequested: root.startSystemMove()
                 }
@@ -511,6 +861,9 @@ ApplicationWindow {
             }
             PlaybackControls {
                 id: playbackControls
+                thumbnails: root.thumbnails
+                opacity: root.hidePlaybackControls ? 0 : 1
+                enabled: !root.hidePlaybackControls
                 Layout.fillWidth: true
                 session: root.session
                 sidebarOpen: root.transcriptOpen || root.dictionaryOpen
@@ -524,6 +877,12 @@ ApplicationWindow {
                 onFullscreen: root.fullscreen()
             }
         }
+    }
+    ToolTip {
+        id: screenshotResult
+        x: Math.max(16, (root.width - width) / 2)
+        y: root.height - height - 90
+        timeout: 4000
     }
     Popup {
         id: errorNotice

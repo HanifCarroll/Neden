@@ -1,5 +1,6 @@
 #include "subtitle_appearance.h"
 #include "credentials.h"
+#include "platform_media_session.h"
 #include "desktop_application.h"
 #include "recent_videos.h"
 #include <QCommandLineParser>
@@ -8,6 +9,8 @@
 #include "fullscreen_controller.h"
 #include "learning_session.h"
 #include "mpv_playback.h"
+#include "thumbnail_service.h"
+#include <QQuickImageProvider>
 #include <QColorSpace>
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -19,6 +22,22 @@
 #include <QSurfaceFormat>
 #include <QtWebView/QtWebView>
 
+namespace {
+class PreviewImages : public QQuickImageProvider {
+public:
+    explicit PreviewImages(ThumbnailService *service)
+        : QQuickImageProvider(QQuickImageProvider::Image), service(service) {}
+    QImage requestImage(const QString &, QSize *size, const QSize &) override {
+        const auto image = service->currentImage();
+        if (size)
+            *size = image.size();
+        return image;
+    }
+
+private:
+    ThumbnailService *service;
+};
+} // namespace
 int main(int argc, char **argv) {
 
     // 1. Configure the OpenGL video surface and native text before creating windows.
@@ -65,6 +84,7 @@ int main(int argc, char **argv) {
     LearningSession session(&playbackEngine);
     session.setStudyServices(&study);
     session.setRecentVideos(&recentVideos);
+    session.initializePreferences(storage);
     QObject::connect(&application, &DesktopApplication::fileOpened, &session, &LearningSession::openVideo);
     QObject::connect(&application, &QGuiApplication::aboutToQuit, &session, [&] {
         session.setPaused(true);
@@ -73,8 +93,11 @@ int main(int argc, char **argv) {
     });
     session.cueModel()->setSearchLanguage(CueModel::Turkish);
     FullscreenController fullscreen;
+    ThumbnailService thumbnails;
     QQmlApplicationEngine qmlEngine;
-    qmlEngine.setInitialProperties({{"appearance", QVariant::fromValue(&subtitleAppearance)},
+    qmlEngine.addImageProvider("preview", new PreviewImages(&thumbnails));
+    qmlEngine.setInitialProperties({{"thumbnails", QVariant::fromValue(&thumbnails)},
+                                    {"appearance", QVariant::fromValue(&subtitleAppearance)},
                                     {"session", QVariant::fromValue(&session)},
                                     {"playback", QVariant::fromValue(&playbackEngine)},
                                     {"recentVideos", QVariant::fromValue(&recentVideos)},
@@ -87,11 +110,14 @@ int main(int argc, char **argv) {
     // 3. Attach native window controls after the main window exists.
     auto *mainWindow = qobject_cast<QQuickWindow *>(qmlEngine.rootObjects().first());
     fullscreen.attach(mainWindow);
+    PlatformMediaSession platformMedia(&session, mainWindow);
     mainWindow->raise();
     mainWindow->requestActivate();
     if (!commandLineParser.positionalArguments().isEmpty()) {
-        session.openVideo(QUrl::fromLocalFile(
-            QFileInfo(commandLineParser.positionalArguments().first()).absoluteFilePath()));
+        QList<QUrl> urls;
+        for (const auto &argument : commandLineParser.positionalArguments())
+            urls << QUrl::fromUserInput(argument, QDir::currentPath(), QUrl::AssumeLocalFile);
+        session.openVideos(urls);
     }
     return application.exec();
 }
