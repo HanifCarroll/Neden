@@ -9,11 +9,32 @@ Rectangle {
     required property LearningSession session
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
+    property bool capturing: false
+    property bool hideCursor: false
+    signal screenshotFinished(bool saved)
+    function saveScreenshot(path) {
+        if (!path.length)
+            return;
+        capturing = true;
+        Qt.callLater(() => {
+            const started = stage.grabToImage(result => {
+                const saved = result.saveToFile(path);
+                stage.capturing = false;
+                stage.screenshotFinished(saved);
+            });
+            if (!started) {
+                stage.capturing = false;
+                stage.screenshotFinished(false);
+            }
+        });
+    }
     property bool windowDragEnabled: false
     HoverHandler {
         id: stageHover
         blocking: false
+        cursorShape: stage.hideCursor ? Qt.BlankCursor : Qt.ArrowCursor
     }
+    signal videoClicked
     signal fullscreenRequested
     signal moveWindowRequested
     readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
@@ -38,8 +59,19 @@ Rectangle {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         enabled: stage.session.hasMedia
-        onClicked: stage.forceActiveFocus()
-        onDoubleClicked: stage.fullscreenRequested()
+        onClicked: {
+            stage.forceActiveFocus();
+            singleClick.restart();
+        }
+        onDoubleClicked: {
+            singleClick.stop();
+            stage.fullscreenRequested();
+        }
+        Timer {
+            id: singleClick
+            interval: Application.styleHints.mouseDoubleClickInterval
+            onTriggered: stage.videoClicked()
+        }
     }
     Item {
         width: parent.width
@@ -108,6 +140,37 @@ Rectangle {
             }
         }
     }
+    ColumnLayout {
+        anchors.centerIn: parent
+        visible: !stage.capturing && stage.session.playbackState === "finished"
+        Label {
+            text: "Playback finished"
+            color: "white"
+            font.pixelSize: Theme.title
+        }
+        RowLayout {
+            ActionButton {
+                text: "Replay"
+                onClicked: stage.session.startOver()
+            }
+            ActionButton {
+                text: "Next video"
+                visible: stage.session.queue.hasNext
+                onClicked: stage.session.queue.next()
+            }
+        }
+    }
+    Label {
+        anchors.centerIn: parent
+        visible: !stage.capturing && ["loading", "buffering", "seeking"].includes(stage.session.playbackState)
+        text: stage.session.playbackState === "loading" ? "Opening video…" : stage.session.playbackState === "buffering" ? "Buffering…" : "Seeking…"
+        color: "white"
+        padding: Theme.space3
+        background: Rectangle {
+            color: "#bb10141a"
+            radius: 8
+        }
+    }
     ActionButton {
         id: explainLine
         objectName: "primarySubtitleTextExplainButton"
@@ -118,18 +181,17 @@ Rectangle {
         readonly property bool fitsBesideText: textRight + Theme.space2 + width <= stage.width - Theme.space4
         readonly property real preferredX: fitsBesideText ? textRight + Theme.space2 : textRight - width
         readonly property real preferredY: fitsBesideText ? subtitleOverlay.y + caption.y + (caption.height - height) / 2 : subtitleOverlay.y - height - Theme.space2
-        readonly property bool captionHovered: captionHoverRegion.hovered || subtitle.hovered || translation.hovered
-        readonly property bool selectionInProgress: subtitle.selecting || translation.selecting
-        readonly property bool actionInUse: hovered || down || activeFocus
-        readonly property bool shouldShow: captionHovered || hoverRetained || actionInUse || selectionInProgress
+        readonly property bool captionHovered: (subtitle.visible && subtitle.wordsHovered) || (translation.visible && translation.wordsHovered)
+        readonly property bool actionInUse: hovered || down
+        readonly property bool shouldShow: captionHovered || hoverRetained || actionInUse
         property bool hoverRetained: false
         text: "Explain line"
         implicitHeight: 30
-        focusPolicy: Qt.TabFocus
+        focusPolicy: Qt.NoFocus
         font.pixelSize: Theme.caption
         x: Math.max(Theme.space2, Math.min(preferredX, stage.width - width - Theme.space2))
         y: Math.max(Theme.space2, Math.min(preferredY, stage.height - height - Theme.space2))
-        visible: hasCaptions && shouldShow
+        visible: !stage.capturing && hasCaptions && shouldShow
         Accessible.name: subtitle.visible ? "Explain the full primary subtitle" : "Explain the full secondary subtitle"
         onCaptionHoveredChanged: {
             if (captionHovered) {
@@ -142,23 +204,8 @@ Rectangle {
             stage.session.explainCue(!subtitle.visible);
         }
     }
-    // One continuous region spans both tracks and the action. Observe from the stage,
-    // rather than placing an input layer above the editors and their word-hover handlers.
-    Item {
-        id: captionHoverRegion
-        z: 1
-        visible: explainLine.hasCaptions
-        readonly property real leftEdge: Math.min(subtitleOverlay.x, explainLine.x) - Theme.space3
-        readonly property real topEdge: Math.min(subtitleOverlay.y, explainLine.y) - Theme.space3
-        readonly property real rightEdge: Math.max(subtitleOverlay.x + subtitleOverlay.width, explainLine.x + explainLine.width) + Theme.space3
-        readonly property real bottomEdge: Math.max(subtitleOverlay.y + subtitleOverlay.height, explainLine.y + explainLine.height) + Theme.space3
-        x: Math.max(0, leftEdge)
-        y: Math.max(0, topEdge)
-        width: Math.min(stage.width, rightEdge) - x
-        height: Math.min(stage.height, bottomEdge) - y
-        readonly property point pointerPosition: stageHover.point.position
-        readonly property bool hovered: stageHover.hovered && pointerPosition.x >= x && pointerPosition.x <= x + width && pointerPosition.y >= y && pointerPosition.y <= y + height
-    }
+    // Briefly retain the action while crossing the small gap from text to button.
+    // Empty caption margins never activate it, even while text is selected.
     Timer {
         id: hideExplanation
         interval: 180
@@ -167,7 +214,7 @@ Rectangle {
     Rectangle {
         id: wordCard
         objectName: "wordMeaningCard"
-        visible: stage.session.study.words.state !== "idle"
+        visible: !stage.capturing && stage.session.study.words.state !== "idle"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Math.max(16, Math.min(parent.height - height - 16, subtitleOverlay.height + subtitleOverlay.anchors.bottomMargin + 12))

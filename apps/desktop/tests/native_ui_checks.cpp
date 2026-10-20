@@ -96,6 +96,18 @@ private:
         return nullptr;
     }
 
+    QPoint wordPoint(QQuickItem *subtitle) {
+        auto *editor = subtitle->property("editor").value<QQuickItem *>();
+        QRectF first, second;
+        if (!editor ||
+            !QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, first),
+                                       Q_ARG(int, 0)) ||
+            !QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, second),
+                                       Q_ARG(int, 1)))
+            return {};
+        return editor->mapToScene(QPointF((first.x() + second.x()) / 2, first.center().y())).toPoint();
+    }
+
     void click(const char *name) {
         QTRY_VERIFY(visualItem(window->contentItem(), QString::fromUtf8(name)));
         auto *item = visualItem(window->contentItem(), QString::fromUtf8(name));
@@ -131,7 +143,8 @@ private:
 
 private slots:
     void init() {
-        const QStringList headlessChecks{"explainHoverCoversBothTracksAndThePathToTheButton",
+        const QStringList headlessChecks{"explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+                                         "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explanationPhraseUsesThePluginCardStyle",
                                          "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
@@ -849,6 +862,30 @@ private slots:
         QVERIFY(!card->isVisible());
     }
 
+    void explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus() {
+        window->setProperty("showRecent", false);
+        session->setPaused(true);
+        session->replaceCues({{0, 7200000, "Bir ışık gördüm.", {}}});
+        session->clearTrack(true);
+        auto *caption = visualItem(window->contentItem(), "primarySubtitleText");
+        auto *button = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
+        QVERIFY(caption && button);
+        auto *editor = caption->property("editor").value<QQuickItem *>();
+        QVERIFY(editor);
+        QTest::qWait(80);
+        QVERIFY(QMetaObject::invokeMethod(editor, "selectAll"));
+        QTest::mouseMove(window, wordPoint(caption));
+        QTRY_VERIFY(button->isVisible());
+        button->forceActiveFocus();
+        for (double horizontal : {8.0, caption->width() - 8}) {
+            QTest::mouseMove(window,
+                             caption->mapToScene(QPointF(horizontal, caption->height() / 2)).toPoint());
+            QTRY_VERIFY_WITH_TIMEOUT(!button->isVisible(), 1000);
+            QTest::mouseMove(window, wordPoint(caption));
+            QTRY_VERIFY(button->isVisible());
+        }
+    }
+
     void explainHoverSurvivesActiveSelections() {
         window->setProperty("showRecent", false);
         session->setPaused(true);
@@ -870,8 +907,7 @@ private slots:
         QVERIFY(primaryEditor && secondaryEditor);
 
         // Real mouse grabs are different from merely retaining a completed selection.
-        const auto start =
-            primaryEditor->mapToScene(QPointF(primary->width() / 2, primary->height() / 2)).toPoint();
+        const auto start = wordPoint(primary);
         QTest::mouseMove(window, start);
         QTRY_VERIFY(button->isVisible());
         QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
@@ -919,9 +955,7 @@ private slots:
                 for (auto *track : {primary, secondary}) {
                     QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
                     QTRY_VERIFY(!button->isVisible());
-                    QTest::mouseMove(
-                        window,
-                        track->mapToScene(QPointF(track->width() / 2, track->height() / 2)).toPoint());
+                    QTest::mouseMove(window, wordPoint(track));
                     QTRY_VERIFY(button->isVisible());
                     QTest::qWait(220); // Stay beyond the hide timer; retention cannot mask a lost hover.
                     QVERIFY(button->isVisible());
@@ -938,8 +972,7 @@ private slots:
         auto unselectable = savedAppearance;
         unselectable.insert("selectable", false);
         QVERIFY(appearance->preview(unselectable));
-        QTest::mouseMove(window,
-                         primary->mapToScene(QPointF(primary->width() / 2, primary->height() / 2)).toPoint());
+        QTest::mouseMove(window, wordPoint(primary));
         QTRY_VERIFY(button->isVisible());
         QVERIFY(appearance->preview(savedAppearance));
         window->setProperty("inspectorMode", 1);
@@ -980,8 +1013,7 @@ private slots:
                     for (auto *track : {secondary, primary}) {
                         QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
                         QTRY_VERIFY_WITH_TIMEOUT(!button->isVisible(), 1000);
-                        const QPoint start =
-                            track->mapToScene(QPointF(track->width() / 2, track->height() / 2)).toPoint();
+                        const QPoint start = wordPoint(track);
                         QTest::mouseMove(window, start);
                         QTRY_VERIFY_WITH_TIMEOUT(button->isVisible(), 1000);
                         const QPoint target =
@@ -995,11 +1027,10 @@ private slots:
                         QVERIFY(button->property("hovered").toBool());
                     }
                     // A new cue must retain the action beneath a stationary pointer.
-                    QTest::mouseMove(
-                        window,
-                        primary->mapToScene(QPointF(primary->width() / 2, primary->height() / 2)).toPoint());
+                    QTest::mouseMove(window, wordPoint(primary));
                     session->replaceCues({{0, 7200000, phrase + " Şimdi.", {}}});
                     QTest::qWait(80);
+                    QTest::mouseMove(window, wordPoint(primary));
                     QVERIFY(button->isVisible());
                     QVERIFY(session->paused());
                     QVERIFY(study->explanation()->subject().isEmpty());
@@ -1008,9 +1039,7 @@ private slots:
         }
         session->replaceCues({});
         // A primary-track gap must not hide the action on an active secondary cue.
-        QTest::mouseMove(
-            window,
-            secondary->mapToScene(QPointF(secondary->width() / 2, secondary->height() / 2)).toPoint());
+        QTest::mouseMove(window, wordPoint(secondary));
         QTRY_VERIFY(button->isVisible());
         session->clearTrack(true);
         QTRY_VERIFY(!button->isVisible());
