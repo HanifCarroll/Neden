@@ -2,7 +2,7 @@
 
 ## Repository and supported runtimes
 
-`apps/desktop` is the selected Qt Quick player, `apps/iina-plugin` is the existing IINA plugin, `shared` holds shared assets, and `scripts` holds build and validation tools. The [desktop architecture](desktop/ARCHITECTURE.md) and [plugin specification](iina-plugin/SPEC.md) describe their separate runtime boundaries. Player-specific adapters keep conversation and context logic independently testable.
+`apps/desktop` is the selected Qt Quick player, `apps/iina-plugin` is the existing IINA plugin, `shared` holds shared assets, and `scripts` holds build and validation tools. The [desktop architecture](desktop/ARCHITECTURE.md) and [plugin specification](iina-plugin/SPEC.md) describe their separate runtime boundaries. Player-specific adapters keep conversation and context logic independently testable. Desktop native code is grouped into app, playback, subtitles, study, and platform modules, with checks under tests and QML under ui. See the desktop architecture for module contracts before extending a workflow.
 
 The desktop app retains its existing native Keychain adapter and signing identity. Its normal local delivery path is `bun run install:desktop`, which runs tests and QML lint, packages the app, gracefully quits the installed copy to save position, replaces it with rollback on failure, and launches it. Build-only work does not update `/Applications/Neden.app`. Deferred installation means leaving the installed bundle and running app untouched; `--no-launch` still quits and replaces it. The [installation guide](desktop/INSTALLATION.md) covers the stable bundle identity, subtitle/history restoration, and isolated native checks. The desktop installer does not change the user's IINA installation.
 

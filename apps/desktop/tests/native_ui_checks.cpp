@@ -37,7 +37,7 @@ private:
     std::unique_ptr<SubtitleAppearance> appearance;
     std::unique_ptr<MpvPlayback> playback;
     std::unique_ptr<RecentVideos> recent;
-    std::unique_ptr<StudyTools> study;
+    std::unique_ptr<StudyServices> study;
     std::unique_ptr<LearningSession> session;
     std::unique_ptr<FullscreenController> fullscreen;
     std::unique_ptr<QQmlApplicationEngine> engine;
@@ -48,11 +48,11 @@ private:
         appearance = std::make_unique<SubtitleAppearance>(profile.path());
         playback = std::make_unique<MpvPlayback>();
         recent = std::make_unique<RecentVideos>(profile.path());
-        study = std::make_unique<StudyTools>(profile.path(), [](const QString &endpoint) {
+        study = std::make_unique<StudyServices>(profile.path(), [](const QString &endpoint) {
             return QUrl(endpoint).host() == "127.0.0.1" ? QByteArray("synthetic-test-key") : QByteArray();
         });
         session = std::make_unique<LearningSession>(playback.get());
-        session->setStudyTools(study.get());
+        session->setStudyServices(study.get());
         session->setRecentVideos(recent.get());
         fullscreen = std::make_unique<FullscreenController>();
         engine = std::make_unique<QQmlApplicationEngine>();
@@ -130,7 +130,7 @@ private slots:
         const QStringList headlessChecks{"explainHoverCoversBothTracksAndThePathToTheButton",
             "explanationPhraseUsesThePluginCardStyle", "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
             "singleClickShowsContextualWordCardWithoutChangingTheSidebar", "videoAndSidebarReachTheTopWithoutATitleStrip",
-            "trackDropdownsDisplayTheirNamedRolesAndReadableSelection"};
+            "trackDropdownsDisplayTheirNamedRolesAndReadableSelection", "settingsDraftAndShortcutPolicyUseTheActualUi"};
         if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")
             && !headlessChecks.contains(QString::fromUtf8(QTest::currentTestFunction()))) {
             QSKIP("This check needs the real player and a visible native display.");
@@ -163,16 +163,16 @@ private slots:
         session->setPaused(true);
         chooseFile("primaryPicker", qEnvironmentVariable("NEDEN_CHECK_PRIMARY"), "loadPrimarySubtitlesButton");
         chooseFile("secondaryPicker", qEnvironmentVariable("NEDEN_CHECK_SECONDARY"), "loadSecondarySubtitlesButton");
-        QVERIFY(!session->model.cues.isEmpty());
+        QVERIFY(!session->cueModel()->entries().isEmpty());
         QVERIFY(session->translationCueCount() > 0);
 
         // 2. Find an overlap without printing or copying commercial subtitle text.
         QFile secondaryFile(qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
         QVERIFY(secondaryFile.open(QIODevice::ReadOnly));
         const auto secondary = parseSrt(QString::fromUtf8(secondaryFile.readAll()));
-        double target = cueAt(session->model.cues, 195000) >= 0 && cueAt(secondary, 195000) >= 0 ? 195 : -1;
+        double target = cueAt(session->cueModel()->entries(), 195000) >= 0 && cueAt(secondary, 195000) >= 0 ? 195 : -1;
         if (target < 0) {
-            for (const auto &primaryCue : session->model.cues) {
+            for (const auto &primaryCue : session->cueModel()->entries()) {
                 if (primaryCue.startMs < 190000) continue;
 
                 for (const auto &secondaryCue : secondary) {
@@ -232,7 +232,7 @@ private slots:
 
     void speedSelectionPreservesPlayerShortcutsAndTextInput() {
         window->setProperty("showRecent", false);
-        window->setProperty("inspectorTab", 0);
+        window->setProperty("inspectorMode", 1);
         session->setPaused(true);
 
         // 1. Select a speed with the mouse, then use the ordinary player shortcuts.
@@ -288,20 +288,20 @@ private slots:
         session->seek(stoppedAt);
         QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
         const int initial = session->activeCue();
-        QVERIFY(initial > 0 && initial + 1 < session->model.cues.size());
+        QVERIFY(initial > 0 && initial + 1 < session->cueModel()->entries().size());
         session->setPaused(false);
         click("previousSubtitleButton");
-        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial - 1].startMs / 1000.0) < 0.1);
+        QTRY_VERIFY(std::abs(session->position() - session->cueModel()->entries()[initial - 1].startMs / 1000.0) < 0.1);
         QVERIFY(!session->paused());
         QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
         QVERIFY(session->paused());
         QTest::keyClick(window, Qt::Key_Right, Qt::ControlModifier);
-        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial].startMs / 1000.0) < 0.1);
+        QTRY_VERIFY(std::abs(session->position() - session->cueModel()->entries()[initial].startMs / 1000.0) < 0.1);
         QVERIFY(!session->paused());
         QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
         QVERIFY(session->paused());
         QTest::keyClick(window, Qt::Key_Left, Qt::ControlModifier);
-        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial - 1].startMs / 1000.0) < 0.1);
+        QTRY_VERIFY(std::abs(session->position() - session->cueModel()->entries()[initial - 1].startMs / 1000.0) < 0.1);
         QVERIFY(!session->paused());
         QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), 15000);
         QVERIFY(session->paused());
@@ -311,20 +311,60 @@ private slots:
         click("replaySubtitleButton");
         QVERIFY(session->replaying());
         QVERIFY(!session->paused());
-        const auto cueDuration = session->model.cues[initial].endMs - session->model.cues[initial].startMs;
+        const auto cueDuration = session->cueModel()->entries()[initial].endMs - session->cueModel()->entries()[initial].startMs;
         QTRY_VERIFY_WITH_TIMEOUT(!session->replaying(), int(cueDuration) + 10000);
         QVERIFY(session->paused());
-        QTRY_VERIFY(std::abs(session->position() - session->model.cues[initial].endMs / 1000.0) < 0.15);
+        QTRY_VERIFY(std::abs(session->position() - session->cueModel()->entries()[initial].endMs / 1000.0) < 0.15);
         session->seek(stoppedAt);
         QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
         session->setPaused(true);
         session->checkpoint();
     }
 
+    void settingsDraftAndShortcutPolicyUseTheActualUi() {
+        window->setProperty("showRecent",false);
+        window->setProperty("inspectorMode",1);
+        session->volume(60);
+        window->contentItem()->forceActiveFocus();
+        QTest::keyClick(window,Qt::Key_M);
+        QCOMPARE(session->volumeLevel(),0.0);
+        QTest::keyClick(window,Qt::Key_M);
+        QCOMPARE(session->volumeLevel(),60.0);
+        click("transcriptSearchButton");
+        auto *search=visualItem(window->contentItem(),"transcriptSearchField");
+        QVERIFY(search && search->isVisible()); search->forceActiveFocus();
+        QTest::keyClick(window,Qt::Key_M);
+        QVERIFY(!search->property("text").toString().isEmpty());
+        QCOMPARE(session->volumeLevel(),60.0);
+        QVERIFY(search->setProperty("text",QString()));
+        QVERIFY(QMetaObject::invokeMethod(window,"openSettings"));
+        auto *dialog=window->findChild<QObject *>("settingsDialog");
+        QVERIFY(dialog); QTRY_VERIFY(dialog->property("opened").toBool());
+        auto *endpoint=visualItem(window->contentItem(),"aiEndpointField");
+        auto *model=visualItem(window->contentItem(),"aiModelField");
+        auto *provider=visualItem(window->contentItem(),"wordProviderChoice");
+        auto *save=visualItem(window->contentItem(),"saveSettingsButton");
+        QVERIFY(endpoint && model && provider && save);
+        QCOMPARE(provider->property("currentValue").toString(),QString("ai"));
+        const auto original=study->settings()->endpoint();
+        QVERIFY(endpoint->setProperty("text",QString("https://example.org/v1")));
+        QVERIFY(model->setProperty("text",QString("draft-model")));
+        QCOMPARE(study->settings()->endpoint(),original);
+        QVERIFY(QMetaObject::invokeMethod(save,"clicked"));
+        QCOMPARE(study->settings()->endpoint(),QString("https://example.org/v1"));
+        QCOMPARE(study->settings()->model(),QString("draft-model"));
+        QVERIFY(QMetaObject::invokeMethod(dialog,"close"));
+        QTRY_VERIFY(!dialog->property("opened").toBool());
+        window->contentItem()->forceActiveFocus();
+        QTest::keyClick(window,Qt::Key_M);
+        QCOMPARE(session->volumeLevel(),0.0);
+        session->volume(60);
+    }
+
     void trackDropdownsDisplayTheirNamedRolesAndReadableSelection() {
         window->setProperty("showRecent", false);
-        window->setProperty("inspectorTab", 0);
-        window->setProperty("transcriptOpen", true);
+        window->setProperty("inspectorMode", 1);
+        window->setProperty("inspectorMode", 1);
         const QStringList names{"046 - Leyla ile Mecnun 46. Bölüm.tr.srt", "046 - Leyla ile Mecnun 46. Bölüm.en.srt"};
         for (int i = 0; i < names.size(); ++i) {
             QFile file(profile.filePath(names[i]));
@@ -383,8 +423,8 @@ private slots:
 
     void trackSelectorsAndAppearancePreviewUseActualControls() {
         window->setProperty("showRecent", false);
-        window->setProperty("inspectorTab", 0);
-        window->setProperty("transcriptOpen", true);
+        window->setProperty("inspectorMode", 1);
+        window->setProperty("inspectorMode", 1);
         auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
         auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
         QVERIFY(primary && secondary);
@@ -533,7 +573,7 @@ private slots:
                 });
             });
         });
-        QVERIFY(study->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        QVERIFY(study->settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
         const auto start = qRound64(session->position() * 1000) - 500;
         session->replaceCues({{start, start + 10000, "ışık", {}}});
         QTest::qWait(250);
@@ -543,15 +583,15 @@ private slots:
             subtitle->mapToScene(QPointF(subtitle->width() / 2, subtitle->height() / 2)).toPoint());
         QTRY_COMPARE(session->selection(), QString("ışık"));
         QVERIFY(!fullscreen->active());
-        QTRY_COMPARE_WITH_TIMEOUT(study->state(), QString("failed"), 5000);
-        QVERIFY(study->message().contains("allowance"));
+        QTRY_COMPARE_WITH_TIMEOUT(study->explanation()->state(), QString("failed"), 5000);
+        QVERIFY(study->explanation()->message().contains("allowance"));
         QTest::qWait(300);
         QCOMPARE(requests, 1);
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/network-error.png"));
         click("explainButton");
-        QTRY_COMPARE_WITH_TIMEOUT(study->state(), QString("complete"), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(study->explanation()->state(), QString("complete"), 5000);
         QCOMPARE(requests, 2);
-        QCOMPARE(study->answer(), QString("### Natural meaning\nLight"));
+        QCOMPARE(study->explanation()->answer(), QString("### Natural meaning\nLight"));
         QCOMPARE(window->property("inspectorTab").toInt(), 1);
         auto *meaning = window->findChild<QObject *>("meaningLoader");
         QVERIFY(meaning && meaning->property("active").toBool());
@@ -564,7 +604,7 @@ private slots:
         session->select("ış");
         QTest::qWait(100);
         QCOMPARE(subject->property("text").toString(), QString("ışık"));
-        QCOMPARE(study->answer(), QString("### Natural meaning\nLight"));
+        QCOMPARE(study->explanation()->answer(), QString("### Natural meaning\nLight"));
         QCOMPARE(requests, 2);
 
         // 5. Read-only subtitle and answer focus must not disable Space or require a click first.
@@ -601,8 +641,8 @@ private slots:
 
     void videoAndSidebarReachTheTopWithoutATitleStrip() {
         window->setProperty("showRecent", false);
-        window->setProperty("transcriptOpen", true);
-        window->setProperty("inspectorTab", 0);
+        window->setProperty("inspectorMode", 1);
+        window->setProperty("inspectorMode", 1);
         const auto savedSize = window->size();
         for (const QSize size : {QSize(900, 540), QSize(1280, 756)}) {
             window->resize(size);
@@ -668,8 +708,8 @@ private slots:
                 socket->disconnectFromHost();
             });
         });
-        QVERIFY(study->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
-        QVERIFY(study->configureLearning({{"wordProvider", "ai"}, {"sourceLanguage", "Turkish"},
+        QVERIFY(study->settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        QVERIFY(study->settings()->configureLearning({{"wordProvider", "ai"}, {"sourceLanguage", "Turkish"},
             {"explanationLanguage", "English"}, {"includeSecondary", true}, {"primaryProvider", "configured"}}));
         const QString cue = "Ben televizyona dalmışım ya.";
         session->replaceCues({{0, 7200000, cue, {}}});
@@ -681,13 +721,13 @@ private slots:
         QRectF glyph;
         QVERIFY(QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, glyph), Q_ARG(int, cue.indexOf("dalmışım") + 2)));
         const auto point = editor->mapToScene(glyph.center() + QPointF(3, 0)).toPoint();
-        const auto originalSubject = study->subject();
+        const auto originalSubject = study->explanation()->subject();
         QSignalSpy wordRequested(subtitle, SIGNAL(wordRequested(int)));
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QCOMPARE(wordRequested.count(), 1);
         QCOMPARE(study->words()->word(), QString("dalmışım"));
-        QCOMPARE(study->subject(), originalSubject);
+        QCOMPARE(study->explanation()->subject(), originalSubject);
         QCOMPARE(requests, 1);
         QCOMPARE(wordRequests, 1);
         QCOMPARE(sentContext.value("clickedSubtitle").toString(), cue);
@@ -702,11 +742,11 @@ private slots:
         QVERIFY(session->paused());
         // Double-click must produce a full explanation, without a second word-card charge.
         QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier, point);
-        QTRY_COMPARE(study->state(), QString("complete"));
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
         QTest::qWait(450);
         QCOMPARE(requests, 2);
         QCOMPARE(wordRequests, 1);
-        QCOMPARE(study->subject(), QString("dalmışım"));
+        QCOMPARE(study->explanation()->subject(), QString("dalmışım"));
         session->closeDefinition();
         // A changed cue cancels a card, so it cannot explain a previous scene.
         session->lookupWordAt(cue, cue.indexOf("dalmışım"));
@@ -718,8 +758,8 @@ private slots:
 
     void explainHoverCoversBothTracksAndThePathToTheButton() {
         window->setProperty("showRecent", false);
-        window->setProperty("transcriptOpen", true);
-        window->setProperty("inspectorTab", 0);
+        window->setProperty("inspectorMode", 1);
+        window->setProperty("inspectorMode", 1);
         session->setPaused(true);
 
         QFile secondaryFile(profile.filePath("hover-secondary.srt"));
@@ -768,7 +808,7 @@ private slots:
                     QTest::qWait(80);
                     QVERIFY(button->isVisible());
                     QVERIFY(session->paused());
-                    QVERIFY(study->subject().isEmpty());
+                    QVERIFY(study->explanation()->subject().isEmpty());
                 }
             }
         }
@@ -781,9 +821,9 @@ private slots:
     void explanationPhraseUsesThePluginCardStyle() {
         const QString phrase = "Ya abi, bilmem mi? Ben yani ben, motorların üstünde geçti benim hayatım.";
         window->setProperty("showRecent", false);
-        window->setProperty("transcriptOpen", true);
-        window->setProperty("inspectorTab", 1);
-        study->explain(phrase, phrase);
+        window->setProperty("inspectorMode", 1);
+        window->setProperty("inspectorMode", 2);
+        study->explanation()->explain(phrase, phrase);
         auto *subject = visualItem(window->contentItem(), "explanationSubject");
         auto *card = visualItem(window->contentItem(), "explanationSourceCard");
         auto *disclosure = visualItem(window->contentItem(), "fullSubtitleButton");
@@ -800,7 +840,7 @@ private slots:
         QCOMPARE(subject->property("text").toString(), phrase);
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/source-phrase-card.png"));
-        study->explain("bilmem mi?", phrase);
+        study->explanation()->explain("bilmem mi?", phrase);
         QTRY_VERIFY(disclosure->isVisible());
         QCOMPARE(subject->property("text").toString(), QString("bilmem mi?"));
         session->closeDefinition();
@@ -840,7 +880,7 @@ private slots:
                 socket->disconnectFromHost();
             });
         });
-        QVERIFY(study->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        QVERIFY(study->settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
         session->setPaused(true);
         const auto start = qRound64(session->position() * 1000) - 500;
         const QString phrase = "Bir ışık\ngördüm.";
@@ -863,10 +903,10 @@ private slots:
 
         // 3. Clicking sends the complete multiline cue exactly once and keeps playback paused.
         click("primarySubtitleTextExplainButton");
-        QTRY_COMPARE(study->state(), QString("complete"));
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
         QCOMPARE(requests, 1);
         QCOMPARE(submitted, phrase);
-        QCOMPARE(study->subject(), phrase);
+        QCOMPARE(study->explanation()->subject(), phrase);
         QVERIFY(session->paused());
         QVERIFY(!fullscreen->active());
         QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
@@ -883,12 +923,12 @@ private slots:
         QCOMPARE(input->property("text").toString(), QString("why m"));
         QVERIFY(session->paused());
         click("sendFollowUpButton");
-        QTRY_COMPARE(study->state(), QString("complete"));
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
         QCOMPARE(requests, 2);
-        QCOMPARE(study->turns().size(), 2);
+        QCOMPARE(study->explanation()->turns().size(), 2);
         QCOMPARE(submittedMessages.size(), 4);
         QCOMPARE(submittedMessages.last().toObject().value("content").toString(), QString("why m"));
-        QCOMPARE(study->subject(), phrase);
+        QCOMPARE(study->explanation()->subject(), phrase);
         QTest::qWait(150);
         QList<QQuickItem *> answers;
         std::function<void(QQuickItem *)> collectAnswers = [&](QQuickItem *item) {
@@ -906,7 +946,7 @@ private slots:
         }
         if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/follow-up-chat.png"));
         click("transcriptTab");
-        QCOMPARE(study->turns().size(), 2);
+        QCOMPARE(study->explanation()->turns().size(), 2);
     }
 
     void closeReopenResumeAndRemoveThroughTheUi() {

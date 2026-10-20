@@ -1,4 +1,5 @@
 #pragma once
+#include "ai_client.h"
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPointer>
@@ -32,7 +33,7 @@ public:
     bool contextual() const { return contextLookup; }
     void lookup(const QString &word, const QVariantMap &settings, bool translationOnly = false);
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
-        const QString &model, bool noKeyRequired = false);
+                       const QString &model, bool noKeyRequired = false);
     void cancel();
     static QString wordAt(const QString &text, int offset);
     static QString languageCode(const QString &language);
@@ -40,9 +41,11 @@ public:
     static QVariantMap parseContextMeaning(const QByteArray &body);
 signals:
     void changed();
+
 private:
-    void send(const QNetworkRequest &request, const QByteArray &body, bool google = false, bool dictionary = false);
+    void observe(QNetworkReply *reply, bool google = false, bool dictionary = false);
     CredentialReader credentials;
+    AiClient ai;
     QUrl testOrigin;
     QNetworkAccessManager network;
     QPointer<QNetworkReply> reply;

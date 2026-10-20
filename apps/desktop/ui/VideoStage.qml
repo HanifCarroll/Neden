@@ -10,7 +10,6 @@ Rectangle {
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
     property bool windowDragEnabled: false
-    signal explainSelection
     signal fullscreenRequested
     signal moveWindowRequested
     readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
@@ -86,9 +85,9 @@ Rectangle {
                 pixelSize: stage.appearance.primarySize
                 selectable: stage.appearance.selectable
                 Layout.row: stage.appearance.reversed ? 1 : 0
-                onWordRequested: offset => stage.session.lookupWordAt(text, offset)
+                onWordRequested: offset => stage.session.lookupWordAt(text, offset, false)
                 onSelectionChanged: selection => stage.session.select(selection)
-                onSelectionCommitted: stage.explainSelection()
+                onSelectionCommitted: stage.session.commitSelection(false)
             }
             SubtitleText {
                 id: translation
@@ -100,9 +99,9 @@ Rectangle {
                 selectable: stage.appearance.selectable
                 textColor: stage.appearance.secondaryColor
                 Layout.row: stage.appearance.reversed ? 0 : 1
-                onWordRequested: offset => stage.session.lookupWordAt(text, offset)
-                onSelectionChanged: selection => stage.session.select(selection)
-                onSelectionCommitted: stage.explainSelection()
+                onWordRequested: offset => stage.session.lookupWordAt(text, offset, true)
+                onSelectionChanged: selection => stage.session.select(selection, true)
+                onSelectionCommitted: stage.session.commitSelection(true)
             }
         }
     }
@@ -141,8 +140,7 @@ Rectangle {
                 hideExplanation.restart();
         }
         onClicked: {
-            stage.session.select(subtitle.text);
-            stage.explainSelection();
+            stage.session.explainCue();
         }
     }
     Timer {
@@ -257,7 +255,7 @@ Rectangle {
                 }
                 ActionButton {
                     text: "Try word translation"
-                    visible: stage.session.study.learningSettings.wordProvider === "microsoft" && stage.session.study.words.state === "failed"
+                    visible: stage.session.study.settings.wordProvider === "microsoft" && stage.session.study.words.state === "failed"
                     onClicked: stage.session.translateWord()
                 }
                 ActionButton {
@@ -265,8 +263,7 @@ Rectangle {
                     objectName: "wordFullExplanationButton"
                     flat: true
                     onClicked: {
-                        stage.session.select(stage.session.study.words.word);
-                        stage.explainSelection();
+                        stage.session.explainWord();
                     }
                 }
             }

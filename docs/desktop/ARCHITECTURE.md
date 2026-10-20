@@ -1,21 +1,44 @@
 # Desktop architecture
 
-`apps/desktop` contains a single Qt Quick application built by CMake. QML views are in `ui/`; application services and native adapters are small C++/Objective-C++ files beside the build definition. Qt Test targets exercise parsing, Turkish and Unicode search, session ownership, study services, safe explanation formatting, render lifetime, and video geometry.
+The Qt Quick desktop application is organized around complete workflows. QML renders state and submits user actions; native modules own context, cancellation, persistence, and playback ownership. The IINA plugin remains independent.
 
-- `LearningSession` owns subtitle selection, current/translated cues, replay, and playback interaction. `CueModel` parses and searches subtitles without changing their displayed text.
-- `PlaybackEngine` isolates session logic from libmpv. `MpvPlayback` owns the reviewed player, bounded buffers, queued events, and pending media requests. `Video` creates its GPU context only after media is requested; renderer ownership tokens reject stale pending loads.
-- `Video` renders into a Qt Quick OpenGL color texture. It preserves the sRGB declaration and nonblocking mpv timing fix. The idle texture is 64 × 64 with no depth/stencil attachment. Qt uses native text rendering.
-- `StudyTools` owns settings, streamed requests, subtitle search/download, local cards, review, and export. `ExplanationFormat` uses Qt's Markdown parser while making links inert and replacing images with text. No model HTML is executed.
-- `WordLookup` owns bounded single-word requests and cancellation. Contextual AI uses a non-streaming JSON Chat Completions response validated before display: contextual meaning, lemma, one short usage note, and zero to four other senses. All fields render as plain text; no model HTML, links or resources execute. `LearningSession` freezes subtitle context for lookup and explicit retry, reusing the phrase-context builder, and cancels on cue/track/media changes. Older Google/Microsoft lookup remains selectable.
-- `credentials_mac.mm` reads existing native Keychain items; credentials do not enter QML state. Other platforms fail closed until their credential-store adapters are verified.
-- `FullscreenController` bridges public AppKit APIs for instant borderless or optional native fullscreen. Other platforms use the window manager's fullscreen mechanism.
+```text
+apps/desktop/
+  app/        composition, settings, profile storage, history, player session
+  playback/   libmpv adapter, video surface, geometry and renderer lifetime
+  subtitles/  file decoding, two-track timeline, transcript, subtitle acquisition
+  study/      frozen targets, study interactions, conversations, AI client, word cards, deck
+  platform/   native credentials and fullscreen implementations
+  tests/      portable tests and opt-in native/off-screen interaction checks
+  ui/         QML views, design tokens, controls and keyboard policy
+  macos/      bundle metadata and icon
+```
 
-The dictionary WebView exists only while open. Settings and study panels are constructed on first use, then retain drafts/state. There is no sample-media autoload, comparison driver, or periodic profiling timer.
+## Module contracts
 
-`RecentVideos` is a bounded local JSON history model with atomic writes. Its version 2 records hold video paths, precise playback positions/durations, and optional local primary/secondary subtitle paths; version 1 records still load. `LearningSession` checkpoints on video switches, normal quit/close, and every five seconds, and ignores a removed active video until explicitly opened again. Subtitle choices belong to each video and restore independently before resume checkpoints are enabled. Failed restores keep the saved file reference, report a recoverable warning, and allow the video and other track to play. Downloaded subtitles are saved atomically in the profile before their path is published to the session. Saved primary tracks suppress automatic subtitle searches on reopen. Resume seeks use the full stored precision and reject another video's stale load callback. Sentence replay checkpoints its current position, retaining a pending seek target until the decoder arrives. `mediaPathIdentity` resolves aliases and normalizes Mac paths to NFC so Finder and file-picker Unicode spellings identify the same video; it does not change subtitle text.
+- `LearningSession` coordinates media loading, exact resume checkpoints, playback and sentence replay. It delegates subtitle data to `SubtitleTimeline` and study gestures to `StudyInteraction`. `PlaybackEngine` remains the testable boundary around libmpv.
+- `SubtitleTimeline` owns the primary transcript model and independent secondary timeline. It decodes bounded UTF-8 SRT/WebVTT before replacing a track, handles role reuse/removal, resolves timed text and adjacent cues, and captures contextual selections. Transcript cue storage is private; its public entries are read-only. Search preserves displayed Unicode and the existing Turkish matching policy.
+- `StudyTarget` is a value snapshot containing the selection, role, full cue, neighboring cues, translation clues, languages, local media identity, playback position and cue interval. Local media paths stay out of AI requests. Context is captured once; subsequent playback changes cannot change a displayed explanation or the card/replay derived from it.
+- `StudyInteraction` owns preview versus committed selection, duplicate gesture suppression, word-card transitions, and whether closing a study interaction may resume playback. QML invokes complete commands (`commitSelection`, `explainCue`, `explainWord`); it does not sequence selection and network operations itself.
+- `StudyServices` is a composition root exposing independent feature objects. It has no shared status message, forwarding API, or catch-all change signal.
+- `ExplanationSession` owns conversation requests, streaming completion, explicit retries, optional five-second fallback, cancellation and the frozen explanation target. `Conversation` retains its pure history/context rules, limits and omission of partial answers from subsequent prompts.
+- `WordLookup` owns bounded, plain-text word cards, structured response validation and legacy Google/Microsoft translation. `StudyInteraction` supplies its frozen target. A double-click or phrase selection does not also submit a delayed word request.
+- `AiClient` owns authenticated Chat Completions request construction, endpoint/credential validation, provider options, token budgets, redirect policy and bounded network buffers. Both explanation and word requests use it; DeepSeek thinking remains disabled. Feature-specific streaming/card parsers retain their own output contracts. There is no automatic retry in the transport.
+- `SubtitleService` owns video fingerprints, search, account login, download allowance requests, restricted redirects, validated SRT storage and media/request ownership. It has its own results and message. It publishes a stable saved path only after the download is committed.
+- `FlashcardDeck` owns bounded cards, review scheduling, atomic updates and TSV export. Its message is independent of explanations and subtitle acquisition. `StudyInteraction` saves the explanation's original target and answer, never a mixture of that answer with the current playhead.
+- `AppSettings` parses Qt form drafts into typed connection/learning settings. Provider choices expose stable IDs and names rather than positional mappings. All fields validate and persist before active settings change; failed saves leave active values unchanged. Credential actions use the native adapter and return status only.
+- `ProfileStore` privately coordinates atomic updates to the existing `study.json` document. Settings writes preserve cards and card writes preserve settings. Version 1 data remains readable; damaged documents are preserved and writes are disabled. No migration, duplicate profile, or plaintext credential storage is introduced.
 
-The app/executable is named **Neden**. Retain `io.github.hanifcarroll.neden.qt-lab` as the bundle/signing identifier. Existing study data and history use the established `Neden Qt Lab` application-support directory explicitly; this legacy directory name does not appear in the product UI. `DesktopApplication` handles Finder Open With events without taking over default video associations.
+## Presentation and platform boundaries
 
-The video and inspector share the top edge of the content area; there is no episode-title toolbar. Inspector tabs and Close live at the top of the sidebar, and the bottom playback bar can reopen it. On macOS public expanded-client-area flags extend video under the transparent native titlebar; the title remains available to the window manager but is not drawn. Native traffic-light controls remain, with a narrow drag gesture area over the upper video. Only sidebar controls are inset for titlebar/notch safe areas; the video itself remains edge to edge.
+`PlayerShortcuts.qml` owns playback-key eligibility. Editable input, control-key handling, and read-only subtitle selection are distinguished so Space/M do not disappear when a study view opens. `Main.qml` owns window/panel presentation; the inspector has one mode (hidden, transcript, meaning or dictionary). Dialogs and study panels remain lazy, and the dictionary WebView exists only while open.
 
-Contextual JSON follows [DeepSeek’s JSON output contract](https://api-docs.deepseek.com/guides/json_mode/), including a JSON example and bounded completion length. Expanded content follows [Qt’s documented safe-area behavior](https://www.qt.io/blog/expanded-client-areas-and-safe-areas-in-qt-6.9).
+`ExplanationFormat` keeps model links inert and replaces images with text; model HTML and remote resources are not executed. Word-card fields render as plain text. The shared `ChoiceBox` honors named model roles and keeps full subtitle filenames readable.
+
+The rendering and platform adapters retain the established behavior: sRGB video texture, nonblocking mpv rendering, small idle framebuffer, native Mac text/window buttons, borderless fullscreen by default, optional native fullscreen, and protected Keychain access. The video and sidebar reach the top edge without an episode-title toolbar; sidebar controls respect safe areas.
+
+The app/executable remains **Neden**, with bundle/signing identifier `io.github.hanifcarroll.neden.qt-lab`. Existing data stays in `Neden Qt Lab` under application support. `RecentVideos` retains version 2 records, independent subtitle paths, precise positions, malformed-data protection, and removal semantics. Source changes do not update the installed app until the installer runs; use the [installation guide](INSTALLATION.md).
+
+## Verification
+
+Portable tests exercise module behavior and controlled local HTTP/SSE contracts. Regressions cover saving/replaying an explained cue after seeking elsewhere, transaction failure, independent feature messages, Unicode/Turkish text, profile compatibility, cancellation, replay and history restoration. Off-screen checks exercise the actual QML controls, word/phrase gestures, follow-ups, provider models, draft saving and shortcut focus policy without saved keys or visible windows. They do not establish native macOS presentation or playback performance; those checks belong on the Pro's real display.

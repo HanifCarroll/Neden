@@ -1,4 +1,4 @@
-#include "study_tools.h"
+#include "study_services.h"
 #include "subtitle_appearance.h"
 #include "network_error.h"
 #include <QTcpServer>
@@ -6,6 +6,7 @@
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QFile>
+#include <QDir>
 #include <QTimer>
 #include <QJsonDocument>
 #include <memory>
@@ -14,6 +15,50 @@
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void settingsDraftCommitsAllFieldsOnlyAfterSuccessfulPersistence() {
+        QTemporaryDir directory;
+        StudyServices services(directory.path(),[](const QString &) { return QByteArray(); });
+        auto *settings=services.settings();
+        const auto originalEndpoint=settings->endpoint();
+        auto draft=settings->learningSettings();
+        draft.insert("endpoint","https://example.org/v1"); draft.insert("model","new-model");
+        draft.insert("dictionary","https://example.org/dictionary/%s"); draft.insert("automaticSubtitles",true);
+        draft.insert("wordProvider","unknown");
+        QSignalSpy changes(settings,&AppSettings::changed);
+        QVERIFY(!settings->applyDraft(draft));
+        QCOMPARE(settings->endpoint(),originalEndpoint);
+        QCOMPARE(changes.count(),0);
+        draft.insert("wordProvider","ai");
+        QVERIFY(settings->applyDraft(draft));
+        QCOMPARE(settings->endpoint(),QString("https://example.org/v1"));
+        QCOMPARE(settings->model(),QString("new-model"));
+        QCOMPARE(changes.count(),1);
+        const auto savedValues=settings->learningSettings();
+        QVERIFY(QFile::rename(directory.filePath("study.json"),directory.filePath("preserved.json")));
+        QVERIFY(QDir().mkdir(directory.filePath("study.json"))); // Force atomic replacement to fail.
+        draft.insert("endpoint","https://different.example/v1"); draft.insert("sourceLanguage","Japanese");
+        QVERIFY(!settings->applyDraft(draft));
+        QCOMPARE(settings->endpoint(),QString("https://example.org/v1"));
+        QCOMPARE(settings->learningSettings(),savedValues);
+        QCOMPARE(changes.count(),1);
+    }
+
+    void featureStatusMessagesDoNotOverwriteAnExplanation() {
+        QTemporaryDir directory;
+        StudyServices services(directory.path(),[](const QString &) { return QByteArray(); });
+        services.explanation()->explain("ışık","Bir ışık gördüm.");
+        QCOMPARE(services.explanation()->state(),QString("failed"));
+        const auto error=services.explanation()->message();
+        services.deck()->saveCard("ışık","Bir ışık gördüm.","light",1.5);
+        QVERIFY(services.deck()->message().contains("saved"));
+        QCOMPARE(services.explanation()->message(),error);
+        services.subtitles()->findSubtitles("invalid");
+        QCOMPARE(services.explanation()->message(),error);
+        QVERIFY(!services.subtitles()->message().isEmpty());
+        StudyServices restored(directory.path(),[](const QString &) { return QByteArray(); });
+        QCOMPARE(restored.deck()->cards().size(),1);
+    }
+
     void contextualWordCardsRequireCompleteBoundedStructuredAnswers() {
         const auto envelope = [](const QJsonObject &card, const QString &finish = "stop") {
             return QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{{"finish_reason", finish},
@@ -68,14 +113,14 @@ private slots:
             });
         });
         QString credentialEndpoint;
-        StudyTools study(directory.path(), [&](const QString &endpoint) { credentialEndpoint = endpoint; return QByteArray("synthetic-test-key"); });
+        StudyServices study(directory.path(), [&](const QString &endpoint) { credentialEndpoint = endpoint; return QByteArray("synthetic-test-key"); });
         const auto endpoint = QString("http://127.0.0.1:%1").arg(server.serverPort());
-        QVERIFY(study.configure(endpoint, "mock", "https://example.org/%s", false));
-        QCOMPARE(study.learningSettings().value("wordProvider").toString(), QString("ai"));
+        QVERIFY(study.settings()->configure(endpoint, "mock", "https://example.org/%s", false));
+        QCOMPARE(study.settings()->learningSettings().value("wordProvider").toString(), QString("ai"));
         const QJsonObject context{{"clickedSubtitle", "Ben televizyona dalmışım ya."},
             {"before", QJsonArray{"Açık bile değil televizyon."}}, {"after", QJsonArray{"Öyle mi?"}},
             {"secondary", QJsonArray{"I was watching TV."}}, {"explanationLanguage", "English"}};
-        study.lookupWord("dalmışım", context);
+        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(), study.settings()->model());
         QTRY_COMPARE(study.words()->state(), QString("complete"));
         QCOMPARE(requests, 1);
         QCOMPARE(credentialEndpoint, endpoint);
@@ -90,9 +135,9 @@ private slots:
         QCOMPARE(sentContext.value("secondary"), context.value("secondary"));
         QCOMPARE(study.words()->lemma(), QString("dalmak"));
         QCOMPARE(study.words()->otherMeanings(), QStringList{"to dive"});
-        study.lookupWord("dalmışım", context);
+        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(), study.settings()->model());
         QTRY_COMPARE(requests, 2);
-        study.invalidateContext();
+        study.words()->cancel();
         QTest::qWait(250);
         QCOMPARE(study.words()->state(), QString("idle"));
         QVERIFY(study.words()->otherMeanings().isEmpty());
@@ -131,28 +176,28 @@ private slots:
     }
     void learningSettingsWhitelistFieldsAndNeverPersistKeys() {
         QTemporaryDir directory;
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
         const QVariantMap settings{{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"},
             {"includeSecondary", true}, {"primaryProvider", "configured"}, {"wordProvider", "off"}, {"apiKey", "should-not-save"}};
-        QVERIFY(study.configureLearning(settings));
+        QVERIFY(study.settings()->configureLearning(settings));
         QFile file(directory.filePath("study.json"));
         QVERIFY(file.open(QIODevice::ReadOnly));
         QVERIFY(!file.readAll().contains("should-not-save"));
-        StudyTools restored(directory.path(), [](const QString &) { return QByteArray(); });
-        QCOMPARE(restored.sourceLanguage(), QString("Turkish"));
-        QVERIFY(restored.includeSecondary());
+        StudyServices restored(directory.path(), [](const QString &) { return QByteArray(); });
+        QCOMPARE(restored.settings()->sourceLanguage(), QString("Turkish"));
+        QVERIFY(restored.settings()->includeSecondary());
 
         QString savedEndpoint;
-        study.setCredentialWriter([&](const QString &endpoint, QByteArray key) {
+        study.settings()->setCredentialWriter([&](const QString &endpoint, QByteArray key) {
             savedEndpoint = endpoint;
             const bool valid = key == "synthetic-test-key";
             key.fill(0);
             return valid ? QString("Saved") : QString("Invalid");
         });
-        study.saveServiceKey("google", "synthetic-test-key");
+        study.settings()->saveServiceKey("google", "synthetic-test-key");
         QCOMPARE(savedEndpoint, QString("https://translation.googleapis.com"));
-        QCOMPARE(study.message(), QString("Saved"));
-        QVERIFY(!study.learningSettings().contains("apiKey"));
+        QCOMPARE(study.settings()->message(), QString("Saved"));
+        QVERIFY(!study.settings()->learningSettings().contains("apiKey"));
     }
 
     void optedInFallbackWaitsAndUsesOnlyOneAlternateAttempt() {
@@ -187,21 +232,21 @@ private slots:
             });
         });
         const QString local = QString("http://127.0.0.1:%1");
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
             "https://api.opensubtitles.com/api/v1", local.arg(alternate.serverPort()));
-        QVERIFY(study.configure(local.arg(primary.serverPort()), "mock", "https://example.org/%s", false));
+        QVERIFY(study.settings()->configure(local.arg(primary.serverPort()), "mock", "https://example.org/%s", false));
         QVariantMap settings{{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}, {"wordProvider", "off"},
             {"primaryProvider", "configured"}, {"fallbackEnabled", true}};
-        QVERIFY(study.configureLearning(settings));
-        study.explain("ışık", "Bir ışık gördüm.");
+        QVERIFY(study.settings()->configureLearning(settings));
+        study.explanation()->explain("ışık", "Bir ışık gördüm.");
         QTRY_COMPARE(primaryRequests, 1);
         QTest::qWait(100);
         QCOMPARE(alternateRequests, 0);
-        QTRY_COMPARE_WITH_TIMEOUT(study.state(), QString("complete"), 7000);
+        QTRY_COMPARE_WITH_TIMEOUT(study.explanation()->state(), QString("complete"), 7000);
         QCOMPARE(primaryRequests, 1);
         QCOMPARE(alternateRequests, 1);
-        QCOMPARE(study.turns().first().toMap().value("fallback").toBool(), true);
-        QCOMPARE(study.turns().first().toMap().value("provider").toString(), QString("gpt-6-luna"));
+        QCOMPARE(study.explanation()->turns().first().toMap().value("fallback").toBool(), true);
+        QCOMPARE(study.explanation()->turns().first().toMap().value("provider").toString(), QString("gpt-6-luna"));
     }
     void wordLookupStreamsOneBoundedResponseAndCancellationRejectsLateCallbacks() {
         QTcpServer server;
@@ -284,54 +329,54 @@ private slots:
                 socket->disconnectFromHost();
             });
         });
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
-        study.explain("ışık", "Bir ışık gördüm.");
-        QTRY_COMPARE(study.state(), QString("failed"));
-        QVERIFY(study.message().contains("allowance"));
-        QVERIFY(!study.message().contains("private provider details"));
-        QVERIFY(!study.message().contains("HTTP 0"));
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        study.explanation()->explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE(study.explanation()->state(), QString("failed"));
+        QVERIFY(study.explanation()->message().contains("allowance"));
+        QVERIFY(!study.explanation()->message().contains("private provider details"));
+        QVERIFY(!study.explanation()->message().contains("HTTP 0"));
         QTest::qWait(200);
         QCOMPARE(requests, 1);
-        study.retryExplanation();
-        QTRY_COMPARE(study.state(), QString("complete"));
+        study.explanation()->retryExplanation();
+        QTRY_COMPARE(study.explanation()->state(), QString("complete"));
         QCOMPARE(requests, 2);
-        QCOMPARE(study.subject(), QString("ışık"));
-        QCOMPARE(study.answer(), QString("Light"));
+        QCOMPARE(study.explanation()->subject(), QString("ışık"));
+        QCOMPARE(study.explanation()->answer(), QString("Light"));
     }
     void dictionaryEncodingAndDestinationValidation() {
-        const auto url = StudyTools::buildDictionaryUrl("https://example.org/?q=%s", "İstanbul & ışık?#");
+        const auto url = AppSettings::buildDictionaryUrl("https://example.org/?q=%s", "İstanbul & ışık?#");
         QCOMPARE(QUrlQuery(url).queryItemValue("q", QUrl::FullyDecoded), QString("İstanbul & ışık?#"));
-        QVERIFY(StudyTools::buildDictionaryUrl("https://%s.example.org", "evil").isEmpty());
-        QVERIFY(StudyTools::buildDictionaryUrl("javascript:%s", "test").isEmpty());
-        QVERIFY(StudyTools::buildDictionaryUrl("https://user:pass@example.org/%s", "test").isEmpty());
+        QVERIFY(AppSettings::buildDictionaryUrl("https://%s.example.org", "evil").isEmpty());
+        QVERIFY(AppSettings::buildDictionaryUrl("javascript:%s", "test").isEmpty());
+        QVERIFY(AppSettings::buildDictionaryUrl("https://user:pass@example.org/%s", "test").isEmpty());
     }
     void persistentCardsAndLiteralExport() {
         QTemporaryDir directory;
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.saveCard("ışık", "<script>context</script>\nline", "light\tbright", 1.5);
-        QCOMPARE(study.cards().size(), 1);
-        study.exportCards(QUrl::fromLocalFile(directory.filePath("cards.tsv")));
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+        study.deck()->saveCard("ışık", "<script>context</script>\nline", "light\tbright", 1.5);
+        QCOMPARE(study.deck()->cards().size(), 1);
+        study.deck()->exportCards(QUrl::fromLocalFile(directory.filePath("cards.tsv")));
         QFile exportFile(directory.filePath("cards.tsv"));
         QVERIFY(exportFile.open(QIODevice::ReadOnly));
         const auto text = exportFile.readAll();
         QVERIFY(text.contains("#html:false"));
         QVERIFY(text.contains("light bright"));
-        StudyTools restored(directory.path(), [](const QString &) { return QByteArray(); });
-        QCOMPARE(restored.cards().size(), 1);
-        restored.reviewCard(0, true);
-        QCOMPARE(restored.cards().first().toMap().value("reviews").toInt(), 1);
-        restored.removeCard(0);
-        QCOMPARE(restored.cards().size(), 0);
+        StudyServices restored(directory.path(), [](const QString &) { return QByteArray(); });
+        QCOMPARE(restored.deck()->cards().size(), 1);
+        restored.deck()->reviewCard(0, true);
+        QCOMPARE(restored.deck()->cards().first().toMap().value("reviews").toInt(), 1);
+        restored.deck()->removeCard(0);
+        QCOMPARE(restored.deck()->cards().size(), 0);
     }
     void corruptStorageIsPreserved() {
         QTemporaryDir directory;
         QFile file(directory.filePath("study.json"));
         QVERIFY(file.open(QIODevice::WriteOnly));
         file.write("broken data"); file.close();
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.saveCard("ışık", "", "light", 0);
-        QCOMPARE(study.cards().size(), 0);
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+        study.deck()->saveCard("ışık", "", "light", 0);
+        QCOMPARE(study.deck()->cards().size(), 0);
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), QByteArray("broken data"));
     }
@@ -341,9 +386,9 @@ private slots:
         QVERIFY(file.open(QIODevice::WriteOnly));
         const QByteArray data = R"({"version":1,"cards":[{"front":"ışık"}]})";
         file.write(data); file.close();
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.saveCard("ışık", "", "light", 0);
-        QCOMPARE(study.cards().size(), 0);
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+        study.deck()->saveCard("ışık", "", "light", 0);
+        QCOMPARE(study.deck()->cards().size(), 0);
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), data);
     }
@@ -352,14 +397,14 @@ private slots:
         QFile file(directory.filePath("video"));
         QVERIFY(file.open(QIODevice::WriteOnly));
         file.write(QByteArray(131072, '\0')); file.close();
-        QCOMPARE(StudyTools::movieHash(file.fileName()), QString("0000000000020000"));
+        QCOMPARE(SubtitleService::movieHash(file.fileName()), QString("0000000000020000"));
     }
     void missingCredentialSendsNothing() {
         QTemporaryDir directory;
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.explain("ışık", "Bir ışık gördüm.");
-        QCOMPARE(study.state(), QString("failed"));
-        QVERIFY(study.answer().isEmpty());
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+        study.explanation()->explain("ışık", "Bir ışık gördüm.");
+        QCOMPARE(study.explanation()->state(), QString("failed"));
+        QVERIFY(study.explanation()->answer().isEmpty());
     }
     void subtitleSearchDownloadAndCredentialIsolation() {
 
@@ -408,18 +453,18 @@ private slots:
                 socket->disconnectFromHost();
             });
         });
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
-        study.setSubtitleLoginReader([] { return QByteArray(R"({"username":"synthetic-user","password":"synthetic-password"})"); });
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
+        study.subtitles()->setSubtitleLoginReader([] { return QByteArray(R"({"username":"synthetic-user","password":"synthetic-password"})"); });
         QVector<Cue> received;
         QString savedPath;
-        connect(&study, &StudyTools::subtitlesReady, this, [&](QVector<Cue> cues, QString path) {
+        connect(study.subtitles(), &SubtitleService::subtitlesReady, this, [&](QVector<Cue> cues, QString path) {
             received = cues;
             savedPath = path;
         });
 
         // 2. An exact match may auto-download, but signed file requests never receive the key.
-        study.setMedia(media.fileName());
-        study.findSubtitles("tr", true);
+        study.subtitles()->setMedia(media.fileName());
+        study.subtitles()->findSubtitles("tr", true);
         QTRY_COMPARE(received.size(), 1);
         QCOMPARE(received.first().text, QString("İstanbul ışığı"));
         QFile savedSubtitle(savedPath);
@@ -432,7 +477,7 @@ private slots:
         QVERIFY(downloadAuthenticated);
 
         // 3. A manual title/episode search does not inherit the movie hash or auto-download.
-        study.findSubtitles("tr", false, "Original show", 2, 1);
+        study.subtitles()->findSubtitles("tr", false, "Original show", 2, 1);
         QTRY_COMPARE(requests.size(), 6);
         const QUrlQuery query(QUrl("http://localhost" + requests.last()));
         QCOMPARE(query.queryItemValue("query"), QString("Original show"));
@@ -441,8 +486,8 @@ private slots:
         QVERIFY(!query.hasQueryItem("moviehash"));
 
         // 4. Reopening a video with a saved track must not trigger another API request.
-        QVERIFY(study.configure(base, "mock", "https://example.org/%s", true));
-        study.setMedia(media.fileName(), false);
+        QVERIFY(study.settings()->configure(base, "mock", "https://example.org/%s", true));
+        study.subtitles()->setMedia(media.fileName(), false);
         QTest::qWait(100);
         QCOMPARE(requests.size(), 6);
     }
@@ -464,12 +509,12 @@ private slots:
             });
         });
         const auto base = QString("http://127.0.0.1:%1").arg(server.serverPort());
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
-        study.setMedia(directory.filePath("video"));
-        study.findSubtitles("tr", false, "Original show");
-        QTRY_VERIFY(study.message().contains("failed"));
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
+        study.subtitles()->setMedia(directory.filePath("video"));
+        study.subtitles()->findSubtitles("tr", false, "Original show");
+        QTRY_VERIFY(study.subtitles()->message().contains("failed"));
         QCOMPARE(requests, 1);
-        QVERIFY(study.subtitleResults().isEmpty());
+        QVERIFY(study.subtitles()->subtitleResults().isEmpty());
     }
     void incompleteStreams_data() {
         QTest::addColumn<QByteArray>("ending");
@@ -493,11 +538,11 @@ private slots:
                 socket->disconnectFromHost();
             });
         });
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
-        study.explain("ışık", "Bir ışık gördüm.");
-        QTRY_COMPARE(study.state(), QString("incomplete"));
-        QCOMPARE(study.answer(), QString("light"));
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        study.explanation()->explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE(study.explanation()->state(), QString("incomplete"));
+        QCOMPARE(study.explanation()->answer(), QString("light"));
     }
     void streamingAndCancellation() {
 
@@ -522,24 +567,24 @@ private slots:
                 QTimer::singleShot(1000, socket, [socket] { socket->write("data: [DONE]\n\n"); socket->disconnectFromHost(); });
             });
         });
-        StudyTools study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
 
         // 2. Prove visible text precedes completion, then cancel and reject late output.
-        study.explain("ışık", "Bir ışık gördüm.");
-        QTRY_COMPARE_WITH_TIMEOUT(study.answer(), QString("ışık"), 500);
-        QCOMPARE(study.state(), QString("streaming"));
-        study.stop();
-        QCOMPARE(study.state(), QString("incomplete"));
+        study.explanation()->explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE_WITH_TIMEOUT(study.explanation()->answer(), QString("ışık"), 500);
+        QCOMPARE(study.explanation()->state(), QString("streaming"));
+        study.explanation()->stop();
+        QCOMPARE(study.explanation()->state(), QString("incomplete"));
         QTRY_VERIFY(disconnected);
-        study.invalidateContext();
+        study.explanation()->invalidateContext();
         QTest::qWait(1100);
-        QVERIFY(study.answer().isEmpty());
+        QVERIFY(study.explanation()->answer().isEmpty());
 
         // 3. Require a successful end marker on a new request.
-        study.explain("ışık", "Bir ışık gördüm.");
-        QTRY_COMPARE_WITH_TIMEOUT(study.state(), QString("complete"), 2000);
-        QCOMPARE(study.answer(), QString("ışık"));
+        study.explanation()->explain("ışık", "Bir ışık gördüm.");
+        QTRY_COMPARE_WITH_TIMEOUT(study.explanation()->state(), QString("complete"), 2000);
+        QCOMPARE(study.explanation()->answer(), QString("ışık"));
     }
 };
 QTEST_GUILESS_MAIN(StudyTests)

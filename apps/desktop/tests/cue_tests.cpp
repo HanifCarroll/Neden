@@ -17,7 +17,7 @@ private slots:
         model.replace(cues);
         model.setTranslationCues({{1250, 3000, "English", {}}});
         model.setTranslationCues({});
-        QVERIFY(model.cues[0].translation.isEmpty());
+        QVERIFY(model.entries()[0].translation.isEmpty());
     }
 
     void turkishSearch_data() {
@@ -40,7 +40,7 @@ private slots:
         model.replace({{0, 1000, original, {}}});
         model.search(query);
         QCOMPARE(model.count(), expectedCount);
-        QCOMPARE(model.cues[0].text, original);
+        QCOMPARE(model.entries()[0].text, original);
     }
     void turkishPairsStayDistinct_data() {
         QTest::addColumn<QString>("query");
@@ -142,8 +142,8 @@ private slots:
         model.search("SECOND");
         QCOMPARE(model.count(), 1);
         QCOMPARE(model.data(model.index(0), CueModel::CueIndex).toInt(), 1);
-        QCOMPARE(cueAt(model.cues, 3500), -1);
+        QCOMPARE(cueAt(model.entries(), 3500), -1);
     }
 };
 QTEST_GUILESS_MAIN(CueTests)
-#include "tests.moc"
+#include "cue_tests.moc"

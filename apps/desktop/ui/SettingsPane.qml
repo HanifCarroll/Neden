@@ -9,7 +9,17 @@ ColumnLayout {
     required property SubtitleAppearance appearance
     required property LearningSession session
     required property FullscreenController fullscreenController
-    readonly property StudyTools study: session.study
+    readonly property AppSettings study: session.study.settings
+    function saveSettings() {
+        return study.applyDraft({
+            endpoint: endpointField.text, model: modelField.text, dictionary: dictionaryField.text,
+            automaticSubtitles: automaticField.checked, sourceLanguage: sourceLanguage.text,
+            explanationLanguage: explanationLanguage.text, includeSecondary: includeSecondary.checked,
+            noKeyRequired: noKeyRequired.checked, primaryProvider: primaryProvider.currentValue,
+            fallbackEnabled: fallbackEnabled.checked, wordProvider: wordProvider.currentValue,
+            wordRegion: wordRegion.text
+        });
+    }
     property string appearanceMessage: ""
     function restoreAppearanceControls() {
         primarySize.value = appearance.primarySize;
@@ -271,6 +281,7 @@ ColumnLayout {
             }
             SearchField {
                 id: endpointField
+                objectName: "aiEndpointField"
                 text: pane.study.endpoint
                 Layout.fillWidth: true
                 Accessible.name: "AI API base URL"
@@ -281,6 +292,7 @@ ColumnLayout {
             }
             SearchField {
                 id: modelField
+                objectName: "aiModelField"
                 text: pane.study.model
                 Layout.fillWidth: true
                 Accessible.name: "AI model ID"
@@ -306,10 +318,6 @@ ColumnLayout {
                 color: Theme.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
-            }
-            ActionButton {
-                text: "Save settings"
-                onClicked: pane.study.configure(endpointField.text, modelField.text, dictionaryField.text, automaticField.checked)
             }
             Label {
                 text: "Explanation languages"
@@ -338,7 +346,7 @@ ColumnLayout {
             CheckBox {
                 id: noKeyRequired
                 text: "Configured endpoint does not require an API key"
-                checked: pane.study.learningSettings.noKeyRequired || false
+                checked: pane.study.noKeyRequired
             }
             Label {
                 text: "Primary explanation provider"
@@ -346,15 +354,17 @@ ColumnLayout {
             }
             ChoiceBox {
                 id: primaryProvider
-                model: ["Configured provider", "GPT-6 Luna"]
-                currentIndex: pane.study.learningSettings.primaryProvider === "luna" ? 1 : 0
+                model: pane.study.primaryProviders
+                textRole: "name"
+                valueRole: "id"
+                currentIndex: { for (let i=0; i<count; ++i) if (model[i].id === pane.study.primaryProvider) return i; return 0; }
                 Layout.fillWidth: true
                 Accessible.name: "Primary explanation provider"
             }
             CheckBox {
                 id: fallbackEnabled
                 text: "Use the other provider after 5 seconds without an answer"
-                checked: pane.study.learningSettings.fallbackEnabled || false
+                checked: pane.study.fallbackEnabled
             }
             Label {
                 text: "Fallback is optional and may bill both attempts. It never switches after an answer starts. Each provider needs its own saved key."
@@ -369,14 +379,17 @@ ColumnLayout {
             }
             ChoiceBox {
                 id: wordProvider
-                model: ["Contextual AI (configured model)", "Off", "Google Cloud Translation", "Microsoft Translator"]
-                currentIndex: pane.study.learningSettings.wordProvider === "off" ? 1 : pane.study.learningSettings.wordProvider === "google" ? 2 : pane.study.learningSettings.wordProvider === "microsoft" ? 3 : 0
+                objectName: "wordProviderChoice"
+                model: pane.study.wordProviders
+                textRole: "name"
+                valueRole: "id"
+                currentIndex: { for (let i=0; i<count; ++i) if (model[i].id === pane.study.wordProvider) return i; return 0; }
                 Layout.fillWidth: true
                 Accessible.name: "Word translation provider"
             }
             SearchField {
                 id: wordRegion
-                text: pane.study.learningSettings.wordRegion || ""
+                text: pane.study.wordRegion
                 placeholderText: "Microsoft region (if required)"
                 Layout.fillWidth: true
                 Accessible.name: "Microsoft Translator region"
@@ -388,17 +401,9 @@ ColumnLayout {
                 Layout.fillWidth: true
             }
             ActionButton {
-                text: "Save learning settings"
-                onClicked: pane.study.configureLearning({
-                    sourceLanguage: sourceLanguage.text,
-                    explanationLanguage: explanationLanguage.text,
-                    includeSecondary: includeSecondary.checked,
-                    noKeyRequired: noKeyRequired.checked,
-                    primaryProvider: primaryProvider.currentIndex === 1 ? "luna" : "configured",
-                    fallbackEnabled: fallbackEnabled.checked,
-                    wordProvider: ["ai", "off", "google", "microsoft"][wordProvider.currentIndex],
-                    wordRegion: wordRegion.text
-                })
+                text: "Save settings"
+                objectName: "saveSettingsButton"
+                onClicked: pane.saveSettings()
             }
             Label {
                 text: "Secure service credentials"
@@ -407,7 +412,9 @@ ColumnLayout {
             }
             ChoiceBox {
                 id: keyService
-                model: ["Configured AI", "GPT-6 Luna", "Google Translation", "Microsoft Translator", "OpenSubtitles"]
+                model: pane.study.credentialServices
+                textRole: "name"
+                valueRole: "id"
                 Layout.fillWidth: true
                 Accessible.name: "Credential service"
             }
@@ -425,8 +432,8 @@ ColumnLayout {
                     text: "Save key in Keychain"
                     enabled: newKey.text.length > 0
                     onClicked: {
-                        if (keyService.currentIndex !== 0 || pane.study.configure(endpointField.text, modelField.text, dictionaryField.text, automaticField.checked)) {
-                            pane.study.saveServiceKey(["ai", "luna", "google", "microsoft", "subtitles"][keyService.currentIndex], newKey.text);
+                        if (keyService.currentValue !== "ai" || pane.saveSettings()) {
+                            pane.study.saveServiceKey(keyService.currentValue, newKey.text);
                             newKey.clear();
                         }
                     }
@@ -434,8 +441,8 @@ ColumnLayout {
                 ActionButton {
                     text: "Connect saved key"
                     onClicked: {
-                        if (keyService.currentIndex !== 0 || pane.study.configure(endpointField.text, modelField.text, dictionaryField.text, automaticField.checked))
-                            pane.study.connectServiceKey(["ai", "luna", "google", "microsoft", "subtitles"][keyService.currentIndex]);
+                        if (keyService.currentValue !== "ai" || pane.saveSettings())
+                            pane.study.connectServiceKey(keyService.currentValue);
                     }
                 }
             }

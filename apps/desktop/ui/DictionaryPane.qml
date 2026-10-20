@@ -18,7 +18,7 @@ Rectangle {
         if (!term.length)
             return;
         query.text = term;
-        browser.url = pane.session.study.dictionaryUrl(term);
+        browser.url = pane.session.study.settings.dictionaryUrl(term);
     }
 
     ColumnLayout {

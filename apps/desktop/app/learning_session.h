@@ -1,6 +1,8 @@
 #pragma once
 #include "cues.h"
-#include "study_tools.h"
+#include "study_services.h"
+#include "study_interaction.h"
+#include "subtitle_timeline.h"
 #include "recent_videos.h"
 #include <QTimer>
 #include <QUrl>
@@ -28,9 +30,9 @@ class LearningSession : public QObject {
     Q_PROPERTY(bool canPreviousSubtitle READ canPreviousSubtitle NOTIFY cueChanged)
     Q_PROPERTY(bool canNextSubtitle READ canNextSubtitle NOTIFY cueChanged)
 public:
-    Q_PROPERTY(StudyTools *study READ study CONSTANT)
-    StudyTools *study() const { return studyTools; }
-    void setStudyTools(StudyTools *tools);
+    Q_PROPERTY(StudyServices *study READ study CONSTANT)
+    StudyServices *study() const { return services; }
+    void setStudyServices(StudyServices *tools);
     void setRecentVideos(RecentVideos *videos);
     ~LearningSession() override;
     bool hasMedia() const { return !currentMediaPath.isEmpty(); }
@@ -43,24 +45,27 @@ public:
     Q_INVOKABLE void checkpoint();
     explicit LearningSession(PlaybackEngine *engine, QObject *parent = nullptr);
     Q_PROPERTY(CueModel *cueModel READ cueModel CONSTANT)
-    CueModel *cueModel() { return &model; }
+    CueModel *cueModel() { return timeline.transcript(); }
     void replaceCues(QVector<Cue> next);
     void setPaused(bool value);
-    CueModel model;
     double position() const { return engine->position(); }
     double duration() const { return engine->duration(); }
     bool paused() const { return engine->paused(); }
     QString subtitle() const;
     QString translation() const;
-    int translationCueCount() const { return translationCues.size(); }
-    QString selection() const { return selectedText; }
+    int translationCueCount() const { return timeline.count(SubtitleRole::Secondary); }
+    QString selection() const { return interaction.selection(); }
     QString status() const { return statusText; }
     bool replaying() const { return replayActive; }
     int activeCue() const { return currentCue; }
     Q_INVOKABLE void openVideo(const QUrl &url);
     Q_INVOKABLE void openTranslation(const QUrl &url);
     Q_INVOKABLE void explainSelection();
-    Q_INVOKABLE void lookupWordAt(const QString &text, int offset);
+    Q_INVOKABLE void commitSelection(bool secondary = false);
+    Q_INVOKABLE void explainCue(bool secondary = false);
+    Q_INVOKABLE void explainWord();
+    Q_INVOKABLE void invalidateStudy();
+    Q_INVOKABLE void lookupWordAt(const QString &text, int offset, bool secondary = false);
     Q_INVOKABLE void translateWord();
     Q_INVOKABLE void retryWordLookup();
     Q_INVOKABLE void closeWordCard(bool resume = true);
@@ -73,7 +78,7 @@ public:
     double volumeLevel() const { return audioLevel; }
     Q_INVOKABLE void volume(double level);
     Q_INVOKABLE void toggleMute();
-    Q_INVOKABLE void select(const QString &text);
+    Q_INVOKABLE void select(const QString &text, bool secondary = false);
     Q_INVOKABLE void closeDefinition();
     bool canPreviousSubtitle() const { return previousSubtitleIndex() >= 0; }
     bool canNextSubtitle() const { return nextSubtitleIndex() >= 0; }
@@ -94,8 +99,10 @@ signals:
     void mediaChanged();
     void tracksChanged();
     void volumeChanged();
+    void explanationRequested();
+
 private:
-    QJsonObject subtitleContext() const;
+    void playSpan(double start, double end);
     int previousSubtitleIndex() const;
     int nextSubtitleIndex() const;
     void playSubtitle(int index);
@@ -104,13 +111,12 @@ private:
     void resetInteraction(bool clearConversation = false);
     void finishOpening(const QString &path);
     QString restoreSubtitleTracks(const RecentVideo &saved);
-    StudyTools *studyTools = nullptr;
+    SubtitleTimeline timeline;
+    StudyInteraction interaction;
+    StudyServices *services = nullptr;
     RecentVideos *recentVideos = nullptr;
     QTimer checkpointTimer;
     QString currentMediaPath;
-    QStringList loadedSubtitlePaths;
-    QString sourceSubtitlePath;
-    QString translationSubtitlePath;
     QString rememberedSourceSubtitlePath;
     QString rememberedTranslationSubtitlePath;
     double audioLevel = 60;
@@ -120,17 +126,10 @@ private:
     int subtitleSeekIndex = -1;
     bool mediaReady = false;
     bool rememberCurrent = true;
-    QVector<Cue> translationCues;
     int translationCue = -1;
     PlaybackEngine *engine;
     int currentCue = -1;
-    int explainedCueIndex = -1;
-    QString selectedText;
     QString statusText = "Ready to explore";
-    bool resumeAfterDefinition = false;
-    bool wordResume = false;
-    bool wordActive = false;
-    QJsonObject wordContext;
     bool replayActive = false;
     bool replayArmed = false;
     double replayStart = 0;

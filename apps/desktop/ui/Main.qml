@@ -12,12 +12,13 @@ ApplicationWindow {
     required property RecentVideos recentVideos
     required property MpvPlayback playback
     required property FullscreenController fullscreenController
-    property bool dictionaryOpen: false
+    enum InspectorMode { Hidden, Transcript, Meaning, Dictionary }
+    property int inspectorMode: Main.Transcript
+    readonly property bool dictionaryOpen: inspectorMode === Main.Dictionary
+    readonly property bool transcriptOpen: inspectorMode !== Main.Hidden
+    readonly property int inspectorTab: inspectorMode === Main.Meaning ? 1 : 0
     property bool showRecent: false
-    property bool transcriptOpen: true
-    property int inspectorTab: 0
     readonly property bool meaningEditing: transcriptOpen && inspectorTab === 1 && meaningLoader.item !== null && (meaningLoader.item as MeaningPane).editing
-    property string requestedSelection: ""
     width: 1280
     height: 756
     minimumWidth: 900
@@ -48,9 +49,7 @@ ApplicationWindow {
         target: root.appearance
         function onChanged() {
             if (!root.appearance.selectable) {
-                root.session.closeWordCard();
-                root.session.closeDefinition();
-                root.session.study.invalidateContext();
+                root.session.invalidateStudy();
             }
         }
     }
@@ -180,7 +179,7 @@ ApplicationWindow {
                 text: "Transcript"
                 checkable: true
                 checked: root.transcriptOpen
-                onTriggered: root.transcriptOpen = checked
+                onTriggered: root.inspectorMode = checked ? Main.Transcript : Main.Hidden
             }
             Action {
                 text: "Recently played"
@@ -202,26 +201,20 @@ ApplicationWindow {
     }
     Connections {
         target: root.session
-        function onSelectionChanged() {
-            root.requestedSelection = "";
-        }
+        function onExplanationRequested() { root.openMeaning(); }
         function onMediaChanged() {
             root.showRecent = false;
         }
     }
     function openMeaning() {
-        dictionaryOpen = false;
-        transcriptOpen = true;
-        inspectorTab = 1;
+        inspectorMode = Main.Meaning;
     }
     function toggleTranscript() {
         if (transcriptOpen && inspectorTab === 0 && !dictionaryOpen) {
-            transcriptOpen = false;
+            inspectorMode = Main.Hidden;
         } else {
             closeSelection();
-            dictionaryOpen = false;
-            transcriptOpen = true;
-            inspectorTab = 0;
+            inspectorMode = Main.Transcript;
         }
     }
     function openStudy(tab) {
@@ -229,14 +222,6 @@ ApplicationWindow {
         const pane = studyLoader.item as StudyPane;
         pane.currentTab = tab;
         studyDrawer.open();
-    }
-    function explainCommittedSelection() {
-        if (!session.selection.length || requestedSelection === session.selection)
-            return;
-
-        requestedSelection = session.selection;
-        openMeaning();
-        session.explainSelection();
     }
     function openSettings() {
         if (studyDrawer.opened)
@@ -253,14 +238,14 @@ ApplicationWindow {
         contentItem.forceActiveFocus();
     }
     function openDictionary(term) {
-        dictionaryOpen = true;
+        inspectorMode = Main.Dictionary;
         if (studyDrawer.opened)
             studyDrawer.close();
         const pane = dictionaryLoader.item as DictionaryPane;
         pane.lookup(term || session.selection);
     }
     function closeDictionary() {
-        dictionaryOpen = false;
+        inspectorMode = Main.Transcript;
         closeSelection();
     }
     function escapeLayer() {
@@ -274,7 +259,7 @@ ApplicationWindow {
             session.closeWordCard();
         else if (session.selection.length) {
             closeSelection();
-            inspectorTab = 0;
+            inspectorMode = Main.Transcript;
         } else if (session.replaying)
             session.stopReplay();
         else if (fullscreenController.active)
@@ -298,25 +283,12 @@ ApplicationWindow {
         sequence: "Escape"
         onActivated: root.escapeLayer()
     }
-    Shortcut {
-        sequence: "Space"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !playbackControls.editing
-        onActivated: root.session.toggle()
-    }
-    Shortcut {
-        sequence: "M"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !playbackControls.editing
-        onActivated: root.session.toggleMute()
-    }
-    Shortcut {
-        sequence: "Right"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !stage.editing && !playbackControls.editing
-        onActivated: root.session.seek(root.session.position + 5)
-    }
-    Shortcut {
-        sequence: "Left"
-        enabled: root.session.hasMedia && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen && !root.meaningEditing && !transcript.editing && !stage.editing && !playbackControls.editing
-        onActivated: root.session.seek(root.session.position - 5)
+    PlayerShortcuts {
+        session: root.session
+        available: !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !root.dictionaryOpen
+        textEntryActive: root.meaningEditing || transcript.editing
+        controlKeysActive: playbackControls.editing
+        subtitleSelectionActive: stage.editing
     }
     FileDialog {
         id: videoDialog
@@ -396,7 +368,7 @@ ApplicationWindow {
         modal: true
         onAboutToShow: studyLoader.active = true
         onClosed: {
-            root.session.study.stop();
+            root.session.study.explanation.stop();
             if (!root.dictionaryOpen)
                 root.closeSelection();
         }
@@ -438,7 +410,6 @@ ApplicationWindow {
                     session: root.session
                     playback: root.playback
                     appearance: root.appearance
-                    onExplainSelection: root.explainCommittedSelection()
                     onFullscreenRequested: root.fullscreen()
                     windowDragEnabled: Qt.platform.os === "osx" && !root.fullscreenController.active
                     onMoveWindowRequested: root.startSystemMove()
@@ -470,8 +441,7 @@ ApplicationWindow {
                                 checked: root.inspectorTab === 0 && !root.dictionaryOpen
                                 onClicked: {
                                     root.closeSelection();
-                                    root.dictionaryOpen = false;
-                                    root.inspectorTab = 0;
+                                    root.inspectorMode = Main.Transcript;
                                 }
                             }
                             InspectorTab {
@@ -487,8 +457,7 @@ ApplicationWindow {
                                 objectName: "closeSidebarButton"
                                 onClicked: {
                                     root.closeSelection();
-                                    root.dictionaryOpen = false;
-                                    root.transcriptOpen = false;
+                                    root.inspectorMode = Main.Hidden;
                                 }
                             }
                         }
@@ -511,7 +480,7 @@ ApplicationWindow {
                                     onDictionaryRequested: term => root.openDictionary(term)
                                     onDismissed: {
                                         root.closeSelection();
-                                        root.transcriptOpen = false;
+                                        root.inspectorMode = Main.Hidden;
                                     }
                                 }
                             }
@@ -541,8 +510,7 @@ ApplicationWindow {
                 onToggleSidebar: {
                     if (sidebarOpen) {
                         root.closeSelection();
-                        root.dictionaryOpen = false;
-                        root.transcriptOpen = false;
+                        root.inspectorMode = Main.Hidden;
                     } else root.toggleTranscript();
                 }
                 onFullscreen: root.fullscreen()

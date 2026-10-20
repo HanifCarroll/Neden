@@ -25,6 +25,8 @@ The desktop uses its own libmpv adapter and subtitle timeline. IINA-only bridge 
 
 Microsoft’s empty dictionary response offers an explicit **Try word translation** action. It does not silently issue a second billable request. AI fallback likewise requires the user’s explicit opt-in. Quick cards make one bounded JSON Chat Completions request after the system double-click interval, so phrase selection does not also charge for a word card. The request freezes the clicked subtitle, primary source cue, three neighboring cues on each side, optional secondary context, and language choices. No retry or provider fallback happens automatically; malformed/truncated/empty answers show an actionable error with an explicit Try again. The model may be wrong; alternative meanings are generated suggestions, not a vetted dictionary. Word-service language settings accept the common language names supported by the plugin or ISO codes.
 
+Each conversation owns a frozen study target. Saving a flashcard or replaying its line uses that target after the playhead moves; subtitle downloads, settings actions and deck updates have independent messages. Settings drafts commit atomically to the existing profile.
+
 Conversations are window-local and not saved to disk. Recent-video history stores media position and chosen subtitle file paths, not chat text. Secure credential storage is implemented on macOS; other platforms continue to fail closed until an OS credential adapter is verified.
 
 ## Verification

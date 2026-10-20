@@ -55,18 +55,18 @@ int main(int argc, char **argv) {
     SubtitleAppearance appearance(storage);
     MpvPlayback playback;
     RecentVideos recentVideos(storage);
-    StudyTools study(storage, readSavedCredential);
-    study.setCredentialAuthorizer(authorizeSavedCredential);
-    study.setCredentialWriter(saveCredential);
-    study.setSubtitleLoginReader(readSavedSubtitleLogin);
+    StudyServices study(storage, readSavedCredential);
+    study.settings()->setCredentialAuthorizer(authorizeSavedCredential);
+    study.settings()->setCredentialWriter(saveCredential);
+    study.subtitles()->setSubtitleLoginReader(readSavedSubtitleLogin);
     LearningSession session(&playback);
-    session.setStudyTools(&study);
+    session.setStudyServices(&study);
     session.setRecentVideos(&recentVideos);
     QObject::connect(&application, &DesktopApplication::fileOpened, &session, &LearningSession::openVideo);
     QObject::connect(&application, &QGuiApplication::aboutToQuit, &session, [&] {
         session.setPaused(true);
         session.checkpoint();
-        study.stop();
+        study.explanation()->stop();
     });
     session.cueModel()->setSearchLanguage(CueModel::Turkish);
     FullscreenController fullscreen;

@@ -34,11 +34,12 @@ public:
     Q_INVOKABLE void search(const QString &query);
     Q_INVOKABLE int rowForCue(int cueIndex) const { return visible.indexOf(cueIndex); }
     void setTranslationCues(const QVector<Cue> &translations);
-    QVector<Cue> cues;
+    const QVector<Cue> &entries() const { return cues; }
 signals:
     void countChanged();
     void searchLanguageChanged();
 private:
+    QVector<Cue> cues;
     QString searchKey(const QString &text) const;
     void rebuildSearchKeys();
     SearchLanguage language = Unicode;

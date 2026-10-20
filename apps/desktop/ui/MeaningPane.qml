@@ -7,7 +7,7 @@ import Neden
 Item {
     id: pane
     required property LearningSession session
-    readonly property StudyTools study: session.study
+    readonly property ExplanationSession study: session.study.explanation
     readonly property bool busy: study.state === "loading" || study.state === "streaming"
     readonly property bool editing: question.activeFocus
     property bool showFullCue: false
