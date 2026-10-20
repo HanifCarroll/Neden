@@ -10,7 +10,8 @@ Rectangle {
     color: Theme.surface
     radius: Theme.panelRadius
     property string term: ""
-    property string loadState: "Choose a word"
+    property string loadState: "idle"
+    property string errorMessage: ""
     signal dismissed
 
     function lookup(value) {
@@ -18,63 +19,69 @@ Rectangle {
         if (!term.length)
             return;
         query.text = term;
-        browser.url = pane.session.study.settings.dictionaryUrl(term);
+        const address = pane.session.study.settings.dictionaryUrl(term);
+        if (!address.toString().length) {
+            errorMessage = "Set a valid dictionary URL in Settings.";
+            loadState = "invalid";
+            return;
+        }
+        browser.url = address;
     }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: Theme.space2
         RowLayout {
-            Layout.leftMargin: 12
-            Layout.rightMargin: 12
-            Layout.topMargin: 12
+            Layout.leftMargin: Theme.space3
+            Layout.rightMargin: Theme.space3
+            Layout.topMargin: Theme.space3
+            IconButton {
+                objectName: "dictionaryBackButton"
+                name: "arrow-left"
+                description: "Back to previous dictionary page"
+                visible: browser.canGoBack
+                onClicked: browser.goBack()
+            }
             Label {
                 text: "Dictionary"
                 color: Theme.ink
                 font.bold: true
                 Layout.fillWidth: true
             }
-            ActionButton {
-                text: "Save"
-                onClicked: pane.session.saveCard()
-            }
-            ActionButton {
-                text: "Close"
-                onClicked: pane.dismissed()
+            BusyIndicator {
+                running: pane.loadState === "loading"
+                visible: running
+                implicitWidth: 24
+                implicitHeight: 24
             }
         }
         RowLayout {
-            Layout.leftMargin: 12
-            Layout.rightMargin: 12
+            Layout.leftMargin: Theme.space3
+            Layout.rightMargin: Theme.space3
             SearchField {
                 id: query
                 Layout.fillWidth: true
+                placeholderText: "Search dictionary…"
                 Accessible.name: "Dictionary word"
                 onAccepted: pane.lookup(text)
             }
-            ActionButton {
-                text: "Look up"
-                onClicked: pane.lookup(query.text)
-            }
         }
         RowLayout {
-            Layout.leftMargin: 12
-            ActionButton {
-                text: "Back"
-                enabled: browser.canGoBack
-                onClicked: browser.goBack()
-            }
-            ActionButton {
-                text: "Reload"
-                onClicked: {
-                    browser.reload();
-                }
-            }
+            Layout.leftMargin: Theme.space3
+            Layout.rightMargin: Theme.space3
+            visible: pane.loadState === "failed" || pane.loadState === "invalid"
             Label {
-                text: pane.loadState
+                text: pane.errorMessage
+                textFormat: Text.PlainText
                 color: Theme.muted
                 Layout.fillWidth: true
-                elide: Text.ElideRight
+                wrapMode: Text.WordWrap
+            }
+            ActionButton {
+                objectName: "dictionaryRetryButton"
+                text: "Retry"
+                visible: pane.loadState === "failed"
+                onClicked: browser.reload()
             }
         }
         WebView {
@@ -85,11 +92,13 @@ Rectangle {
             settings.localStorageEnabled: false
             onLoadingChanged: function (request) {
                 if (request.status === WebView.LoadStartedStatus) {
-                    pane.loadState = "Loading…";
+                    pane.errorMessage = "";
+                    pane.loadState = "loading";
                 } else if (request.status === WebView.LoadSucceededStatus) {
-                    pane.loadState = "Loaded";
+                    pane.loadState = "ready";
                 } else if (request.status === WebView.LoadFailedStatus) {
-                    pane.loadState = "Page failed — try Reload";
+                    pane.errorMessage = "Couldn’t load the dictionary.";
+                    pane.loadState = "failed";
                 }
             }
         }
