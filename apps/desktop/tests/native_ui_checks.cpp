@@ -401,14 +401,17 @@ private slots:
     }
 
     void playbackOptionsPresentGroupedControlsAndReadableDetails() {
-        window->setProperty("showRecent", false);
+        chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
         session->setPaused(true);
-        QVERIFY(QMetaObject::invokeMethod(window, "openPlayerOptions", Q_ARG(QVariant, 0)));
+        chooseFile("primaryPicker", qEnvironmentVariable("NEDEN_CHECK_PRIMARY"));
+        chooseFile("secondaryPicker", qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
+        window->setProperty("showRecent", false);
+        QVERIFY(QMetaObject::invokeMethod(window, "openPlayerOptions", Q_ARG(QVariant, 1)));
         auto *dialog = window->findChild<QObject *>("playerOptionsDialog");
         auto *options = window->findChild<QObject *>("playerOptions");
         QVERIFY(dialog && options);
         QTRY_VERIFY(dialog->property("opened").toBool());
-        QVERIFY(options->setProperty("page", 1));
         session->preferences()->resetPicture();
         click("rotateRightButton");
         QCOMPARE(session->preferences()->rotation(), 90);
@@ -416,8 +419,9 @@ private slots:
         QCOMPARE(session->preferences()->rotation(), 0);
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         const auto originalSize = window->size();
-        for (const QSize size : {QSize(1280, 800), QSize(800, 600)}) {
+        for (const QSize size : {QSize(1280, 800), QSize(900, 540)}) {
             window->resize(size);
+            QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
             for (int page = 0; page < 5; ++page) {
                 QVERIFY(options->setProperty("page", page));
                 QTest::qWait(200);
@@ -428,18 +432,19 @@ private slots:
                 QVERIFY(categories->width() > 0 && categories->width() < dialogWidth);
                 if (!artifacts.isEmpty())
                     QVERIFY(window->grabWindow().save(
-                        artifacts + QString("/options-%1-%2.png").arg(size.width()).arg(page)));
+                        artifacts + QString("/options-%1-%2.png").arg(window->width()).arg(page)));
             }
+            QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+            window->setProperty("settingsPage", 1);
+            QVERIFY(QMetaObject::invokeMethod(window, "openSettings"));
+            auto *settings = window->findChild<QObject *>("settingsDialog");
+            QTRY_VERIFY(settings->property("opened").toBool());
+            QTest::qWait(200);
+            if (!artifacts.isEmpty())
+                QVERIFY(window->grabWindow().save(artifacts +
+                                                  QString("/settings-playback-%1.png").arg(window->width())));
+            QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         }
-        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
-        window->setProperty("settingsPage", 1);
-        QVERIFY(QMetaObject::invokeMethod(window, "openSettings"));
-        auto *settings = window->findChild<QObject *>("settingsDialog");
-        QTRY_VERIFY(settings->property("opened").toBool());
-        QTest::qWait(200);
-        if (!artifacts.isEmpty())
-            QVERIFY(window->grabWindow().save(artifacts + "/settings-playback.png"));
-        QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         window->resize(originalSize);
     }
 

@@ -35,3 +35,21 @@ Conversation controls use the same spacing and type tokens as the inspector. Kee
 The explanation subject uses the plugin’s compact source-card treatment: a 15 px semibold white phrase, 1.4 line height, dark inset card, and quiet replay/disclosure actions. Do not use a large accent-colored heading or an eyebrow. Show the full-subtitle disclosure only when the selected phrase differs from its full cue.
 
 The hover action belongs to the video overlay, outside the selectable text items. One passive video-level pointer handler measures the union of the entire subtitle area and button; moving between them must keep the action visible. Its position stays inside the video, and a 180 ms exit grace prevents flicker during small pointer or layout changes. Text selection retains its own pointer handling. Do not restore a narrow hover handler inside the text editor.
+
+## Playback options and settings
+
+Playback options contains five stable categories: Audio, Picture, Subtitles, Queue, and File info. Use `PlayerOptions.Page` names in menu routes rather than numeric positions. The selected category has a filled background and a persistent label; keyboard navigation uses Qt's TabBar/TabButton behavior. Reset the panel's scroll position when changing category.
+
+Keep adjustments to the current video here. Put persistent fullscreen, history and speed preferences in Settings → Playback; subtitle appearance and AI/services have their own Settings categories. Remember the most recently visited Settings category during the app session. Opening Settings must not apply unsaved service drafts or subtitle appearance previews.
+
+Use `OptionsDialog` for shared dialog chrome, with a compact trailing Done button and an accessible close control. Use `SettingsGroup` to group related rows, `SettingsRow` to align labels and controls, and `TimingControl` for delays. Rows stack their labels above controls at narrow widths. Keep content scrollable while category navigation and closing controls remain visible. Track choices use labeled pickers, including Off, rather than repeating action buttons for every available track. Primary and secondary choices each keep their own delay and file-open action.
+
+File info is a curated read-only view. Display resolution in pixels, sample rate in kHz, codec names and decoder status with explicit Unavailable values when metadata is missing. Keep raw backend objects out of the interface. `MediaDetails` owns this presentation separately from playback operations.
+
+The transport bar remains focused on frequent playback actions. The native menu bar retains the less frequent adjustments; adding settings categories does not add another row of player buttons.
+
+Design references consulted for this layout (20 October 2026):
+
+- [Apple: Settings](https://developer.apple.com/design/human-interface-guidelines/settings) separates task-specific adjustments from general, infrequently changed preferences, and recommends stable pane navigation and restoring the last pane.
+- [Apple: Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars) recommends deliberate item selection, logical grouping and menu-bar access to toolbar commands. Applied here by keeping secondary configuration out of the transport bar.
+- [Nielsen Norman Group: Tabs, Used Right](https://www.nngroup.com/articles/tabs-used-right/) recommends concise labels, clear selection, consistent behavior and a single visible row. Applied to the five playback categories and separate Settings categories.
