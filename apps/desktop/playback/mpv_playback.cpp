@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
+#include <QFileInfo>
+#include <cmath>
 
 namespace {
 constexpr auto positionProperty = std::uint64_t{1};
@@ -60,11 +62,23 @@ MpvPlayback::MpvPlayback(QObject *parent) : PlaybackEngine(parent), mpv(mpv_crea
         throw std::runtime_error("Cannot initialize playback.");
     }
 
+    seekTimer.setSingleShot(true);
+    seekTimer.setInterval(80);
+    connect(&seekTimer, &QTimer::timeout, this, [this] {
+        command({"seek", QString::number(previewTarget, 'g', 17), "absolute+keyframes"});
+    });
+
     // 2. Deliver native events to Qt's owning thread, without a polling UI timer.
     mpv_observe_property(mpv.get(), positionProperty, "time-pos", MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv.get(), durationProperty, "duration", MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv.get(), pausedProperty, "pause", MPV_FORMAT_FLAG);
     mpv_observe_property(mpv.get(), videoParametersProperty, "video-params", MPV_FORMAT_NODE);
+    for (const char *name : {"track-list", "chapter-list", "audio-device-list", "audio-device", "seekable",
+                             "video-codec", "audio-codec-name", "hwdec-current", "video-params", "audio-params"})
+        mpv_observe_property(mpv.get(), 10, name, MPV_FORMAT_NONE);
+    mpv_observe_property(mpv.get(), 11, "paused-for-cache", MPV_FORMAT_FLAG);
+    mpv_observe_property(mpv.get(), 12, "seeking", MPV_FORMAT_FLAG);
+    mpv_observe_property(mpv.get(), 13, "eof-reached", MPV_FORMAT_FLAG);
     mpv_set_wakeup_callback(
         mpv.get(),
         [](void *context) {
@@ -87,13 +101,23 @@ void MpvPlayback::command(const QStringList &arguments) {
     for (const auto &argument : bytes)
         pointers.append(argument.constData());
     pointers.append(nullptr);
-    if (mpv_command(mpv.get(), pointers.data()) < 0)
-        emit failed();
+    const int result = mpv_command_async(mpv.get(), 0, pointers.data());
+    if (result < 0)
+        emit operationFailed(QString::fromUtf8(mpv_error_string(result)));
 }
 
 void MpvPlayback::open(const QString &path, bool loop) {
 
     // 1. Clear the previous geometry and retain only the latest requested media.
+    seekTimer.stop();
+    completed = false;
+    playbackError.clear();
+    updateState("loading");
+    mediaTracks.clear();
+    mediaChapters.clear();
+    mediaInformation.clear();
+    canSeek = false;
+    emit metadataChanged();
     sourceSize = {};
     sourceParameters = {};
     emit videoGeometryChanged();
@@ -141,6 +165,10 @@ void MpvPlayback::loadPendingMedia() {
     command({"loadfile", path});
 }
 void MpvPlayback::seek(double seconds) {
+    if (!std::isfinite(seconds))
+        return;
+    seekTimer.stop();
+    completed = false;
     command({"seek", QString::number(seconds, 'g', 17), "absolute+exact"});
 }
 double MpvPlayback::snapshotPosition() const {
@@ -179,12 +207,44 @@ void MpvPlayback::drainEvents() {
             if (loadedPath == requestedPath) {
                 mpv_get_property(mpv.get(), "duration", MPV_FORMAT_DOUBLE, &durationSeconds);
                 emit durationChanged();
+                refreshMetadata();
+                updateState("ready");
                 emit loaded(loadedPath);
             }
         }
-        if (event->event_id == MPV_EVENT_END_FILE &&
-            static_cast<mpv_event_end_file *>(event->data)->error < 0)
-            emit failed();
+        if (event->event_id == MPV_EVENT_COMMAND_REPLY) {
+            if (screenshotRequests.contains(event->reply_userdata)) {
+                const auto path = screenshotRequests.take(event->reply_userdata);
+                if (event->error >= 0)
+                    emit screenshotSaved(path);
+            }
+            if (subtitleRequests.contains(event->reply_userdata)) {
+                const bool secondary = subtitleRequests.take(event->reply_userdata);
+                if (event->error >= 0) {
+                    refreshMetadata();
+                    // sub-add appends a track. Read the returned track list rather than guessing an id.
+                    for (auto entry = mediaTracks.crbegin(); entry != mediaTracks.crend(); ++entry) {
+                        const auto track = entry->toMap();
+                        if (track.value("type") == "sub" && track.value("external").toBool()) {
+                            configure(secondary ? Option::SecondarySubtitle : Option::PrimarySubtitle,
+                                      track.value("id"));
+                            break;
+                        }
+                    }
+                }
+            }
+            if (event->error < 0)
+                emit operationFailed(QString::fromUtf8(mpv_error_string(event->error)));
+        }
+        if (event->event_id == MPV_EVENT_END_FILE) {
+            const auto *ending = static_cast<mpv_event_end_file *>(event->data);
+            if (ending->error < 0) {
+                playbackError = QString("Playback failed: %1. Check the file or network connection.")
+                                    .arg(QString::fromUtf8(mpv_error_string(ending->error)));
+                updateState("error");
+                emit failed();
+            }
+        }
         if (event->event_id != MPV_EVENT_PROPERTY_CHANGE)
             continue;
 
@@ -209,8 +269,25 @@ void MpvPlayback::drainEvents() {
             emit videoGeometryChanged();
             continue;
         }
+        if (event->reply_userdata == 10) {
+            refreshMetadata();
+            continue;
+        }
         if (!property->data)
             continue;
+        if (event->reply_userdata >= 11 && event->reply_userdata <= 13) {
+            const bool active = *static_cast<int *>(property->data);
+            if (event->reply_userdata == 13 && active && !completed) {
+                completed = true;
+                updateState("finished");
+                emit finished();
+            } else if (!completed) {
+                const bool buffering = this->property("paused-for-cache").toBool();
+                const bool seeking = this->property("seeking").toBool();
+                updateState(buffering ? "buffering" : seeking ? "seeking" : "ready");
+            }
+            continue;
+        }
 
         if (event->reply_userdata == positionProperty) {
             const double value = *static_cast<double *>(property->data);
@@ -231,5 +308,134 @@ void MpvPlayback::drainEvents() {
                 emit pausedChanged();
             }
         }
+    }
+}
+
+namespace {
+QVariant nodeValue(const mpv_node &node, int depth = 0) {
+    if (depth > 8) return {};
+    switch (node.format) {
+    case MPV_FORMAT_STRING: return QString::fromUtf8(node.u.string);
+    case MPV_FORMAT_FLAG: return bool(node.u.flag);
+    case MPV_FORMAT_INT64: return QVariant::fromValue<qlonglong>(node.u.int64);
+    case MPV_FORMAT_DOUBLE: return node.u.double_;
+    case MPV_FORMAT_NODE_ARRAY: {
+        QVariantList values;
+        if (node.u.list)
+            for (int index = 0; index < qMin(node.u.list->num, 10000); ++index)
+                values.append(nodeValue(node.u.list->values[index], depth + 1));
+        return values;
+    }
+    case MPV_FORMAT_NODE_MAP: {
+        QVariantMap values;
+        if (node.u.list)
+            for (int index = 0; index < qMin(node.u.list->num, 256); ++index)
+                values.insert(QString::fromUtf8(node.u.list->keys[index]),
+                              nodeValue(node.u.list->values[index], depth + 1));
+        return values;
+    }
+    default: return {};
+    }
+}
+}
+QVariant MpvPlayback::property(const char *name) const {
+    mpv_node node{};
+    if (mpv_get_property(mpv.get(), name, MPV_FORMAT_NODE, &node) < 0) return {};
+    const auto result = nodeValue(node);
+    mpv_free_node_contents(&node);
+    return result;
+}
+void MpvPlayback::setPropertyValue(const char *name, const QVariant &value) {
+    const auto bytes = value.toString().toUtf8();
+    const int result = mpv_set_property_string(mpv.get(), name, bytes.constData());
+    if (result < 0) emit operationFailed(QString("Cannot change %1: %2")
+                                            .arg(QString::fromUtf8(name), QString::fromUtf8(mpv_error_string(result))));
+}
+void MpvPlayback::refreshMetadata() {
+    const auto previousDevices = outputDevices;
+    mediaTracks = property("track-list").toList();
+    for (auto &entry : mediaTracks) {
+        auto track = entry.toMap();
+        QStringList label;
+        label << QString::number(track.value("id").toLongLong());
+        for (const auto &field : {"lang", "title", "codec"}) {
+            const auto value = track.value(field).toString();
+            if (!value.isEmpty()) label << value;
+        }
+        if (track.value("default").toBool()) label << "Default";
+        if (track.value("forced").toBool()) label << "Forced";
+        track.insert("label", label.join(" · "));
+        entry = track;
+    }
+    mediaChapters = property("chapter-list").toList();
+    outputDevices = property("audio-device-list").toList();
+    canSeek = property("seekable").toBool();
+    mediaInformation = {{"Video codec", property("video-codec")},
+                        {"Audio codec", property("audio-codec-name")},
+                        {"Hardware decoder", property("hwdec-current")},
+                        {"Video", property("video-params")},
+                        {"Audio", property("audio-params")}};
+    if (!previousDevices.isEmpty() && outputDevices.size() < previousDevices.size())
+        emit outputDeviceRemoved();
+    emit metadataChanged();
+}
+void MpvPlayback::updateState(const QString &state) {
+    if (playbackState == state) return;
+    playbackState = state;
+    emit stateChanged();
+}
+void MpvPlayback::previewSeek(double seconds) {
+    if (!std::isfinite(seconds) || !canSeek) return;
+    previewTarget = qBound(0.0, seconds, durationSeconds);
+    if (!seekTimer.isActive()) seekTimer.start();
+}
+void MpvPlayback::configure(Option option, const QVariant &value) {
+    switch (option) {
+    case Option::AudioTrack: setPropertyValue("aid", value); break;
+    case Option::PrimarySubtitle: setPropertyValue("sid", value); break;
+    case Option::SecondarySubtitle: setPropertyValue("secondary-sid", value); break;
+    case Option::AudioDevice: setPropertyValue("audio-device", value); break;
+    case Option::AudioDelay: setPropertyValue("audio-delay", value); break;
+    case Option::PrimarySubtitleDelay: setPropertyValue("sub-delay", value); break;
+    case Option::SecondarySubtitleDelay: setPropertyValue("secondary-sub-delay", value); break;
+    case Option::SubtitleEncoding: setPropertyValue("sub-codepage", value); break;
+    case Option::Rotation: setPropertyValue("video-rotate", value); break;
+    case Option::AspectRatio: setPropertyValue("video-aspect-override", value); break;
+    case Option::Fill: setPropertyValue("panscan", value.toBool() ? 1 : 0); break;
+    case Option::Deinterlace: setPropertyValue("deinterlace", value.toBool() ? "yes" : "no"); break;
+    case Option::NightMode:
+        command(value.toBool() ? QStringList{"af", "add", "@neden-night:lavfi=[acompressor=threshold=0.125:ratio=4:attack=20:release=250:makeup=2]"}
+                               : QStringList{"af", "remove", "@neden-night"});
+        break;
+    case Option::LoopStart: setPropertyValue("ab-loop-a", value); break;
+    case Option::LoopEnd: setPropertyValue("ab-loop-b", value); break;
+    }
+}
+void MpvPlayback::execute(Command action) {
+    switch (action) {
+    case Command::FrameForward: command({"frame-step"}); break;
+    case Command::FrameBackward: command({"frame-back-step"}); break;
+    case Command::Stop: seekTimer.stop(); command({"stop"}); updateState("idle"); break;
+    }
+}
+void MpvPlayback::addSubtitle(const QString &path, bool secondary) {
+    const auto encoded = path.toUtf8();
+    const char *arguments[] = {"sub-add", encoded.constData(), "auto", nullptr};
+    const auto request = ++nextRequest;
+    subtitleRequests.insert(request, secondary);
+    const int result = mpv_command_async(mpv.get(), request, arguments);
+    if (result < 0) {
+        subtitleRequests.remove(request);
+        emit operationFailed("This subtitle track could not be loaded.");
+    }
+}
+void MpvPlayback::screenshot(const QString &path, bool subtitles) {
+    const auto encoded = path.toUtf8();
+    const char *arguments[] = {"screenshot-to-file", encoded.constData(), subtitles ? "subtitles" : "video", nullptr};
+    const auto request = ++nextRequest;
+    screenshotRequests.insert(request, path);
+    if (mpv_command_async(mpv.get(), request, arguments) < 0) {
+        screenshotRequests.remove(request);
+        emit operationFailed("The screenshot could not be saved.");
     }
 }
