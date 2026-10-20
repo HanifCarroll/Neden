@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import Neden
 
@@ -21,9 +20,8 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         spacing: Theme.space5
-        Basic.TabBar {
+        SegmentBar {
             id: categories
-            implicitWidth: 0
             objectName: "playbackCategories"
             Layout.fillWidth: true
             background: Rectangle {

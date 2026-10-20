@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import Neden
 
@@ -69,9 +68,8 @@ ColumnLayout {
     property bool controlsReady: false
     Component.onCompleted: controlsReady = true
     spacing: Theme.space5
-    Basic.TabBar {
+    SegmentBar {
         id: categories
-        implicitWidth: 0
         onCurrentIndexChanged: {
             if (pane.controlsReady && currentIndex !== 0) {
                 pane.appearance.cancelPreview();

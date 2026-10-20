@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import Neden
@@ -41,9 +40,8 @@ Rectangle {
                 onClicked: pane.dismissed()
             }
         }
-        Basic.TabBar {
+        SegmentBar {
             id: tabs
-            implicitWidth: 0
             Layout.fillWidth: true
             SegmentButton {
                 width: tabs.availableWidth / Math.max(1, tabs.count)
