@@ -84,7 +84,7 @@ Item {
                     if (entry.fileAvailable)
                         pane.session.openVideo(entry.mediaUrl);
                 }
-                ToolTip.visible: hovered
+                ToolTip.visible: hovered && !removeButton.hovered && !locateButton.hovered
                 ToolTip.delay: 800
                 ToolTip.text: entry.fileAvailable ? entry.filePath : "Video unavailable. Reconnect its drive or remove it from this list."
                 background: Rectangle {
@@ -115,11 +115,13 @@ Item {
                         font.pixelSize: Theme.caption
                     }
                     ActionButton {
+                        id: locateButton
                         text: "Locate…"
                         visible: !entry.fileAvailable
                         onClicked: pane.locateVideo(entry.mediaUrl)
                     }
                     ActionButton {
+                        id: removeButton
                         objectName: "removeRecentButton"
                         text: "Remove"
                         flat: true
