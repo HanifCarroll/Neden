@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import Neden
 
@@ -65,23 +66,28 @@ ColumnLayout {
         return pane.appearance.preview(values);
     }
     property alias page: categories.currentIndex
+    property bool controlsReady: false
+    Component.onCompleted: controlsReady = true
     spacing: Theme.space5
-    TabBar {
+    Basic.TabBar {
         id: categories
         onCurrentIndexChanged: {
-            if (currentIndex !== 0) {
+            if (pane.controlsReady && currentIndex !== 0) {
                 pane.appearance.cancelPreview();
                 pane.restoreAppearanceControls();
             }
         }
         Layout.fillWidth: true
         SegmentButton {
+            width: categories.availableWidth / categories.count
             text: "Subtitles"
         }
         SegmentButton {
+            width: categories.availableWidth / categories.count
             text: "Playback"
         }
         SegmentButton {
+            width: categories.availableWidth / categories.count
             text: "Services"
         }
     }

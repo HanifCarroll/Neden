@@ -13,7 +13,7 @@ Dialog {
         radius: Theme.panelRadius
     }
     header: Item {
-        implicitHeight: 72
+        implicitHeight: Theme.space6 * 2
         Label {
             anchors.left: parent.left
             anchors.leftMargin: Theme.space5
@@ -33,7 +33,7 @@ Dialog {
         }
     }
     footer: Item {
-        implicitHeight: Theme.controlHeight + Theme.space5 * 2
+        implicitHeight: Theme.controlHeight + Theme.space4 * 2
         Rectangle {
             width: parent.width
             height: 1

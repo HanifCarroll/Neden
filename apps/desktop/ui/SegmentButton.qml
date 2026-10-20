@@ -1,8 +1,8 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import Neden
 
-TabButton {
+Basic.TabButton {
     id: control
     implicitHeight: Theme.controlHeight
     font.pixelSize: Theme.body

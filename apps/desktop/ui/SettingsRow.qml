@@ -4,18 +4,19 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Neden
 
-GridLayout {
+Item {
     id: row
     required property string title
     property string description: ""
     default property alias controls: controlRow.data
-    columns: width < 430 ? 1 : 2
-    columnSpacing: Theme.space5
-    rowSpacing: Theme.space2
+    readonly property bool stacked: width < 430
+    implicitHeight: stacked ? labels.implicitHeight + Theme.space2 + controlRow.implicitHeight : Math.max(labels.implicitHeight, controlRow.implicitHeight)
     Layout.fillWidth: true
+    Layout.minimumWidth: 0
     ColumnLayout {
-        Layout.preferredWidth: row.columns === 2 ? 150 : -1
-        Layout.fillWidth: row.columns === 1
+        id: labels
+        width: row.stacked ? row.width : 150
+        y: row.stacked ? 0 : (row.height - implicitHeight) / 2
         spacing: Theme.space1
         Label {
             text: row.title
@@ -35,7 +36,9 @@ GridLayout {
     }
     RowLayout {
         id: controlRow
-        Layout.fillWidth: true
+        x: row.stacked ? 0 : labels.width + Theme.space5
+        y: row.stacked ? labels.implicitHeight + Theme.space2 : (row.height - implicitHeight) / 2
+        width: row.width - x
         spacing: Theme.space2
     }
 }
