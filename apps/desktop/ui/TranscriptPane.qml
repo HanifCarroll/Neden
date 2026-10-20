@@ -75,33 +75,24 @@ Item {
                 }
             }
         }
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.leftMargin: Theme.space4
             Layout.rightMargin: Theme.space4
-            Layout.bottomMargin: Theme.space3
-            spacing: Theme.space2
-            ActionButton {
-                objectName: "loadPrimarySubtitlesButton"
-                text: "Primary…"
+            Layout.bottomMargin: Theme.space2
+            spacing: 0
+            SubtitleTrackPicker {
                 Layout.fillWidth: true
-                enabled: pane.session.hasMedia
-                onClicked: pane.primaryRequested()
-                Accessible.name: "Load primary subtitles"
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
-                ToolTip.text: pane.session.sourceSubtitleName.length ? "Replace primary subtitles: " + pane.session.sourceSubtitleName : "Load primary subtitles"
+                session: pane.session
+                onFileRequested: pane.primaryRequested()
+                onFinished: pane.forceActiveFocus()
             }
-            ActionButton {
-                objectName: "loadSecondarySubtitlesButton"
-                text: "Secondary…"
+            SubtitleTrackPicker {
                 Layout.fillWidth: true
-                enabled: pane.session.hasMedia
-                onClicked: pane.secondaryRequested()
-                Accessible.name: "Load secondary subtitles"
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
-                ToolTip.text: pane.session.translationSubtitleName.length ? "Replace secondary subtitles: " + pane.session.translationSubtitleName : "Load secondary subtitles"
+                session: pane.session
+                secondary: true
+                onFileRequested: pane.secondaryRequested()
+                onFinished: pane.forceActiveFocus()
             }
         }
         ColumnLayout {
@@ -126,52 +117,6 @@ Item {
                 currentIndex: pane.session.cueModel.searchLanguage === CueModel.Turkish ? 0 : 1
                 onActivated: pane.session.cueModel.searchLanguage = currentIndex === 0 ? CueModel.Turkish : CueModel.Unicode
                 Accessible.name: "Transcript search language"
-            }
-        }
-        RowLayout {
-            visible: pane.session.subtitleTracks.length > 0
-            Layout.fillWidth: true
-            Layout.leftMargin: Theme.space4
-            Layout.rightMargin: Theme.space4
-            Layout.bottomMargin: Theme.space3
-            Repeater {
-                model: [false, true]
-                delegate: ChoiceBox {
-                    id: trackChoice
-                    required property bool modelData
-                    objectName: modelData ? "secondaryTrackChoice" : "primaryTrackChoice"
-                    Layout.fillWidth: true
-                    textRole: "name"
-                    model: {
-                        const tracks = [
-                            {
-                                name: "None",
-                                path: "",
-                                primary: !pane.session.sourceSubtitleName.length,
-                                secondary: !pane.session.translationSubtitleName.length
-                            }
-                        ];
-                        for (let index = 0; index < pane.session.subtitleTracks.length; ++index)
-                            tracks.push(pane.session.subtitleTracks[index]);
-                        return tracks;
-                    }
-                    currentIndex: {
-                        for (let i = 0; i < count; ++i) {
-                            const track = model[i];
-                            if (modelData ? track.secondary : track.primary)
-                                return i;
-                        }
-                        return 0;
-                    }
-                    Accessible.name: modelData ? "Secondary track" : "Primary track"
-                    onActivated: {
-                        if (currentIndex === 0)
-                            pane.session.clearTrack(modelData);
-                        else
-                            pane.session.chooseTrack(model[currentIndex].path, modelData);
-                        pane.forceActiveFocus();
-                    }
-                }
             }
         }
         Rectangle {

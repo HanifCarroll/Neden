@@ -1,5 +1,6 @@
 #include "subtitle_appearance.h"
 #include "fullscreen_controller.h"
+#include <QScopeGuard>
 #include "learning_session.h"
 #include "mpv_playback.h"
 #include "recent_videos.h"
@@ -141,6 +142,17 @@ private:
         qInfo("Completed file picker: %s", pickerName);
     }
 
+    void chooseSubtitleFile(bool secondary, const QString &path) {
+        const QString choiceName = secondary ? "secondaryTrackChoice" : "primaryTrackChoice";
+        click(choiceName.toUtf8().constData());
+        auto *choice = visualItem(window->contentItem(), choiceName);
+        QVERIFY(choice);
+        const QString loadOption = choiceName + "Option" +
+                                   QString::number(choice->property("count").toInt() - 1);
+        chooseFile(secondary ? "secondaryPicker" : "primaryPicker", path,
+                   loadOption.toUtf8().constData());
+    }
+
 private slots:
     void init() {
         const QStringList headlessChecks{"explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
@@ -183,10 +195,8 @@ private slots:
         chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
         QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
         session->setPaused(true);
-        chooseFile("primaryPicker", qEnvironmentVariable("NEDEN_CHECK_PRIMARY"),
-                   "loadPrimarySubtitlesButton");
-        chooseFile("secondaryPicker", qEnvironmentVariable("NEDEN_CHECK_SECONDARY"),
-                   "loadSecondarySubtitlesButton");
+        chooseSubtitleFile(false, qEnvironmentVariable("NEDEN_CHECK_PRIMARY"));
+        chooseSubtitleFile(true, qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
         QVERIFY(!session->cueModel()->entries().isEmpty());
         QVERIFY(session->translationCueCount() > 0);
 
@@ -546,8 +556,8 @@ private slots:
         auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
         auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
         QVERIFY(primary && secondary);
-        QCOMPARE(primary->property("count").toInt(), session->subtitleTracks().size() + 1);
-        QCOMPARE(secondary->property("count").toInt(), session->subtitleTracks().size() + 1);
+        QCOMPARE(primary->property("count").toInt(), session->subtitleTracks().size() + 2);
+        QCOMPARE(secondary->property("count").toInt(), session->subtitleTracks().size() + 2);
         QCOMPARE(primary->property("currentText").toString(), session->sourceSubtitleName());
         QCOMPARE(secondary->property("currentText").toString(), session->translationSubtitleName());
 
@@ -564,6 +574,49 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         QTRY_VERIFY(!settings->property("opened").toBool());
         QCOMPARE(appearance->primarySize(), savedSize);
+    }
+
+    void fullscreenShortcutsChooseTheirModeWithoutChangingThePreference() {
+        chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
+        QTRY_VERIFY(session->duration() > 0);
+        session->setPaused(true);
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 1);
+        const bool originalPreference = fullscreen->nativeMode();
+        const auto restorePreference = qScopeGuard([&] {
+            fullscreen->setActive(false);
+            fullscreen->setNativeMode(originalPreference);
+        });
+        fullscreen->setNativeMode(true);
+        window->contentItem()->forceActiveFocus();
+        auto *shortcuts = window->findChild<QObject *>("playerShortcuts");
+        QVERIFY(shortcuts);
+        QTRY_VERIFY(shortcuts->property("playbackKeysEnabled").toBool());
+        QTest::keyClick(window, Qt::Key_F);
+        QTRY_VERIFY(fullscreen->active());
+#ifdef Q_OS_MACOS
+        QVERIFY(window->visibility() != QWindow::FullScreen);
+        QVERIFY(fullscreen->nativeMode());
+#endif
+        QTest::keyClick(window, Qt::Key_F);
+        QTRY_VERIFY(!fullscreen->active());
+
+        fullscreen->setNativeMode(false);
+        fullscreen->toggleNative();
+        QTRY_VERIFY_WITH_TIMEOUT(fullscreen->active(), 10000);
+        QTRY_COMPARE(window->visibility(), QWindow::FullScreen);
+        QVERIFY(!fullscreen->nativeMode());
+        fullscreen->toggleNative();
+        QTRY_VERIFY_WITH_TIMEOUT(!fullscreen->active(), 10000);
+        QVERIFY(session->paused());
+
+        click("transcriptSearchButton");
+        auto *search = visualItem(window->contentItem(), "transcriptSearchField");
+        QVERIFY(search && search->hasActiveFocus());
+        QTest::keyClick(window, Qt::Key_F);
+        QCOMPARE(search->property("text").toString(), QString("f"));
+        QVERIFY(!fullscreen->active());
+        click("transcriptSearchButton");
     }
 
     void doubleClickVideoTogglesFullscreenWithoutChangingPlayback() {
