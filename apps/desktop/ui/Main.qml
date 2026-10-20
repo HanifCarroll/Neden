@@ -416,9 +416,8 @@ ApplicationWindow {
                 onTriggered: root.showRecent = true
             }
             Action {
-                text: Qt.platform.os === "osx" ? "macOS fullscreen" : "Fullscreen"
-                shortcut: "Ctrl+Meta+F"
-                onTriggered: root.fullscreenController.toggleNative()
+                text: "Instant fullscreen"
+                onTriggered: root.fullscreenController.toggleInstant()
             }
             MenuSeparator {}
             Action {

@@ -7,11 +7,11 @@
 @property(nonatomic, assign) FullscreenController *controller;
 - (void)toggleFullScreen:(id)sender;
 - (void)openSettings:(id)sender;
-- (void)toggleNativeFullScreen:(id)sender;
+- (void)togglePreferredFullScreen:(id)sender;
 @end
 
 @implementation NedenFullscreenTarget
-- (void)toggleNativeFullScreen:(id)sender {
+- (void)toggleFullScreen:(id)sender {
     Q_UNUSED(sender);
     if (self.controller)
         self.controller->toggleNative();
@@ -21,7 +21,7 @@
     if (self.controller)
         emit self.controller->settingsRequested();
 }
-- (void)toggleFullScreen:(id)sender {
+- (void)togglePreferredFullScreen:(id)sender {
     Q_UNUSED(sender);
     if (self.controller)
         self.controller->toggle();
@@ -38,6 +38,7 @@ struct FullscreenController::NativeState {
     NSMenuItem *viewMenuItem = nil;
     bool ownsViewMenu = false;
     NSMenuItem *fullscreenMenuItem = nil;
+    id fullscreenKeyMonitor = nil;
     NSMutableArray *observers = [NSMutableArray new];
 };
 
@@ -58,6 +59,8 @@ void FullscreenController::setNativeMode(bool enabled) {
 }
 
 FullscreenController::~FullscreenController() {
+    if (native->fullscreenKeyMonitor)
+        [NSEvent removeMonitor:native->fullscreenKeyMonitor];
     [native->settingsMenuItem.menu removeItem:native->settingsMenuItem];
     [native->fullscreenMenuItem.menu removeItem:native->fullscreenMenuItem];
     if (native->ownsViewMenu)
@@ -96,11 +99,33 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
     }
     NSMenu *viewMenu = native->viewMenuItem.submenu;
     native->fullscreenMenuItem = [[NSMenuItem alloc] initWithTitle:@"Enter Full Screen"
-                                                            action:@selector(toggleNativeFullScreen:)
+                                                            action:@selector(toggleFullScreen:)
                                                      keyEquivalent:@"f"];
-    native->fullscreenMenuItem.keyEquivalentModifierMask = NSEventModifierFlagFunction;
+    native->fullscreenMenuItem.keyEquivalentModifierMask =
+        NSEventModifierFlagControl | NSEventModifierFlagCommand;
     native->fullscreenMenuItem.target = native->target;
     [viewMenu addItem:native->fullscreenMenuItem];
+
+    // AppKit reserves Fn menu equivalents for system items. Handle the physical
+    // Fn-F event locally before Qt can interpret it as an unmodified F.
+    native->fullscreenKeyMonitor = [NSEvent
+        addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+        handler:^NSEvent *(NSEvent *event) {
+            if (!window)
+                return event;
+            const auto otherModifiers = NSEventModifierFlagCommand | NSEventModifierFlagControl |
+                                        NSEventModifierFlagOption | NSEventModifierFlagShift;
+            NSView *contentView = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+            if (contentView.window.isKeyWindow &&
+                (event.modifierFlags & NSEventModifierFlagFunction) &&
+                !(event.modifierFlags & otherModifiers) &&
+                [event.charactersIgnoringModifiers.lowercaseString isEqualToString:@"f"]) {
+                if (!event.isARepeat)
+                    toggleNative();
+                return nil;
+            }
+            return event;
+        }];
 
     native->settingsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Settings…"
                                                           action:@selector(openSettings:)
@@ -172,7 +197,7 @@ void FullscreenController::bindZoomButton() {
     }
 
     native->zoomButton.target = native->target;
-    native->zoomButton.action = @selector(toggleFullScreen:);
+    native->zoomButton.action = @selector(togglePreferredFullScreen:);
 }
 
 void FullscreenController::toggle() {

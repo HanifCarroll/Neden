@@ -38,7 +38,14 @@ RowLayout {
             tracks.push({name: "Load subtitle file…", path: ""});
             return tracks;
         }
-        currentIndex: selectedTrackIndex
+        function syncSelection() {
+            currentIndex = selectedTrackIndex;
+        }
+        // ComboBox resets its index when a new track model arrives. Reconcile
+        // after that reset, even when the selected primary track stayed the same.
+        onModelChanged: Qt.callLater(syncSelection)
+        onSelectedTrackIndexChanged: Qt.callLater(syncSelection)
+        Component.onCompleted: syncSelection()
         displayText: selectedTrackIndex === 0 ? "Add subtitles…" : textAt(selectedTrackIndex)
         Accessible.name: (picker.secondary ? "Secondary subtitles: " : "Primary subtitles: ") + currentText
         ToolTip.visible: hovered && selectedTrackIndex > 0 && !popup.visible
@@ -58,7 +65,7 @@ RowLayout {
             else
                 picker.session.chooseTrack(model[index].path, picker.secondary);
             // File selection may be cancelled. Always display the active track.
-            currentIndex = Qt.binding(function() { return choice.selectedTrackIndex; });
+            syncSelection();
             picker.finished();
         }
     }

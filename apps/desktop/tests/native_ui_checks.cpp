@@ -498,8 +498,11 @@ private slots:
             window->resize(size);
             QTest::qWait(80);
             for (const auto &name : {"primaryTrackChoice", "secondaryTrackChoice"}) {
-                click(name);
                 auto *choice = visualItem(window->contentItem(), name);
+                QVERIFY(choice);
+                QTRY_COMPARE(choice->property("currentIndex").toInt(),
+                             choice->property("selectedTrackIndex").toInt());
+                click(name);
                 auto *popup = choice->property("popup").value<QObject *>();
                 QVERIFY(popup);
                 QTRY_VERIFY(popup->property("visible").toBool());
