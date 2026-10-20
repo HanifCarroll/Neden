@@ -20,8 +20,18 @@ bool validPath(const QString &path) {
            QFileInfo(path).isAbsolute();
 }
 
+bool validTrackId(const QString &id) {
+    if (id.isEmpty())
+        return true;
+    bool valid = false;
+    const auto number = id.toLongLong(&valid);
+    return valid && number >= 0 && QString::number(number) == id;
+}
 bool validVideo(const RecentVideo &video) {
-    return validPath(video.path) && std::isfinite(video.position) && video.position >= 0 &&
+    return std::isfinite(video.primaryDelay) && std::abs(video.primaryDelay) <= 600 &&
+           std::isfinite(video.secondaryDelay) && std::abs(video.secondaryDelay) <= 600 &&
+           validTrackId(video.primaryNativeTrack) && validTrackId(video.secondaryNativeTrack) &&
+           validPath(video.path) && std::isfinite(video.position) && video.position >= 0 &&
            std::isfinite(video.duration) && video.duration >= 0 &&
            (video.primarySubtitlePath.isEmpty() || validPath(video.primarySubtitlePath)) &&
            (video.secondarySubtitlePath.isEmpty() || validPath(video.secondarySubtitlePath));
@@ -236,23 +246,37 @@ void RecentVideos::remove(const QUrl &url) {
 }
 
 void RecentVideos::clear() {
-    if (!persist({})) return;
+    if (!persist({}))
+        return;
     const auto previous = videos;
-    beginResetModel(); videos.clear(); endResetModel(); emit countChanged();
-    for (const auto &video : previous) emit removed(video.path);
+    beginResetModel();
+    videos.clear();
+    endResetModel();
+    emit countChanged();
+    for (const auto &video : previous)
+        emit removed(video.path);
 }
 bool RecentVideos::relocate(const QUrl &oldUrl, const QUrl &newUrl) {
-    if (!oldUrl.isLocalFile() || !newUrl.isLocalFile() || !QFileInfo(newUrl.toLocalFile()).isFile()) return false;
+    if (!oldUrl.isLocalFile() || !newUrl.isLocalFile() || !QFileInfo(newUrl.toLocalFile()).isFile())
+        return false;
     auto saved = find(oldUrl.toLocalFile());
-    if (!saved) return false;
+    if (!saved)
+        return false;
     const auto oldPath = saved->path;
     saved->path = mediaPathIdentity(newUrl.toLocalFile());
     auto next = videos;
-    next.erase(std::remove_if(next.begin(), next.end(), [&](const RecentVideo &video) {
-        return video.path == oldPath || video.path == saved->path;
-    }), next.end());
+    next.erase(std::remove_if(next.begin(), next.end(),
+                              [&](const RecentVideo &video) {
+                                  return video.path == oldPath || video.path == saved->path;
+                              }),
+               next.end());
     next.prepend(*saved);
-    if (!persist(next)) return false;
-    beginResetModel(); videos = next; endResetModel(); emit countChanged(); emit removed(oldPath);
+    if (!persist(next))
+        return false;
+    beginResetModel();
+    videos = next;
+    endResetModel();
+    emit countChanged();
+    emit removed(oldPath);
     return true;
 }

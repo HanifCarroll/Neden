@@ -48,7 +48,14 @@ private:
     bool completed = false;
     quint64 nextRequest = 100;
     QHash<quint64, QString> screenshotRequests;
-    QHash<quint64, bool> subtitleRequests;
+    struct SubtitleRequest {
+        QString path;
+        bool secondary;
+        quint64 generation;
+    };
+    QHash<quint64, SubtitleRequest> subtitleRequests;
+    quint64 primarySubtitleGeneration = 0;
+    quint64 secondarySubtitleGeneration = 0;
 
     void loadPendingMedia();
     struct HandleDeleter {

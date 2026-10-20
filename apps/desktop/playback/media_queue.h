@@ -35,6 +35,7 @@ public:
 signals:
     void changed();
     void openRequested(QUrl url);
+
 private:
     QList<QUrl> files;
     int selectedIndex = -1;

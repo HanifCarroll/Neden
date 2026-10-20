@@ -21,9 +21,23 @@ public:
     virtual void volume(double value) = 0;
 
     // Optional operations default to no-op for lightweight test engines.
-    enum class Option { AudioTrack, PrimarySubtitle, SecondarySubtitle, AudioDevice, AudioDelay,
-                        PrimarySubtitleDelay, SecondarySubtitleDelay, SubtitleEncoding,
-                        Rotation, AspectRatio, Fill, Deinterlace, NightMode, LoopStart, LoopEnd };
+    enum class Option {
+        AudioTrack,
+        PrimarySubtitle,
+        SecondarySubtitle,
+        AudioDevice,
+        AudioDelay,
+        PrimarySubtitleDelay,
+        SecondarySubtitleDelay,
+        SubtitleEncoding,
+        Rotation,
+        AspectRatio,
+        Fill,
+        Deinterlace,
+        NightMode,
+        LoopStart,
+        LoopEnd
+    };
     enum class Command { FrameForward, FrameBackward, Stop };
     virtual void configure(Option, const QVariant &) {}
     virtual void execute(Command) {}
@@ -37,6 +51,7 @@ public:
     QString state() const { return playbackState; }
     QString error() const { return playbackError; }
     bool seekable() const { return canSeek; }
+    bool supportsIndependentNativeSubtitleTiming() const { return independentNativeSubtitleTiming; }
 
 signals:
     void positionChanged();
@@ -51,12 +66,12 @@ signals:
     void operationFailed(QString message);
     void screenshotSaved(QString path);
 
-
 protected:
     QVariantList mediaTracks, mediaChapters, outputDevices;
     QVariantMap mediaInformation;
     QString playbackState = "idle", playbackError;
     bool canSeek = false;
+    bool independentNativeSubtitleTiming = false;
     double positionSeconds = 0;
     double durationSeconds = 0;
     bool isPaused = true;

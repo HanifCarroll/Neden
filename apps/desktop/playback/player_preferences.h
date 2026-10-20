@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE void clearMedia();
 signals:
     void changed();
+
 private:
     QVariant read(const QString &key, const QVariant &fallback = {}) const;
     void write(const QString &key, const QVariant &value);
