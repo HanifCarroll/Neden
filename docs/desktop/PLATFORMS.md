@@ -7,3 +7,5 @@ Linux has a source-build recipe at `scripts/build_linux_runtime.sh` and an expli
 Windows has no reviewed playback runtime configuration or credential-store adapter. The full player build deliberately fails rather than selecting an arbitrary mpv binary. Portable core tests can be built using `NEDEN_CORE_ONLY=ON` on a compatible Qt toolchain.
 
 Before claiming Windows or Linux support, verify a reviewed runtime and distributable package, hardware decoding and software fallback, actual visible playback, dual Turkish/English subtitles, Turkish search, dictionary navigation and cleanup, explanation streaming/cancellation with mock credentials, settings shortcuts, fullscreen and focus, and local card persistence. Containers can validate builds and pure logic; they cannot establish representative GPU, display, or fullscreen performance.
+
+Platform media adapters now exist for macOS MediaPlayer/IOKit, Linux MPRIS/desktop portal, and Windows SMTC. Their presence does not establish release support: consult the [feature validation ledger](PLAYER_FEATURES.md), particularly native subtitle timing and untested platform/hardware cases.

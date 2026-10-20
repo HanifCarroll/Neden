@@ -28,7 +28,9 @@ Settings → Services uses a single Save settings action for the complete draft;
 
 The Meaning tab supports follow-up questions, Stop, Retry, and replay of the explained cue. Saved flashcards and replay always use the original explained cue and its timestamp, even after you seek elsewhere. Enter sends a question; Shift–Enter adds a line. See [plugin behavior parity](PLUGIN_PARITY.md) for context ownership, optional word meanings, provider settings, and appearance previews.
 
-Local history and study data live under `~/Library/Application Support/Neden Qt Lab/` to retain the existing data location. `recent-videos.json` version 2 contains video paths, positions, durations, and optional primary/secondary subtitle file paths; no subtitle contents, language presets, model output, or credentials. Existing version 1 history remains readable. OpenSubtitles downloads are saved as bounded, content-addressed SRT files under `subtitles/` in the same application-support directory, so resuming uses the saved file without another download. Malformed history is preserved and reported instead of being overwritten.
+Local history and study data live under `~/Library/Application Support/Neden Qt Lab/` to retain the existing data location. `recent-videos.json` version 3 contains video paths, positions, durations, optional primary/secondary subtitle file paths, native track IDs and timing offsets; no subtitle contents, language presets, model output, or credentials. Existing version 1 and 2 history remains readable. OpenSubtitles downloads are saved as bounded, content-addressed SRT files under `subtitles/` in the same application-support directory, so resuming uses the saved file without another download. Malformed history is preserved and reported instead of being overwritten.
+
+See [media player features and runtime limits](PLAYER_FEATURES.md) for queue, audio/picture controls, native subtitle formats, screenshots, timeline previews and platform integration.
 
 ## Isolated native checks
 
@@ -39,6 +41,17 @@ Exercise Open, both subtitle pickers and simultaneous text, seeking, Close/Quit,
 In a separate build directory such as `build/desktop-ui`, the opt-in `NEDEN_NATIVE_UI_CHECKS=ON` CMake target, `NedenNativeChecks`, exercises the real QML window and libmpv on a visible Mac display. Supply `NEDEN_CHECK_VIDEO`, `NEDEN_CHECK_PRIMARY`, and `NEDEN_CHECK_SECONDARY` as absolute paths to local media/SRT files. It uses a temporary profile and no saved credentials. It also checks the bundled HTTPS backend against an unauthenticated API endpoint (no paid request), and uses a local synthetic streaming server to exercise word selection and explanation rendering. To avoid requiring Accessibility privileges, these checks use Qt's file-picker implementation and deliver its selected-file signal; they do not automate Apple's native Open panel. They verify that both subtitle text items are visible, Settings opens, a window/services restart restores the precise position and both chosen subtitle tracks in their original roles, and removing a playing entry remains effective after another restart. Keep these interaction checks on the MacBook Pro when the Air is in use.
 
 Keep the normal install/build directory configured with native UI checks disabled. The installer enforces this so Qt's lint tooling does not combine the same QML URI from two executables. Build the opt-in runner separately when needed.
+
+The optional paused native-subtitle regression uses a static 12-second video with two ASS tracks. Generate it with a development FFmpeg executable (not the bundled playback library):
+
+```sh
+ffmpeg -f lavfi -i 'color=c=black:s=640x360:r=24:d=12' \
+  -i apps/desktop/tests/fixtures/paused-track.ass \
+  -map 0:v -map 1:s -map 1:s -c:v mpeg4 -c:s ass \
+  -disposition:s 0 /tmp/neden-paused-ass.mkv
+```
+
+Set `NEDEN_CHECK_ASS_VIDEO=/tmp/neden-paused-ass.mkv` when running `NedenNativeChecks`. The regression selects subtitle ID 2 while paused at two seconds and requires the current cue and changed video pixels without a test-issued seek, pause-state change, or position drift. It skips explicitly when the fixture is not supplied.
 
 ### Off-screen subtitle interaction checks
 

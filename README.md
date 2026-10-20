@@ -2,7 +2,7 @@
 
 Language learning while watching local video, with selectable subtitles, contextual explanations, and dictionary lookup.
 
-- `apps/desktop/` — Qt Quick desktop player: two independent SRT subtitle tracks, recent videos with precise resume, Turkish-aware transcript search, sentence replay, dictionary WebView, streamed AI explanations/translations, study cards, subtitle downloads, and settings.
+- `apps/desktop/` — Qt Quick desktop player: two independent text subtitle tracks, native tracks, a media queue, audio/picture controls, recent videos with precise resume, Turkish-aware transcript search, sentence replay, dictionary WebView, streamed AI explanations/translations, study cards, subtitle downloads, and settings.
 - `apps/iina-plugin/` — existing macOS IINA integration, with its own [usage guide](apps/iina-plugin/README.md).
 - `shared/` — shared assets and their required notices.
 - `docs/` — current architecture, platform limits, dependency notes, and plugin specification.
@@ -12,7 +12,7 @@ The [development guide](docs/development.md) covers runtime boundaries, credenti
 
 ## Desktop development
 
-Use Qt 6.8 or newer with Quick, Quick Controls 2, Qml, Network, OpenGL, WebView, and Test; CMake 3.21 or newer; Python 3.12 or newer; a C++17 compiler; and libmpv development headers. The current Mac build uses Qt 6.12. macOS builds also require command-line developer tools and the existing Apple Development signing identity.
+Use Qt 6.9 or newer with Quick, Quick Controls 2, Qml, Network, OpenGL, WebView, and Test; CMake 3.21 or newer; Python 3.12 or newer; a C++17 compiler; and libmpv development headers. The current Mac build uses Qt 6.12. macOS builds also require command-line developer tools and the existing Apple Development signing identity.
 
 To update the installed Mac app after source changes:
 
