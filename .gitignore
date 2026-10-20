@@ -15,5 +15,6 @@ coverage/
 build/
 .tmp/
 .cache/
+**/.qmlls.ini
 __pycache__/
 .pytest_cache/

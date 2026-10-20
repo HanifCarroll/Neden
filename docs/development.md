@@ -6,9 +6,13 @@
 
 The desktop app retains its existing native Keychain adapter and signing identity. Its normal local delivery path is `bun run install:desktop`, which runs tests and QML lint, packages the app, gracefully quits the installed copy to save position, replaces it with rollback on failure, and launches it. Build-only work does not update `/Applications/Neden.app`. Deferred installation means leaving the installed bundle and running app untouched; `--no-launch` still quits and replaces it. The [installation guide](desktop/INSTALLATION.md) covers the stable bundle identity, subtitle/history restoration, and isolated native checks. The desktop installer does not change the user's IINA installation.
 
-## C++ editor support
+## Desktop editor support
 
 The desktop CMake configuration exports `build/desktop/compile_commands.json`. The root `.clangd` points Zed and other clangd clients at that database so they use the same Qt/mpv include paths, generated headers, and compiler flags as the app. Run `bun run build:desktop` after a fresh checkout or build configuration change. If an already-open editor retains old diagnostics, run Zed's **Restart Language Server** action. Do not add machine-specific include paths to editor settings.
+
+The desktop build also asks Qt to generate `apps/desktop/.qmlls.ini`, pointing the QML language server at the same `build/desktop` directory. Its generated module metadata identifies the `Theme` singleton and the C++ types exposed to QML. Without that metadata, the editor reports missing properties and imports even when the app builds correctly. The configuration contains local absolute paths, so Git ignores it. Use the QML language server from the Qt installation used to build the app, and restart it after the first build or changes to its project configuration. Qt 6.10+ can discover build metadata automatically in some setups; the explicit generated configuration also supports our nested source/build layout and Qt 6.9.
+
+Shared controls explicitly import `Neden` to resolve the packaged theme. The source-only `ui/qmldir` also declares `Theme` as a singleton for the editor's implicit directory import; keep that declaration consistent with `QT_QML_SINGLETON_TYPE` in CMake. CMake generates the packaged module manifest separately.
 
 ## Desktop C++ conventions
 
