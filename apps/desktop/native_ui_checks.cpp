@@ -129,7 +129,8 @@ private slots:
     void init() {
         const QStringList headlessChecks{"explainHoverCoversBothTracksAndThePathToTheButton",
             "explanationPhraseUsesThePluginCardStyle", "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
-            "singleClickShowsContextualWordCardWithoutChangingTheSidebar", "videoAndSidebarReachTheTopWithoutATitleStrip"};
+            "singleClickShowsContextualWordCardWithoutChangingTheSidebar", "videoAndSidebarReachTheTopWithoutATitleStrip",
+            "trackDropdownsDisplayTheirNamedRolesAndReadableSelection"};
         if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")
             && !headlessChecks.contains(QString::fromUtf8(QTest::currentTestFunction()))) {
             QSKIP("This check needs the real player and a visible native display.");
@@ -318,6 +319,66 @@ private slots:
         QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
         session->setPaused(true);
         session->checkpoint();
+    }
+
+    void trackDropdownsDisplayTheirNamedRolesAndReadableSelection() {
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorTab", 0);
+        window->setProperty("transcriptOpen", true);
+        const QStringList names{"046 - Leyla ile Mecnun 46. Bölüm.tr.srt", "046 - Leyla ile Mecnun 46. Bölüm.en.srt"};
+        for (int i = 0; i < names.size(); ++i) {
+            QFile file(profile.filePath(names[i]));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("1\n00:00:00,000 --> 02:00:00,000\nSubtitle\n");
+            file.close();
+            if (i == 0) session->openSubtitles(QUrl::fromLocalFile(file.fileName()));
+            else session->openTranslation(QUrl::fromLocalFile(file.fileName()));
+        }
+        const auto originalSize = window->size();
+        for (const QSize size : {QSize(900, 540), QSize(1280, 756)}) {
+            window->resize(size);
+            QTest::qWait(80);
+            for (const auto &name : {"primaryTrackChoice", "secondaryTrackChoice"}) {
+                click(name);
+                auto *choice = visualItem(window->contentItem(), name);
+                auto *popup = choice->property("popup").value<QObject *>();
+                QVERIFY(popup);
+                QTRY_VERIFY(popup->property("visible").toBool());
+                for (int index = 0; index < choice->property("count").toInt(); ++index) {
+                    const auto rowName = QString::fromUtf8(name) + "Option" + QString::number(index);
+                    QTRY_VERIFY(visualItem(window->contentItem(), rowName));
+                    auto *row = visualItem(window->contentItem(), rowName);
+                    auto *label = row->property("contentItem").value<QQuickItem *>();
+                    QVERIFY(label);
+                    QString expected;
+                    QVERIFY(QMetaObject::invokeMethod(choice, "textAt", Q_RETURN_ARG(QString, expected), Q_ARG(int, index)));
+                    QVERIFY(!expected.isEmpty());
+                    QCOMPARE(label->property("text").toString(), expected);
+                    QVERIFY(label->height() >= label->property("implicitHeight").toDouble() - 1);
+                    QCOMPARE(label->property("color").value<QColor>(), row->property("highlighted").toBool()
+                        ? QColor("#10151b") : QColor("#e6eaf2"));
+                    if (index > 0) QCOMPARE(label->property("elide").toInt(), int(Qt::ElideNone));
+                }
+                auto *view = popup->property("contentItem").value<QQuickItem *>();
+                QVERIFY(view);
+                const auto bounds = view->mapRectToScene(view->boundingRect());
+                QVERIFY(bounds.left() >= 0 && bounds.right() <= window->width());
+                const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+                if (!artifacts.isEmpty()) QVERIFY(window->grabWindow().save(artifacts + "/" + name + "-" + QString::number(size.width()) + ".png"));
+                QVERIFY(QMetaObject::invokeMethod(popup, "close"));
+            }
+        }
+        // Ordinary string models (including playback speed) still show their labels.
+        click("speedChoice");
+        auto *speed = visualItem(window->contentItem(), "speedChoice");
+        auto *option = visualItem(window->contentItem(), "speedChoiceOption1");
+        QVERIFY(option);
+        auto *label = option->property("contentItem").value<QQuickItem *>();
+        QVERIFY(label);
+        QCOMPARE(label->property("text").toString(), QString("1.0×"));
+        auto *popup = speed->property("popup").value<QObject *>();
+        QVERIFY(popup && QMetaObject::invokeMethod(popup, "close"));
+        window->resize(originalSize);
     }
 
     void trackSelectorsAndAppearancePreviewUseActualControls() {

@@ -49,7 +49,8 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software NEDEN_CHECK_HEADLESS=1 \
   explanationPhraseUsesThePluginCardStyle \
   hoveringAndExplainingTheFullLineUseOneExplicitRequest \
   singleClickShowsContextualWordCardWithoutChangingTheSidebar \
-  videoAndSidebarReachTheTopWithoutATitleStrip
+  videoAndSidebarReachTheTopWithoutATitleStrip \
+  trackDropdownsDisplayTheirNamedRolesAndReadableSelection
 ```
 
 This uses the actual QML with software rendering, a temporary profile and placeholder media, and a local mock AI endpoint. It checks both tracks, subtitle order, wrapping, resizing, pointer movement to the button, phrase-card styling, single-click contextual cards, double-click request separation, edge-to-edge video/sidebar placement, explicit request submission and follow-up editing. Native-only checks are skipped in this mode. It does not verify video rendering, macOS window chrome, or fullscreen animation; keep those checks on the Pro’s real display.
