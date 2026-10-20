@@ -57,9 +57,11 @@ Rectangle {
         mirrorVertically: true
     }
     MouseArea {
+        objectName: "videoClickArea"
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         enabled: stage.session.hasMedia
+        cursorShape: stage.hideCursor ? Qt.BlankCursor : Qt.ArrowCursor
         onClicked: {
             stage.forceActiveFocus();
             singleClick.restart();
