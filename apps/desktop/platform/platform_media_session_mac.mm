@@ -52,7 +52,7 @@ PlatformMediaSession::PlatformMediaSession(LearningSession *player, QWindow *pla
     bind(center.previousTrackCommand,
          [](LearningSession *s, MPRemoteCommandEvent *) { s->queue()->previous(); });
     bind(center.changePlaybackPositionCommand, [](LearningSession *s, MPRemoteCommandEvent *event) {
-        s->seek(((MPChangePlaybackPositionCommandEvent *)event).positionTime);
+        s->seek(static_cast<MPChangePlaybackPositionCommandEvent *>(event).positionTime);
     });
     native->sleepObserver = [[[NSWorkspace sharedWorkspace] notificationCenter]
         addObserverForName:NSWorkspaceWillSleepNotification

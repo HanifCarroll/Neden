@@ -179,9 +179,6 @@ void MpvPlayback::seek(double seconds) {
     if (!std::isfinite(seconds))
         return;
     seekTimer.stop();
-    ++primarySubtitleGeneration;
-    ++secondarySubtitleGeneration;
-    subtitleRequests.clear();
     completed = false;
     command({"seek", QString::number(seconds, 'g', 17), "absolute+exact"});
 }

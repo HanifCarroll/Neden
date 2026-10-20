@@ -585,8 +585,11 @@ private slots:
 
         // 2. Open the actual speed popup and verify the highlighted row remains readable.
         click("speedChoice");
-        QTRY_VERIFY(visualItem(window->contentItem(), "speedChoiceOption1"));
-        auto *option = visualItem(window->contentItem(), "speedChoiceOption1");
+        auto *speed = visualItem(window->contentItem(), "speedChoice");
+        QVERIFY(speed);
+        const auto selectedRow = QString("speedChoiceOption%1").arg(speed->property("currentIndex").toInt());
+        QTRY_VERIFY(visualItem(window->contentItem(), selectedRow));
+        auto *option = visualItem(window->contentItem(), selectedRow);
         QVERIFY(option->property("highlighted").toBool());
         auto *label = option->property("contentItem").value<QQuickItem *>();
         QVERIFY(label);
@@ -594,7 +597,6 @@ private slots:
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         if (!artifacts.isEmpty())
             QVERIFY(window->grabWindow().save(artifacts + "/highlight.png"));
-        auto *speed = visualItem(window->contentItem(), "speedChoice");
         auto *popup = speed->property("popup").value<QObject *>();
         QVERIFY(popup && QMetaObject::invokeMethod(popup, "close"));
 
@@ -1392,6 +1394,48 @@ private slots:
         createWindow();
         QCOMPARE(recent->count(), 0);
         QVERIFY(QFile::exists(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+    }
+
+    void cleanScreenshotUsesTheBundledRuntimeAndQtEncoder() {
+        session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        session->setPaused(true);
+        session->seek(5);
+        QTRY_VERIFY(std::abs(session->position() - 5) < 0.15);
+        const auto path = profile.filePath("clean-frame.png");
+        QSignalSpy saved(playback.get(), &PlaybackEngine::screenshotSaved);
+        session->saveScreenshot(QUrl::fromLocalFile(path));
+        QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
+        const QImage image(path);
+        QVERIFY(!image.isNull());
+        QVERIFY(image.width() > 100 && image.height() > 100);
+    }
+
+    void pausedCanvasResumesAndFullscreenControlsHideAfterKeyboardFocus() {
+        session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        session->setPaused(true);
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 1);
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(video);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
+        QTRY_COMPARE(window->property("inspectorMode").toInt(), 0);
+        QTRY_VERIFY(!session->paused());
+        auto *speed = visualItem(window->contentItem(), "speedChoice");
+        QVERIFY(speed);
+        speed->forceActiveFocus();
+        fullscreen->setActive(true);
+        QTRY_VERIFY(fullscreen->active());
+        QTest::mouseMove(window,
+                         video->mapToScene(QPointF(video->width() / 3, video->height() / 3)).toPoint());
+        QTRY_VERIFY_WITH_TIMEOUT(window->property("hidePlaybackControls").toBool(), 5000);
+        QTest::mouseMove(window,
+                         video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
+        QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
+        fullscreen->setActive(false);
+        session->setPaused(true);
     }
 
     void cleanupTestCase() { destroyWindow(); }

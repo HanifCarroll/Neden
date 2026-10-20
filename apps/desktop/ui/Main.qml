@@ -29,12 +29,13 @@ ApplicationWindow {
     property bool floatingMode: false
     property bool controlsIdle: false
     readonly property bool hidePlaybackControls: fullscreenController.active && controlsIdle && !session.paused && !transcriptOpen && !dictionaryOpen
+    function revealPlaybackControls() {
+        controlsIdle = false;
+        controlsIdleTimer.restart();
+    }
     HoverHandler {
         blocking: false
-        onPointChanged: {
-            root.controlsIdle = false;
-            controlsIdleTimer.restart();
-        }
+        onPointChanged: root.revealPlaybackControls()
     }
     Timer {
         id: controlsIdleTimer
@@ -42,6 +43,8 @@ ApplicationWindow {
         onTriggered: {
             if (!playbackControls.hovered && !playbackControls.interacting)
                 root.controlsIdle = true;
+            else
+                restart();
         }
     }
     property size normalSize: Qt.size(1280, 756)
@@ -420,6 +423,9 @@ ApplicationWindow {
     }
     Connections {
         target: root.session
+        function onPausedChanged() {
+            root.revealPlaybackControls();
+        }
         function onExplanationRequested() {
             root.openMeaning();
         }
@@ -492,6 +498,9 @@ ApplicationWindow {
     }
     Connections {
         target: root.fullscreenController
+        function onActiveChanged() {
+            root.revealPlaybackControls();
+        }
         function onSettingsRequested() {
             root.openSettings();
         }
