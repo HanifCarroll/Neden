@@ -35,7 +35,18 @@ ApplicationWindow {
     }
     HoverHandler {
         blocking: false
-        onPointChanged: root.revealPlaybackControls()
+        property point lastPointerPosition: Qt.point(-1, -1)
+        onPointChanged: {
+            // Qt can deliver stationary hover updates while the video renders.
+            // Only actual pointer movement should restart the inactivity timer.
+            if (!hovered)
+                return;
+            const position = point.position;
+            if (position.x !== lastPointerPosition.x || position.y !== lastPointerPosition.y) {
+                lastPointerPosition = position;
+                root.revealPlaybackControls();
+            }
+        }
     }
     Timer {
         id: controlsIdleTimer
