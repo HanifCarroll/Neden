@@ -11,13 +11,14 @@ ComboBox {
     rightPadding: Theme.space6
     font.pixelSize: Theme.body
     hoverEnabled: true
+    property int textElide: Text.ElideRight
     contentItem: Text {
         text: control.displayText
         textFormat: Text.PlainText
         color: control.enabled ? Theme.ink : Theme.muted
         font: control.font
         verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
+        elide: control.textElide
     }
     indicator: Text {
         x: control.width - width - Theme.space3

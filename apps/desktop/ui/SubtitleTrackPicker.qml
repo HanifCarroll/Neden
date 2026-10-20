@@ -24,6 +24,7 @@ RowLayout {
         Layout.fillWidth: true
         enabled: picker.session.hasMedia
         textRole: "name"
+        textElide: Text.ElideMiddle
         readonly property int selectedTrackIndex: {
             for (let index = 1; index < model.length - 1; ++index) {
                 if (picker.secondary ? model[index].secondary : model[index].primary)
