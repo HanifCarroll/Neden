@@ -204,7 +204,7 @@ ApplicationWindow {
             }
             Action {
                 text: "Queue…"
-                onTriggered: root.openPlayerOptions(3)
+                onTriggered: root.openPlayerOptions(PlayerOptions.Queue)
             }
             Action {
                 text: "Start over"
@@ -305,7 +305,7 @@ ApplicationWindow {
             title: "Audio"
             Action {
                 text: "Tracks and output…"
-                onTriggered: root.openPlayerOptions(0)
+                onTriggered: root.openPlayerOptions(PlayerOptions.Audio)
             }
             Action {
                 text: "Audio earlier by 0.1 s"
@@ -324,7 +324,7 @@ ApplicationWindow {
             title: "Video"
             Action {
                 text: "Picture options…"
-                onTriggered: root.openPlayerOptions(1)
+                onTriggered: root.openPlayerOptions(PlayerOptions.Picture)
             }
             Action {
                 text: "Save screenshot with subtitles…"
@@ -345,7 +345,7 @@ ApplicationWindow {
             Action {
                 text: "Media information…"
                 enabled: root.session.hasMedia
-                onTriggered: root.openPlayerOptions(4)
+                onTriggered: root.openPlayerOptions(PlayerOptions.Information)
             }
             Action {
                 text: "Floating player"
@@ -358,7 +358,7 @@ ApplicationWindow {
             title: "Subtitles"
             Action {
                 text: "Tracks, timing and encoding…"
-                onTriggered: root.openPlayerOptions(2)
+                onTriggered: root.openPlayerOptions(PlayerOptions.Subtitles)
             }
             Action {
                 text: "Load primary track…"
@@ -423,7 +423,10 @@ ApplicationWindow {
             MenuSeparator {}
             Action {
                 text: "Playback preferences…"
-                onTriggered: root.openPlayerOptions(5)
+                onTriggered: {
+                    root.settingsPage = 1;
+                    root.openSettings();
+                }
             }
             MenuItem {
                 text: "Settings…"
@@ -461,6 +464,7 @@ ApplicationWindow {
         pane.currentTab = tab;
         studyDrawer.open();
     }
+    property int settingsPage: 0
     function openSettings() {
         if (studyDrawer.opened)
             studyDrawer.close();
@@ -594,16 +598,18 @@ ApplicationWindow {
                 root.session.saveScreenshot(selectedFile);
         }
     }
-    Dialog {
+    OptionsDialog {
         id: playerOptionsDialog
+        objectName: "playerOptionsDialog"
         title: "Playback options"
         modal: true
         anchors.centerIn: parent
-        width: Math.min(root.width - 40, 780)
-        height: Math.min(root.height - 40, 620)
-        standardButtons: Dialog.Close
+        width: Math.min(root.width - 40, 820)
+        height: Math.min(root.height - 40, 660)
         contentItem: PlayerOptions {
             id: playerOptions
+            objectName: "playerOptions"
+            onLoadSubtitles: secondary => secondary ? translationDialog.open() : subtitleDialog.open()
             session: root.session
             onAddFiles: {
                 root.appendToQueue = true;
@@ -673,42 +679,22 @@ ApplicationWindow {
         }
         onClosed: root.contentItem.forceActiveFocus()
     }
-    Dialog {
+    OptionsDialog {
         id: settingsDialog
         objectName: "settingsDialog"
         title: "Settings"
         anchors.centerIn: parent
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.width - 48, 720)
         height: Math.min(root.height - 48, 700)
         modal: true
-        padding: Theme.space5
-        background: Rectangle {
-            color: Theme.background
-            border.color: Theme.border
-            radius: Theme.panelRadius
-        }
-        header: Label {
-            text: "Settings"
-            color: Theme.ink
-            font.pixelSize: Theme.heading
-            font.weight: Font.DemiBold
-            padding: Theme.space5
-        }
-        footer: Item {
-            implicitHeight: Theme.controlHeight + Theme.space5
-            ActionButton {
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.space5
-                text: "Close"
-                onClicked: settingsDialog.close()
-            }
-        }
         contentItem: Loader {
             id: settingsLoader
             objectName: "settingsLoader"
             active: false
             // Retain drafts after first use, without constructing controls at startup.
             sourceComponent: SettingsPane {
+                page: root.settingsPage
+                onPageChanged: root.settingsPage = page
                 session: root.session
                 fullscreenController: root.fullscreenController
                 appearance: root.appearance

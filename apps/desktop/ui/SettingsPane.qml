@@ -64,7 +64,8 @@ ColumnLayout {
         values.bottomPercent = bottomPercent.value;
         return pane.appearance.preview(values);
     }
-    spacing: Theme.space4
+    property alias page: categories.currentIndex
+    spacing: Theme.space5
     TabBar {
         id: categories
         onCurrentIndexChanged: {
@@ -78,7 +79,10 @@ ColumnLayout {
             text: "Subtitles"
         }
         SegmentButton {
-            text: "Playback & services"
+            text: "Playback"
+        }
+        SegmentButton {
+            text: "Services"
         }
     }
     ScrollView {
@@ -265,29 +269,37 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         contentWidth: availableWidth
+        clip: true
+        ColumnLayout {
+            width: parent.width
+            spacing: Theme.space5
+            SettingsGroup {
+                title: "Fullscreen"
+                visible: pane.fullscreenController.supportsNativeMode
+                Layout.fillWidth: true
+                description: "Saved automatically. Applies the next time you enter fullscreen."
+                ChoiceBox {
+                    Layout.fillWidth: true
+                    model: ["Instant · current desktop", "Native · separate Space"]
+                    currentIndex: pane.fullscreenController.nativeMode ? 1 : 0
+                    Accessible.name: "Fullscreen mode"
+                    onActivated: pane.fullscreenController.nativeMode = currentIndex === 1
+                }
+            }
+            PlaybackPreferences {
+                Layout.fillWidth: true
+                session: pane.session
+            }
+        }
+    }
+    ScrollView {
+        visible: categories.currentIndex === 2
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        contentWidth: availableWidth
         ColumnLayout {
             width: parent.width
             spacing: Theme.space4
-            Label {
-                visible: pane.fullscreenController.supportsNativeMode
-                text: "Fullscreen"
-                color: Theme.muted
-            }
-            ChoiceBox {
-                visible: pane.fullscreenController.supportsNativeMode
-                Layout.fillWidth: true
-                model: ["Instant · current desktop", "Native · separate Space"]
-                currentIndex: pane.fullscreenController.nativeMode ? 1 : 0
-                Accessible.name: "Fullscreen mode"
-                onActivated: pane.fullscreenController.nativeMode = currentIndex === 1
-            }
-            Label {
-                visible: pane.fullscreenController.supportsNativeMode
-                text: "Saved automatically. Applies the next time you enter fullscreen."
-                color: Theme.muted
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
             Label {
                 text: "AI API base URL"
                 color: Theme.muted
@@ -468,7 +480,7 @@ ColumnLayout {
         }
     }
     Label {
-        visible: categories.currentIndex === 1
+        visible: categories.currentIndex === 2
         text: pane.settings.message
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
