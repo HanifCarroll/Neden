@@ -204,24 +204,19 @@ private slots:
         QFile secondaryFile(qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
         QVERIFY(secondaryFile.open(QIODevice::ReadOnly));
         const auto secondary = parseSrt(QString::fromUtf8(secondaryFile.readAll()));
-        double target =
-            cueAt(session->cueModel()->entries(), 195000) >= 0 && cueAt(secondary, 195000) >= 0 ? 195 : -1;
-        if (target < 0) {
-            for (const auto &primaryCue : session->cueModel()->entries()) {
-                if (primaryCue.startMs < 190000)
-                    continue;
-
-                for (const auto &secondaryCue : secondary) {
-                    const auto start = qMax(primaryCue.startMs, secondaryCue.startMs);
-                    const auto end = qMin(primaryCue.endMs, secondaryCue.endMs);
-                    if (end - start > 500) {
-                        target = (start + 200) / 1000.0;
-                        break;
-                    }
-                }
-                if (target >= 0)
+        double target = -1;
+        const qint64 videoEndMs = qint64(session->duration() * 1000);
+        for (const auto &primaryCue : session->cueModel()->entries()) {
+            for (const auto &secondaryCue : secondary) {
+                const auto start = qMax(primaryCue.startMs, secondaryCue.startMs);
+                const auto end = qMin(qMin(primaryCue.endMs, secondaryCue.endMs), videoEndMs);
+                if (end - start > 500) {
+                    target = (start + 200) / 1000.0;
                     break;
+                }
             }
+            if (target >= 0)
+                break;
         }
         QVERIFY(target >= 0);
         session->seek(target);
