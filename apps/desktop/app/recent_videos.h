@@ -10,6 +10,8 @@ struct RecentVideo {
     double duration = 0;
     QString primarySubtitlePath{};
     QString secondarySubtitlePath{};
+    double primaryDelay = 0, secondaryDelay = 0;
+    QString primaryNativeTrack{}, secondaryNativeTrack{};
 };
 
 class RecentVideos : public QAbstractListModel {
@@ -36,6 +38,8 @@ public:
     std::optional<RecentVideo> find(const QString &path) const;
     bool remember(const RecentVideo &video, bool promote = false);
     Q_INVOKABLE void remove(const QUrl &url);
+    Q_INVOKABLE void clear();
+    Q_INVOKABLE bool relocate(const QUrl &oldUrl, const QUrl &newUrl);
 signals:
     void countChanged();
     void errorChanged();

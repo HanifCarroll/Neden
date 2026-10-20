@@ -49,7 +49,7 @@ private slots:
         QVERIFY(recent.find(video)->primarySubtitlePath.isEmpty());
         QVERIFY(recent.remember({video, 20, 100}, true));
         QVERIFY(file.open(QIODevice::ReadOnly));
-        QCOMPARE(QJsonDocument::fromJson(file.readAll()).object().value("version").toInt(), 2);
+        QCOMPARE(QJsonDocument::fromJson(file.readAll()).object().value("version").toInt(), 3);
     }
     void removalPersistsWithoutDeletingMedia() {
         QTemporaryDir directory;

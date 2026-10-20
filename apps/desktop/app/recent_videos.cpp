@@ -9,6 +9,7 @@
 #include <QSaveFile>
 #include <QSet>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 constexpr qint64 maximumHistoryBytes = 4 * 1024 * 1024;
@@ -101,7 +102,7 @@ void RecentVideos::load() {
         const auto entries = root.value("videos").toArray();
         const int version = root.value("version").toInt();
         validStorage = error.error == QJsonParseError::NoError && document.isObject() &&
-                       (version == 1 || version == 2) && root.value("videos").isArray() &&
+                       (version >= 1 && version <= 3) && root.value("videos").isArray() &&
                        entries.size() <= maximumRecentVideos;
         QSet<QString> paths;
         for (const auto &entry : entries) {
@@ -110,6 +111,10 @@ void RecentVideos::load() {
                               item.value("duration").toDouble(-1),
                               item.value("primarySubtitlePath").toString(),
                               item.value("secondarySubtitlePath").toString()};
+            video.primaryDelay = item.value("primaryDelay").toDouble();
+            video.secondaryDelay = item.value("secondaryDelay").toDouble();
+            video.primaryNativeTrack = item.value("primaryNativeTrack").toString();
+            video.secondaryNativeTrack = item.value("secondaryNativeTrack").toString();
             const bool validTrackFields =
                 (!item.contains("primarySubtitlePath") || item.value("primarySubtitlePath").isString()) &&
                 (!item.contains("secondarySubtitlePath") || item.value("secondarySubtitlePath").isString());
@@ -146,9 +151,13 @@ bool RecentVideos::persist(const QList<RecentVideo> &next) {
             item.insert("primarySubtitlePath", video.primarySubtitlePath);
         if (!video.secondarySubtitlePath.isEmpty())
             item.insert("secondarySubtitlePath", video.secondarySubtitlePath);
+        item.insert("primaryDelay", video.primaryDelay);
+        item.insert("secondaryDelay", video.secondaryDelay);
+        item.insert("primaryNativeTrack", video.primaryNativeTrack);
+        item.insert("secondaryNativeTrack", video.secondaryNativeTrack);
         entries.append(item);
     }
-    const auto bytes = QJsonDocument(QJsonObject{{"version", 2}, {"videos", entries}}).toJson();
+    const auto bytes = QJsonDocument(QJsonObject{{"version", 3}, {"videos", entries}}).toJson();
 
     // 2. Commit atomically so an interrupted update cannot truncate existing history.
     QSaveFile file(storageFile);
@@ -224,4 +233,26 @@ void RecentVideos::remove(const QUrl &url) {
         emit removed(identity);
         return;
     }
+}
+
+void RecentVideos::clear() {
+    if (!persist({})) return;
+    const auto previous = videos;
+    beginResetModel(); videos.clear(); endResetModel(); emit countChanged();
+    for (const auto &video : previous) emit removed(video.path);
+}
+bool RecentVideos::relocate(const QUrl &oldUrl, const QUrl &newUrl) {
+    if (!oldUrl.isLocalFile() || !newUrl.isLocalFile() || !QFileInfo(newUrl.toLocalFile()).isFile()) return false;
+    auto saved = find(oldUrl.toLocalFile());
+    if (!saved) return false;
+    const auto oldPath = saved->path;
+    saved->path = mediaPathIdentity(newUrl.toLocalFile());
+    auto next = videos;
+    next.erase(std::remove_if(next.begin(), next.end(), [&](const RecentVideo &video) {
+        return video.path == oldPath || video.path == saved->path;
+    }), next.end());
+    next.prepend(*saved);
+    if (!persist(next)) return false;
+    beginResetModel(); videos = next; endResetModel(); emit countChanged(); emit removed(oldPath);
+    return true;
 }

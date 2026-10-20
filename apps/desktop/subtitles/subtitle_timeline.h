@@ -17,17 +17,21 @@ public:
     QString path(SubtitleRole role) const;
     QString name(SubtitleRole role) const;
     QVariantList tracks() const;
-    void load(const QUrl &url, SubtitleRole role);
+    void load(const QUrl &url, SubtitleRole role, const QString &encoding = "auto");
+    void setDelay(qint64 milliseconds, SubtitleRole role);
     void publish(QVector<Cue> cues, const QString &path, SubtitleRole role);
     void replacePrimary(QVector<Cue> cues);
     void clear(SubtitleRole role);
     void reset();
     bool knows(const QString &path) const { return loadedSubtitlePaths.contains(path); }
     StudyTarget capture(StudyTarget selection, bool includeSecondary) const;
-    static QVector<Cue> read(const QUrl &url);
+    static QVector<Cue> read(const QUrl &url, const QString &encoding = "auto");
 
 private:
     const QVector<Cue> &entries(SubtitleRole role) const;
+    void rebuild();
+    QVector<Cue> originalPrimary, originalSecondary;
+    qint64 primaryDelay = 0, secondaryDelay = 0;
     CueModel transcriptModel;
     QVector<Cue> secondaryCues;
     QString primarySubtitlePath, secondarySubtitlePath;

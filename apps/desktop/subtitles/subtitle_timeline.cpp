@@ -40,41 +40,67 @@ QVariantList SubtitleTimeline::tracks() const {
                                   {"secondary", path == secondarySubtitlePath}});
     return result;
 }
-QVector<Cue> SubtitleTimeline::read(const QUrl &url) {
+QVector<Cue> SubtitleTimeline::read(const QUrl &url, const QString &encoding) {
     if (!url.isLocalFile())
         throw std::runtime_error("Choose a local subtitle file.");
     QFile file(url.toLocalFile());
     if (!file.open(QIODevice::ReadOnly) || file.size() > 8 * 1024 * 1024)
         throw std::runtime_error("Cannot read subtitle file (8 MiB maximum).");
-    QStringDecoder decoder(QStringDecoder::Utf8);
-    const QString text = decoder.decode(file.readAll());
-    if (decoder.hasError())
-        throw std::runtime_error("Subtitles must use UTF-8 encoding.");
+    const auto bytes = file.readAll();
+    QStringDecoder decoder(encoding == "auto" ? QStringConverter::encodingForData(bytes).value_or(QStringConverter::Utf8)
+                                              : QStringConverter::encodingForName(encoding.toUtf8()).value_or(QStringConverter::Utf8));
+    QString text;
+    if (encoding == "windows-1254" || encoding == "windows-1252" || encoding == "ISO-8859-9") {
+        // Unicode's single-byte mapping; never guess a legacy code page from valid UTF-8.
+        constexpr char16_t punctuation[] = {0x20ac,0x0081,0x201a,0x0192,0x201e,0x2026,0x2020,0x2021,
+            0x02c6,0x2030,0x0160,0x2039,0x0152,0x008d,0x017d,0x008f,0x0090,0x2018,0x2019,0x201c,
+            0x201d,0x2022,0x2013,0x2014,0x02dc,0x2122,0x0161,0x203a,0x0153,0x009d,0x017e,0x0178};
+        for (const unsigned char byte : bytes) {
+            char16_t character = byte;
+            if (encoding != "ISO-8859-9" && byte >= 0x80 && byte < 0xa0) character = punctuation[byte - 0x80];
+            if (encoding != "windows-1252") {
+                switch (byte) {
+                case 0xd0: character = u'Ğ'; break; case 0xdd: character = u'İ'; break;
+                case 0xde: character = u'Ş'; break; case 0xf0: character = u'ğ'; break;
+                case 0xfd: character = u'ı'; break; case 0xfe: character = u'ş'; break;
+                }
+            }
+            text.append(QChar(character));
+        }
+    } else {
+        text = decoder.decode(bytes);
+        if (decoder.hasError())
+            throw std::runtime_error("This subtitle file is not valid Unicode. Choose its encoding in Playback options (for Turkish, try Windows-1254), then load it again.");
+    }
     return parseSrt(text);
 }
 void SubtitleTimeline::publish(QVector<Cue> cues, const QString &path, SubtitleRole role) {
     if (role == SubtitleRole::Primary) {
         primarySubtitlePath = path;
-        transcriptModel.replace(std::move(cues));
+        originalPrimary = std::move(cues);
     } else {
         secondarySubtitlePath = path;
-        secondaryCues = std::move(cues);
+        originalSecondary = std::move(cues);
     }
+    rebuild();
     if (!path.isEmpty() && !loadedSubtitlePaths.contains(path))
         loadedSubtitlePaths.append(path);
     transcriptModel.setTranslationCues(secondaryCues);
 }
-void SubtitleTimeline::load(const QUrl &url, SubtitleRole role) {
-    publish(read(url), QFileInfo(url.toLocalFile()).absoluteFilePath(), role);
+void SubtitleTimeline::load(const QUrl &url, SubtitleRole role, const QString &encoding) {
+    publish(read(url, encoding), QFileInfo(url.toLocalFile()).absoluteFilePath(), role);
 }
 void SubtitleTimeline::replacePrimary(QVector<Cue> cues) {
-    transcriptModel.replace(std::move(cues));
-    transcriptModel.setTranslationCues(secondaryCues);
+    originalPrimary = std::move(cues);
+    rebuild();
 }
 void SubtitleTimeline::clear(SubtitleRole role) {
     publish({}, {}, role);
 }
 void SubtitleTimeline::reset() {
+    originalPrimary.clear();
+    originalSecondary.clear();
+    primaryDelay = secondaryDelay = 0;
     secondaryCues.clear();
     transcriptModel.replace({});
     primarySubtitlePath.clear();
@@ -137,4 +163,18 @@ StudyTarget SubtitleTimeline::capture(StudyTarget target, bool includeSecondary)
     if (target.translation.isEmpty())
         target.translation = item->translation;
     return target;
+}
+
+void SubtitleTimeline::setDelay(qint64 milliseconds, SubtitleRole role) {
+    if (role == SubtitleRole::Primary) primaryDelay = milliseconds;
+    else secondaryDelay = milliseconds;
+    rebuild();
+}
+void SubtitleTimeline::rebuild() {
+    auto primary = originalPrimary;
+    secondaryCues = originalSecondary;
+    for (auto &cue : primary) { cue.startMs += primaryDelay; cue.endMs += primaryDelay; }
+    for (auto &cue : secondaryCues) { cue.startMs += secondaryDelay; cue.endMs += secondaryDelay; }
+    transcriptModel.replace(std::move(primary));
+    transcriptModel.setTranslationCues(secondaryCues);
 }

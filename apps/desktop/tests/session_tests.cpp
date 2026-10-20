@@ -38,6 +38,32 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void independentSubtitleDelaysPreserveOriginalTimestamps() {
+        SubtitleTimeline timeline;
+        timeline.publish({{1000, 2000, "ışık", {}}}, "/primary.srt", SubtitleRole::Primary);
+        timeline.publish({{1100, 2100, "light", {}}}, "/secondary.srt", SubtitleRole::Secondary);
+        timeline.setDelay(500, SubtitleRole::Primary);
+        timeline.setDelay(-200, SubtitleRole::Secondary);
+        QCOMPARE(timeline.text(1200, SubtitleRole::Primary), QString());
+        QCOMPARE(timeline.text(1200, SubtitleRole::Secondary), QString("light"));
+        QCOMPARE(timeline.cue(0)->startMs, 1500);
+        timeline.setDelay(100, SubtitleRole::Primary);
+        QCOMPARE(timeline.cue(0)->startMs, 1100); // Absolute offset, never cumulative.
+        timeline.setDelay(0, SubtitleRole::Primary);
+        QCOMPARE(timeline.cue(0)->startMs, 1000);
+    }
+    void legacyTurkishEncodingRequiresAnExplicitChoice() {
+        QTemporaryDir directory;
+        QFile file(directory.filePath("turkish.srt"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("1\n00:00:01,000 --> 00:00:02,000\n");
+        file.write(QByteArray::fromHex("49fefd6b20ddfefd6b20d0def0fe"));
+        file.close();
+        const auto url = QUrl::fromLocalFile(file.fileName());
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, SubtitleTimeline::read(url));
+        const auto cues = SubtitleTimeline::read(url, "windows-1254");
+        QCOMPARE(cues.first().text, QString("Işık Işık ĞŞğş").replace("Işık I", "Işık İ"));
+    }
     void studyTargetRetainsIntegerTimestampsWithoutFloatingPointConversion() {
         constexpr qint64 start = 9007199254740993; // The first integer a double cannot represent exactly.
         const auto target = StudyTarget::fromJson({{"cueStartMs", start}, {"cueEndMs", start + 1}});
