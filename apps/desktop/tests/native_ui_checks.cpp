@@ -1483,6 +1483,25 @@ private slots:
                                  2000);
         QTRY_VERIFY_WITH_TIMEOUT(subtitleText().contains("STYLED EMBEDDED TEST"), 2000);
         QTRY_VERIFY_WITH_TIMEOUT(window->grabWindow().copy(pixelBounds) != beforePixels, 2000);
+        // The new subtitle may change its glyph pixels, but the paused video
+        // must remain intact. This catches a cue rendered over a corrupt frame.
+        const auto originalFrame = beforePixels.convertToFormat(QImage::Format_RGB32);
+        const auto updatedFrame =
+            window->grabWindow().copy(pixelBounds).convertToFormat(QImage::Format_RGB32);
+        QCOMPARE(updatedFrame.size(), originalFrame.size());
+        qsizetype changedPixels = 0;
+        for (int row = 0; row < originalFrame.height(); ++row) {
+            const auto *originalPixels = reinterpret_cast<const QRgb *>(originalFrame.constScanLine(row));
+            const auto *updatedPixels = reinterpret_cast<const QRgb *>(updatedFrame.constScanLine(row));
+            for (int column = 0; column < originalFrame.width(); ++column) {
+                if (std::abs(qRed(originalPixels[column]) - qRed(updatedPixels[column])) > 15 ||
+                    std::abs(qGreen(originalPixels[column]) - qGreen(updatedPixels[column])) > 15 ||
+                    std::abs(qBlue(originalPixels[column]) - qBlue(updatedPixels[column])) > 15)
+                    ++changedPixels;
+            }
+        }
+        QVERIFY2(changedPixels < qsizetype(originalFrame.width()) * originalFrame.height() / 5,
+                 "Selecting a subtitle corrupted the paused video outside its glyphs.");
         QVERIFY(session->paused());
         QCOMPARE(pauseChanges.count(), 0);
         QVERIFY(std::abs(session->position() - beforePosition) < 0.1);

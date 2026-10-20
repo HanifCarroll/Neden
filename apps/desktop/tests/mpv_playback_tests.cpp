@@ -59,6 +59,11 @@ private slots:
         QCOMPARE(
             mpv_get_property(playback.handle(), "audio-pitch-correction", MPV_FORMAT_FLAG, &correctPitch), 0);
         QCOMPARE(correctPitch, 1);
+        double seekPreroll = 0;
+        QCOMPARE(mpv_get_property(playback.handle(), "hr-seek-demuxer-offset", MPV_FORMAT_DOUBLE,
+                                  &seekPreroll),
+                 0);
+        QVERIFY(qAbs(seekPreroll - 0.1) < 0.000001);
     }
     void idleControlsDoNotRequestVideoOutput() {
         MpvPlayback playback;

@@ -22,6 +22,9 @@ constexpr std::array playbackOptions{
     std::pair{"config", "no"}, std::pair{"vo", "libmpv"}, std::pair{"hwdec", "auto-safe"},
     std::pair{"pause", "yes"}, std::pair{"keep-open", "yes"}, std::pair{"volume", "60"},
     std::pair{"sid", "no"},
+    // Give the demuxer a small preroll so an exact refresh seek can recover
+    // reference frames when switching native subtitle tracks while paused.
+    std::pair{"hr-seek-demuxer-offset", "0.1"},
     // Paired with BLOCK_FOR_TARGET_TIME=0 in VideoRenderer.
     std::pair{"video-timing-offset", "0"}, std::pair{"demuxer-max-bytes", "33554432"},
     std::pair{"demuxer-max-back-bytes", "8388608"}};
