@@ -12,8 +12,10 @@ Rectangle {
     readonly property bool hovered: controlsHover.hovered
     HoverHandler {
         id: controlsHover
+        blocking: false
     }
     readonly property bool editing: timeline.activeFocus || speed.activeFocus || volume.activeFocus
+    readonly property bool interacting: timeline.pressed || volume.pressed || speed.popup.visible
     signal fullscreen
     signal toggleSidebar
     implicitHeight: 72

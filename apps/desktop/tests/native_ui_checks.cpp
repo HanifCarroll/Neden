@@ -96,14 +96,14 @@ private:
         return nullptr;
     }
 
-    QPoint wordPoint(QQuickItem *subtitle) {
+    QPoint wordPoint(QQuickItem *subtitle, int offset = 0) {
         auto *editor = subtitle->property("editor").value<QQuickItem *>();
         QRectF first, second;
         if (!editor ||
             !QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, first),
-                                       Q_ARG(int, 0)) ||
+                                       Q_ARG(int, offset)) ||
             !QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, second),
-                                       Q_ARG(int, 1)))
+                                       Q_ARG(int, offset + 1)))
             return {};
         return editor->mapToScene(QPointF((first.x() + second.x()) / 2, first.center().y())).toPoint();
     }
@@ -312,7 +312,7 @@ private slots:
         QVERIFY(session->paused());
         click("transcriptSearchButton");
         session->rate(1);
-        QVERIFY(speed->setProperty("currentIndex", 1));
+        QTRY_COMPARE(speed->property("currentText").toString(), QString("1.0×"));
     }
 
     void subtitleControlsPlayOneCueThenPauseOnTheRealAdapter() {
@@ -461,7 +461,7 @@ private slots:
         QVERIFY(option);
         auto *label = option->property("contentItem").value<QQuickItem *>();
         QVERIFY(label);
-        QCOMPARE(label->property("text").toString(), QString("1.0×"));
+        QCOMPARE(label->property("text").toString(), QString("0.75×"));
         auto *popup = speed->property("popup").value<QObject *>();
         QVERIFY(popup && QMetaObject::invokeMethod(popup, "close"));
         window->resize(originalSize);
@@ -474,10 +474,10 @@ private slots:
         auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
         auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
         QVERIFY(primary && secondary);
-        QCOMPARE(primary->property("count").toInt(), 3);
-        QCOMPARE(secondary->property("count").toInt(), 3);
-        QCOMPARE(primary->property("currentIndex").toInt(), 1);
-        QCOMPARE(secondary->property("currentIndex").toInt(), 2);
+        QCOMPARE(primary->property("count").toInt(), session->subtitleTracks().size() + 1);
+        QCOMPARE(secondary->property("count").toInt(), session->subtitleTracks().size() + 1);
+        QCOMPARE(primary->property("currentText").toString(), session->sourceSubtitleName());
+        QCOMPARE(secondary->property("currentText").toString(), session->translationSubtitleName());
 
         QTest::keyClick(window, Qt::Key_Comma, Qt::ControlModifier);
         auto *settings = window->findChild<QObject *>("settingsDialog");
@@ -920,13 +920,8 @@ private slots:
         for (auto *track : {primary, secondary}) {
             auto *editor = track->property("editor").value<QQuickItem *>();
             QVERIFY(editor);
-            QRectF first, last;
-            QVERIFY(QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, first),
-                                              Q_ARG(int, 1)));
-            QVERIFY(QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, last),
-                                              Q_ARG(int, 8)));
-            const auto from = editor->mapToScene(first.center()).toPoint();
-            const auto to = editor->mapToScene(last.center()).toPoint();
+            const auto from = wordPoint(track, 1);
+            const auto to = wordPoint(track, 6);
             QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, from);
             QTest::mouseMove(window, to);
             QTest::qWait(230);
@@ -1356,6 +1351,14 @@ private slots:
     }
 
     void closeReopenResumeAndRemoveThroughTheUi() {
+
+        // Restore the episode's real tracks after earlier cases loaded synthetic fixtures.
+        session->openSubtitles(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_PRIMARY")));
+        session->openTranslation(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_SECONDARY")));
+        session->seek(stoppedAt);
+        session->setPaused(true);
+        QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.15);
+        session->checkpoint();
 
         // 1. Destroy the whole window and service graph, then reconstruct from saved disk state.
         destroyWindow();

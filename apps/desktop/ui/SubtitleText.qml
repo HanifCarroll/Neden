@@ -18,7 +18,8 @@ Item {
     property string wordText: ""
     readonly property bool selecting: selectionPointer.active
     readonly property bool hovered: wordHover.hovered
-    readonly property bool wordsHovered: hovered && wordRectanglesAt(wordHover.point.position, textEditor.width, textEditor.font).length > 0
+    readonly property point pointerPosition: selecting ? selectionPointer.point.position : wordHover.point.position
+    readonly property bool wordsHovered: (hovered || selecting) && wordRectanglesAt(pointerPosition, textEditor.width, textEditor.font).length > 0
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
     visible: textEditor.length > 0

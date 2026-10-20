@@ -30,6 +30,7 @@ ApplicationWindow {
     property bool controlsIdle: false
     readonly property bool hidePlaybackControls: fullscreenController.active && controlsIdle && !session.paused && !transcriptOpen && !dictionaryOpen
     HoverHandler {
+        blocking: false
         onPointChanged: {
             root.controlsIdle = false;
             controlsIdleTimer.restart();
@@ -39,7 +40,7 @@ ApplicationWindow {
         id: controlsIdleTimer
         interval: 2500
         onTriggered: {
-            if (!playbackControls.hovered && !playbackControls.editing)
+            if (!playbackControls.hovered && !playbackControls.interacting)
                 root.controlsIdle = true;
         }
     }
