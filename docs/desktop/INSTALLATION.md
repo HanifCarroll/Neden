@@ -30,6 +30,8 @@ Settings → Services uses a single Save settings action for the complete draft;
 
 The Meaning tab supports follow-up questions, Stop, Retry, and replay of the explained cue. Saved flashcards and replay always use the original explained cue and its timestamp, even after you seek elsewhere. Enter sends a question; Shift–Enter adds a line. See [plugin behavior parity](PLUGIN_PARITY.md) for context ownership, optional word meanings, provider settings, and appearance previews.
 
+Settings → Shortcuts contains the editable keyboard map. Command–B toggles the sidebar; E pauses and explains the current subtitle. Overrides are saved separately in `shortcuts.json`; standard editing/window shortcuts and macOS native fullscreen remain fixed.
+
 Local history and study data live under `~/Library/Application Support/Neden Qt Lab/` to retain the existing data location. `recent-videos.json` version 3 contains video paths, positions, durations, optional primary/secondary subtitle file paths, native track IDs and timing offsets; no subtitle contents, language presets, model output, or credentials. Existing version 1 and 2 history remains readable. OpenSubtitles downloads are saved as bounded, content-addressed SRT files under `subtitles/` in the same application-support directory, so resuming uses the saved file without another download. Malformed history is preserved and reported instead of being overwritten.
 
 See [media player features and runtime limits](PLAYER_FEATURES.md) for queue, audio/picture controls, native subtitle formats, screenshots, timeline previews and platform integration.
@@ -64,6 +66,8 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software NEDEN_CHECK_HEADLESS=1 \
   build/desktop-ui/NedenNativeChecks \
   explainHoverCoversBothTracksAndThePathToTheButton \
   explainHoverSurvivesActiveSelections \
+  explainButtonFootprintAndStationaryCueChanges \
+  pausedVideoHidesControlsAndCursorUntilPointerMoves \
   explanationPhraseUsesThePluginCardStyle \
   hoveringAndExplainingTheFullLineUseOneExplicitRequest \
   singleClickShowsContextualWordCardWithoutChangingTheSidebar \

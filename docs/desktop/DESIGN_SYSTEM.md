@@ -57,3 +57,9 @@ Design references consulted for this layout (20 October 2026):
 ## Flat surfaces
 
 Group content with headings, spacing and occasional single separators rather than nested cards or bordered section boxes. Settings groups, explanation subjects, queue entries and study cards share their parent surface. Tabs use an underline instead of filled segments. Secondary action buttons are transparent at rest, with hover, pressed and keyboard-focus feedback; primary actions may retain an accent fill. Input fields and floating dialogs/word popovers keep their own visible boundaries because they represent editable controls or separate layers. Keep these exceptions shallow; do not place decorative boxes inside them.
+
+## Keyboard customization
+
+The shortcut editor uses searchable command rows, direct key recording, explicit conflict messages and per-command/all-command reset. Only overrides are persisted. This follows the discoverability and conflict-resolution patterns in [VS Code's keyboard editor](https://code.visualstudio.com/docs/configure/keybindings) and [IntelliJ's keymap editor](https://www.jetbrains.com/help/idea/configuring-keyboard-and-mouse-shortcuts.html). Native editing shortcuts remain available in text fields.
+
+Floating word cards show the clicked form, a compact part-of-speech/base-form row, the meaning in this sentence, one usage note and useful alternative senses. Explain line is a separate, filled video-overlay action: either caption words or the button's footprint reveals it. The Meaning sidebar has a single close action in its top navigation.

@@ -8,7 +8,7 @@ The media player work is divided into decoding, durable choices, queue progressi
 - `PlayerPreferences` owns global volume/output/encoding/speed preferences and per-media audio, sync and picture choices. Network URLs are not persisted. Disabling history disables per-media writes; clearing history also removes per-media preferences.
 - `MediaQueue` expands folders, sorts filenames naturally, deduplicates canonical paths, and owns progression/reordering. Autoplay is explicitly opt-in and belongs to the current queue. Removing a queue entry does not delete its file or stop the currently playing video.
 - `SubtitleTimeline` owns independently shifted primary and secondary text timelines. Original timestamps are retained, so repeated delay changes do not accumulate. Decoding accepts valid Unicode or an explicit legacy encoding, including Windows-1254 and ISO-8859-9 for Turkish.
-- `ThumbnailService` has one lazy worker, one replaceable request and one preview image. Its decoder runs off the GUI thread and is released after ten idle seconds. It handles local files only; hovering network media shows the time without launching a second network request.
+- `ThumbnailService` has one lazy worker and one replaceable pending request. It shows a fast keyframe preview immediately, limits moving-pointer requests to one per 50 ms, and requests an exact frame after 180 ms without movement. A 32 MiB memory cache makes revisiting previews inexpensive. Approximate frames are labeled until refinement completes. Its decoder runs off the GUI thread and is released after ten idle seconds. It handles local files only; hovering network media shows the time without launching a second network request.
 - `PlatformMediaSession` owns system transport registration and display-sleep inhibition, and releases them on teardown. macOS uses MediaPlayer/IOKit/CoreAudio, Linux uses MPRIS and the desktop Inhibit portal, Windows uses SMTC and execution-state requests. macOS pauses when the default audio route changes; the mpv device-list callback pauses on device removal on other platforms.
 - `LearningSession` coordinates these modules with existing study interactions and precise recent-history checkpoints. QML invokes these interfaces rather than assembling backend commands.
 
@@ -21,12 +21,16 @@ The media player work is divided into decoding, durable choices, queue progressi
 | Audio | Track selection with title/language/codec/default/forced labels, output selection, per-video audio delay, volume/mute, night-mode compression, speed choices and 0.05× increments/reset |
 | Subtitles | External SRT/VTT, explicit legacy text decoding, embedded/native tracks, ASS/SSA and bitmap files through mpv, separate text offsets, remembered roles and delays |
 | Picture | Rotation, aspect override, fit/fill, deinterlace and reset; hardware decoder and media information |
-| Window | Instant/fullscreen preferences retained, floating always-on-top mode, compact controls for small windows, fullscreen control/cursor inactivity hiding |
+| Window | Instant/fullscreen preferences retained, floating always-on-top mode, compact controls for small windows, control/cursor inactivity hiding during playback and pause |
 | Capture | Clean source frame from mpv with asynchronous Qt PNG encoding, or displayed video with both QML subtitle tracks via the video-stage capture; success/failure feedback |
 | History | Resume, remove, locate a missing file, clear all history, disable future history, explicit speed persistence |
 | System | Screen-awake lifecycle, system transport/Now Playing adapters, pause on audio-device removal |
 
 Standalone arrow/M shortcuts remain suppressed while editing text or operating a focused control. Command/Ctrl subtitle navigation keeps its play-once-and-pause behavior. A single click on a paused video with the sidebar open closes the sidebar and resumes; the delayed single-click handler preserves double-click fullscreen and subtitle text interaction.
+
+Command–B toggles the sidebar. E explains the current primary subtitle (or secondary when no primary cue is active), pauses playback and opens Meaning; a gap without either cue does nothing. Settings → Shortcuts supports searching, recording, conflict checks, clearing and resetting bindings. Player commands stay inactive while typing in search/follow-up fields.
+
+After 2.5 seconds of pointer inactivity, the bottom controls and the video-area cursor hide, including while paused and in a normal window. Pointer movement reveals them. Active sliders, open speed menus and subtitle selection keep controls available; popover controls retain a visible cursor.
 
 The Explain line action activates only on actual word geometry, including when text is selected. It remains briefly reachable across the gap to its button, and button focus does not keep it visible over empty video space. Explanation prompts lead with natural translation and teach spoken vocabulary/grammar using subtitle labels only as context.
 
