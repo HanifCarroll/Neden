@@ -34,8 +34,11 @@ RowLayout {
         }
         model: {
             const tracks = [{name: "Off", path: ""}];
-            for (let index = 0; index < picker.session.subtitleTracks.length; ++index)
-                tracks.push(picker.session.subtitleTracks[index]);
+            for (const track of picker.session.subtitleTracks) {
+                const assignedToOtherSlot = picker.secondary ? track.primary : track.secondary;
+                if (!assignedToOtherSlot)
+                    tracks.push(track);
+            }
             tracks.push({name: "Load subtitle file…", path: ""});
             return tracks;
         }

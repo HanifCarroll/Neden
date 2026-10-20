@@ -165,6 +165,7 @@ private slots:
                                          "singleClickShowsContextualWordCardWithoutChangingTheSidebar",
                                          "videoAndSidebarReachTheTopWithoutATitleStrip",
                                          "trackDropdownsDisplayTheirNamedRolesAndReadableSelection",
+                                         "subtitlePickersExcludeTheOtherSlotsTrack",
                                          "settingsDraftAndShortcutPolicyUseTheActualUi",
                                          "streamingRepliesStayAnchoredToTheLatestQuestion"};
         if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS") &&
@@ -482,7 +483,6 @@ private slots:
     void trackDropdownsDisplayTheirNamedRolesAndReadableSelection() {
         window->setProperty("showRecent", false);
         window->setProperty("inspectorMode", 1);
-        window->setProperty("inspectorMode", 1);
         const QStringList names{"046 - Leyla ile Mecnun 46. Bölüm.tr.srt",
                                 "046 - Leyla ile Mecnun 46. Bölüm.en.srt"};
         for (int i = 0; i < names.size(); ++i) {
@@ -539,6 +539,7 @@ private slots:
         // Ordinary string models (including playback speed) still show their labels.
         click("speedChoice");
         auto *speed = visualItem(window->contentItem(), "speedChoice");
+        QTRY_VERIFY(visualItem(window->contentItem(), "speedChoiceOption1"));
         auto *option = visualItem(window->contentItem(), "speedChoiceOption1");
         QVERIFY(option);
         auto *label = option->property("contentItem").value<QQuickItem *>();
@@ -549,15 +550,55 @@ private slots:
         window->resize(originalSize);
     }
 
-    void trackSelectorsAndAppearancePreviewUseActualControls() {
+    void subtitlePickersExcludeTheOtherSlotsTrack() {
         window->setProperty("showRecent", false);
         window->setProperty("inspectorMode", 1);
+        const QString primaryPath = profile.filePath("exclusive-primary.srt");
+        const QString secondaryPath = profile.filePath("exclusive-secondary.srt");
+        for (const auto &path : {primaryPath, secondaryPath}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("1\n00:00:00,000 --> 02:00:00,000\nSubtitle\n");
+        }
+        session->openSubtitles(QUrl::fromLocalFile(primaryPath));
+        session->openTranslation(QUrl::fromLocalFile(secondaryPath));
+        auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
+        auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
+        QVERIFY(primary && secondary);
+        auto containsTrack = [](QQuickItem *choice, const QString &name) {
+            for (int index = 0; index < choice->property("count").toInt(); ++index) {
+                QString text;
+                QMetaObject::invokeMethod(choice, "textAt", Q_RETURN_ARG(QString, text), Q_ARG(int, index));
+                if (text == name)
+                    return true;
+            }
+            return false;
+        };
+        QTRY_VERIFY(containsTrack(primary, "exclusive-primary.srt"));
+        QVERIFY(!containsTrack(primary, "exclusive-secondary.srt"));
+        QVERIFY(containsTrack(secondary, "exclusive-secondary.srt"));
+        QVERIFY(!containsTrack(secondary, "exclusive-primary.srt"));
+        QCOMPARE(primary->property("displayText").toString(), QString("exclusive-primary.srt"));
+        QCOMPARE(secondary->property("displayText").toString(), QString("exclusive-secondary.srt"));
+        session->clearTrack(false);
+        QTRY_VERIFY(containsTrack(secondary, "exclusive-primary.srt"));
+        session->chooseTrack(primaryPath, true);
+        QTRY_VERIFY(!containsTrack(primary, "exclusive-primary.srt"));
+        QVERIFY(containsTrack(primary, "exclusive-secondary.srt"));
+        QCOMPARE(secondary->property("displayText").toString(), QString("exclusive-primary.srt"));
+        session->clearTrack(true);
+        QTRY_VERIFY(containsTrack(primary, "exclusive-primary.srt"));
+        QVERIFY(containsTrack(primary, "exclusive-secondary.srt"));
+    }
+
+    void trackSelectorsAndAppearancePreviewUseActualControls() {
+        window->setProperty("showRecent", false);
         window->setProperty("inspectorMode", 1);
         auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
         auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
         QVERIFY(primary && secondary);
-        QCOMPARE(primary->property("count").toInt(), session->subtitleTracks().size() + 2);
-        QCOMPARE(secondary->property("count").toInt(), session->subtitleTracks().size() + 2);
+        QCOMPARE(primary->property("count").toInt(), session->subtitleTracks().size() + 1);
+        QCOMPARE(secondary->property("count").toInt(), session->subtitleTracks().size() + 1);
         QCOMPARE(primary->property("currentText").toString(), session->sourceSubtitleName());
         QCOMPARE(secondary->property("currentText").toString(), session->translationSubtitleName());
 
@@ -827,7 +868,6 @@ private slots:
 
     void videoAndSidebarReachTheTopWithoutATitleStrip() {
         window->setProperty("showRecent", false);
-        window->setProperty("inspectorMode", 1);
         window->setProperty("inspectorMode", 1);
         const auto savedSize = window->size();
         for (const QSize size : {QSize(900, 540), QSize(1280, 756)}) {
@@ -1164,7 +1204,6 @@ private slots:
 
     void explainHoverCoversBothTracksAndThePathToTheButton() {
         window->setProperty("showRecent", false);
-        window->setProperty("inspectorMode", 1);
         window->setProperty("inspectorMode", 1);
         session->setPaused(true);
 
