@@ -12,7 +12,7 @@ private slots:
         QCOMPARE(cues[0].text, QString("İstanbul"));
         QCOMPARE(subtitlePlainText("<v Ali><c.green>Şüphe</c></v>"), QString("Şüphe"));
         QCOMPARE(cues[1].text, QString("日本語"));
-        QVERIFY_EXCEPTION_THROWN(parseSrt("WEBVTT\n\n00:60.000 --> 01:01.000\nBad"), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, parseSrt("WEBVTT\n\n00:60.000 --> 01:01.000\nBad"));
         CueModel model;
         model.replace(cues);
         model.setTranslationCues({{1250, 3000, "English", {}}});
@@ -133,8 +133,8 @@ private slots:
         QCOMPARE(model.data(model.index(0), CueModel::Translation).toString(), QString("light"));
     }
     void rejectsMalformedTimings() {
-        QVERIFY_EXCEPTION_THROWN(parseSrt("1\n00:61:00,000 --> 00:62:00,000\nInvalid"), std::runtime_error);
-        QVERIFY_EXCEPTION_THROWN(parseSrt("1\n00:00:03,000 --> 00:00:01,000\nInvalid"), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, parseSrt("1\n00:61:00,000 --> 00:62:00,000\nInvalid"));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, parseSrt("1\n00:00:03,000 --> 00:00:01,000\nInvalid"));
     }
     void sortsAndFiltersWithoutLosingCueIdentity() {
         CueModel model;

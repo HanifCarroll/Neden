@@ -10,6 +10,12 @@ The desktop app retains its existing native Keychain adapter and signing identit
 
 The desktop CMake configuration exports `build/desktop/compile_commands.json`. The root `.clangd` points Zed and other clangd clients at that database so they use the same Qt/mpv include paths, generated headers, and compiler flags as the app. Run `bun run build:desktop` after a fresh checkout or build configuration change. If an already-open editor retains old diagnostics, run Zed's **Restart Language Server** action. Do not add machine-specific include paths to editor settings.
 
+## Desktop C++ conventions
+
+Use standard C++17 with compiler extensions disabled. Prefer scoped enums for application state, explicit numeric casts at API boundaries, and automatic resource ownership. The libmpv handle and returned strings use `std::unique_ptr` with libmpv's own release functions; fixed playback options are a `constexpr std::array`. Keep `nullptr`, value members, range loops, and existing `override` declarations.
+
+Raw Qt pointers usually borrow an object or refer to a parent-owned child; do not give them a second smart-pointer owner. Qt model roles remain integer-compatible enums, and renderer factories transfer their allocated objects to Qt. C/Objective-C interop casts and matching render-context cleanup remain localized to their adapters. New compiler warnings cover application and test code; deprecated Apple Keychain APIs and Qt-generated-code diagnostics require separate platform/dependency decisions rather than cosmetic suppression.
+
 ## Plugin runtime and credentials
 
 IINA runtime behavior is established from the installed runtime and inspected source, not type declarations alone. The [plugin specification](iina-plugin/SPEC.md) records the case-sensitive `keyChainRead`/`keychainRead` discrepancy, the verified write method, supported host APIs, subtitle acquisition, and native teardown limits. Browser globals, Node.js facilities, CORS exemptions, complete embedded subtitle timelines, and incremental HTTP delivery cannot be assumed.

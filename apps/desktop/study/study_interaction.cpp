@@ -85,7 +85,7 @@ bool StudyInteraction::followUp(const QString &question) {
     return sent;
 }
 void StudyInteraction::lookupWordAt(const QString &text, int offset, bool secondary) {
-    if (!services || services->settings()->learning().wordProvider == LearningSettings::Off)
+    if (!services || services->settings()->learning().wordProvider == LearningSettings::WordProvider::Off)
         return;
     const auto word = WordLookup::wordAt(text, offset);
     if (word.isEmpty())
@@ -102,7 +102,7 @@ void StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
         wordTarget = target;
         playback.setPaused(true);
         const auto &settings = *services->settings();
-        if (settings.learning().wordProvider == LearningSettings::ContextualAi)
+        if (settings.learning().wordProvider == LearningSettings::WordProvider::ContextualAi)
             services->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
                                              settings.learning().noKeyRequired);
         else

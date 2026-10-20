@@ -8,7 +8,7 @@ const QVector<Cue> &SubtitleTimeline::entries(SubtitleRole role) const {
     return role == SubtitleRole::Primary ? model.entries() : secondary;
 }
 int SubtitleTimeline::count(SubtitleRole role) const {
-    return int(entries(role).size());
+    return static_cast<int>(entries(role).size());
 }
 const Cue *SubtitleTimeline::cue(int index, SubtitleRole role) const {
     const auto &track = entries(role);
@@ -90,7 +90,7 @@ int SubtitleTimeline::previous(qint64 ms, int pending) const {
     const auto &track = entries(SubtitleRole::Primary);
     const auto next = std::lower_bound(track.begin(), track.end(), ms,
                                        [](const Cue &cue, qint64 time) { return cue.startMs < time; });
-    return next == track.begin() ? -1 : int(next - track.begin()) - 1;
+    return next == track.begin() ? -1 : static_cast<int>(next - track.begin()) - 1;
 }
 int SubtitleTimeline::next(qint64 ms, int pending) const {
     if (pending >= 0)
@@ -98,7 +98,7 @@ int SubtitleTimeline::next(qint64 ms, int pending) const {
     const auto &track = entries(SubtitleRole::Primary);
     const auto next = std::upper_bound(track.begin(), track.end(), ms,
                                        [](qint64 time, const Cue &cue) { return time < cue.startMs; });
-    return next == track.end() ? -1 : int(next - track.begin());
+    return next == track.end() ? -1 : static_cast<int>(next - track.begin());
 }
 StudyTarget SubtitleTimeline::capture(StudyTarget target, bool includeSecondary) const {
     target.before.clear();
@@ -121,7 +121,7 @@ StudyTarget SubtitleTimeline::capture(StudyTarget target, bool includeSecondary)
     const auto &track = entries(role);
     for (int i = qMax(0, index - 3); i < index; ++i)
         target.before.append(track[i].text);
-    for (int i = index + 1; i < qMin(int(track.size()), index + 4); ++i)
+    for (int i = index + 1; i < qMin(static_cast<int>(track.size()), index + 4); ++i)
         target.after.append(track[i].text);
     const auto other = role == SubtitleRole::Primary ? SubtitleRole::Secondary : SubtitleRole::Primary;
     for (const auto &clue : entries(other)) {

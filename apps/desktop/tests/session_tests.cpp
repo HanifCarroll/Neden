@@ -24,6 +24,17 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void studyTargetRetainsIntegerTimestampsWithoutFloatingPointConversion() {
+        constexpr qint64 start = 9007199254740993; // The first integer a double cannot represent exactly.
+        const auto target = StudyTarget::fromJson({{"cueStartMs", start}, {"cueEndMs", start + 1}});
+        QCOMPARE(target.startMs, start);
+        QCOMPARE(target.endMs, start + 1);
+        QCOMPARE(target.json().value("cueStartMs").toInteger(), start);
+        const auto invalid = StudyTarget::fromJson({{"cueStartMs", 1e100}, {"cueEndMs", 1e100}});
+        QCOMPARE(invalid.startMs, qint64{0});
+        QCOMPARE(invalid.endMs, qint64{0});
+    }
+
     void contextualSelectionUsesTheSelectedTrackAndKeepsMediaIdentityPrivate() {
         SubtitleTimeline timeline;
         timeline.publish({{0,5000,"Bir ışık gördüm.",{}}},"source.srt",SubtitleRole::Primary);

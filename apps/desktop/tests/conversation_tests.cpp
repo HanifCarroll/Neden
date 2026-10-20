@@ -41,14 +41,14 @@ private slots:
     }
     void limitsRejectWithoutDiscardingHistory() {
         Conversation chat;
-        QVERIFY_EXCEPTION_THROWN(chat.begin({{"selection", QString(4001, 'x')}}), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, chat.begin({{"selection", QString(4001, 'x')}}));
         chat.begin({{"selection", "Türkçe"}});
         chat.append("Meaning");
         chat.finish("complete");
-        QVERIFY_EXCEPTION_THROWN(chat.followUp(QString(2001, 'x')), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, chat.followUp(QString(2001, 'x')));
         QCOMPARE(chat.turns().size(), 1);
         chat.followUp("More?");
-        QVERIFY_EXCEPTION_THROWN(chat.append(QString(65537, 'x')), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, chat.append(QString(65537, 'x')));
         QVERIFY(chat.latest().answer.isEmpty());
         chat.finish("failed");
         chat.clear();

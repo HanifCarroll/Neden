@@ -11,8 +11,8 @@ private slots:
         QCOMPARE(rotatedVideoSize({1920, 1080}, 270), QSize(1080, 1920));
     }
     void rejectsInvalidMetadata() {
-        QVERIFY_EXCEPTION_THROWN(rotatedVideoSize({}, 0), std::invalid_argument);
-        QVERIFY_EXCEPTION_THROWN(rotatedVideoSize({1920, 1080}, 45), std::invalid_argument);
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, rotatedVideoSize({}, 0));
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, rotatedVideoSize({1920, 1080}, 45));
     }
 };
 QTEST_GUILESS_MAIN(VideoGeometryTests)

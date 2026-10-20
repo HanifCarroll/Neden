@@ -65,7 +65,7 @@ QString SubtitleService::movieHash(const QString &path) {
     if (!file.open(QIODevice::ReadOnly) || file.size() < 131072)
         return {};
     quint64 hash = file.size();
-    for (qint64 offset : {qint64(0), file.size() - 65536}) {
+    for (qint64 offset : {qint64{0}, file.size() - 65536}) {
         if (!file.seek(offset))
             return {};
         const auto bytes = file.read(65536);

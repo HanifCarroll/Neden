@@ -20,8 +20,8 @@ struct StudyTarget {
         target.sourceLanguage = value.value("sourceLanguage").toString();
         target.explanationLanguage = value.value("explanationLanguage").toString();
         target.cueIndex = value.value("cueIndex").toInt(-1);
-        target.startMs = qint64(value.value("cueStartMs").toDouble());
-        target.endMs = qint64(value.value("cueEndMs").toDouble());
+        target.startMs = value.value("cueStartMs").toInteger();
+        target.endMs = value.value("cueEndMs").toInteger();
         target.positionMs = target.startMs;
         for (const auto &item : value.value("before").toArray())
             target.before.append(item.toString());

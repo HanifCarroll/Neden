@@ -169,10 +169,10 @@ private slots:
         QCOMPARE(WordLookup::wordAt("Bir ışık gördüm.", 5), QString("ışık"));
         QCOMPARE(WordLookup::wordAt("日本語 العربية", 1), QString("日本語"));
         QCOMPARE(WordLookup::languageCode("Turkish"), QString("tr"));
-        QVERIFY_EXCEPTION_THROWN(WordLookup::languageCode("bad/host"), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::languageCode("bad/host"));
         QCOMPARE(WordLookup::parseMeanings(R"({"data":{"translations":[{"translatedText":"light &amp; bright"}]}})", true, false), QStringList{"light & bright"});
         QCOMPARE(WordLookup::parseMeanings(R"([{"translations":[{"displayTarget":"light"},{"displayTarget":"light"},{"displayTarget":"brightness"}]}])", false, true), (QStringList{"light", "brightness"}));
-        QVERIFY_EXCEPTION_THROWN(WordLookup::parseMeanings(QByteArray(64001, 'x'), false, false), std::runtime_error);
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseMeanings(QByteArray(64001, 'x'), false, false));
     }
     void learningSettingsWhitelistFieldsAndNeverPersistKeys() {
         QTemporaryDir directory;

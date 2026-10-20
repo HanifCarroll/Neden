@@ -16,8 +16,10 @@ QJsonObject LearningSettings::json() const {
     return {
         {"sourceLanguage", sourceLanguage},           {"explanationLanguage", explanationLanguage},
         {"includeSecondary", includeSecondary},       {"noKeyRequired", noKeyRequired},
-        {"fallbackEnabled", fallbackEnabled},         {"primaryProvider", primaryIds[int(primaryProvider)]},
-        {"wordProvider", wordIds[int(wordProvider)]}, {"wordRegion", wordRegion}};
+        {"fallbackEnabled", fallbackEnabled},
+        {"primaryProvider", primaryIds[static_cast<int>(primaryProvider)]},
+        {"wordProvider", wordIds[static_cast<int>(wordProvider)]},
+        {"wordRegion", wordRegion}};
 }
 LearningSettings LearningSettings::parse(const QVariantMap &values) {
     LearningSettings next;
@@ -30,8 +32,8 @@ LearningSettings LearningSettings::parse(const QVariantMap &values) {
         next.sourceLanguage.size() > 100 || next.explanationLanguage.size() > 100 || word < 0 ||
         primary < 0 || !QRegularExpression("^[a-zA-Z0-9-]{0,100}$").match(next.wordRegion).hasMatch())
         throw std::runtime_error("Use language names or codes and a supported provider.");
-    next.wordProvider = WordProvider(word);
-    next.primaryProvider = PrimaryProvider(primary);
+    next.wordProvider = static_cast<WordProvider>(word);
+    next.primaryProvider = static_cast<PrimaryProvider>(primary);
     next.includeSecondary = values.value("includeSecondary", true).toBool();
     next.noKeyRequired = values.value("noKeyRequired", false).toBool();
     next.fallbackEnabled = values.value("fallbackEnabled", false).toBool();

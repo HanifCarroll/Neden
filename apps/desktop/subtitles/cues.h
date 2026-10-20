@@ -4,8 +4,8 @@
 #include <QtQml/qqmlregistration.h>
 
 struct Cue {
-    qint64 startMs;
-    qint64 endMs;
+    qint64 startMs = 0;
+    qint64 endMs = 0;
     QString text;
     QString translation;
 };

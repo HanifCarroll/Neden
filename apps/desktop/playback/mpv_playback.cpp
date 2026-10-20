@@ -1,7 +1,24 @@
 #include "mpv_playback.h"
 #include "media_path.h"
 #include "video_geometry.h"
+#include <array>
+#include <cstdint>
 #include <stdexcept>
+#include <utility>
+
+namespace {
+constexpr auto positionProperty = std::uint64_t{1};
+constexpr auto durationProperty = std::uint64_t{2};
+constexpr auto pausedProperty = std::uint64_t{3};
+constexpr auto videoParametersProperty = std::uint64_t{4};
+constexpr std::array playbackOptions{
+    std::pair{"config", "no"}, std::pair{"vo", "libmpv"}, std::pair{"hwdec", "auto-safe"},
+    std::pair{"pause", "yes"}, std::pair{"keep-open", "yes"}, std::pair{"volume", "60"},
+    std::pair{"sid", "no"},
+    // Paired with BLOCK_FOR_TARGET_TIME=0 in VideoRenderer.
+    std::pair{"video-timing-offset", "0"},
+    std::pair{"demuxer-max-bytes", "33554432"}, std::pair{"demuxer-max-back-bytes", "8388608"}};
+} // namespace
 
 static QJsonObject videoParameterMetadata(const mpv_node *node) {
 
@@ -20,48 +37,39 @@ static QJsonObject videoParameterMetadata(const mpv_node *node) {
         const auto &value = map->values[index];
         if (QStringList{"w", "h", "dw", "dh", "rotate"}.contains(key)
             && value.format == MPV_FORMAT_INT64) {
-            result.insert(key, qint64(value.u.int64));
+            result.insert(key, static_cast<qint64>(value.u.int64));
         }
     }
     return result;
 }
 
-MpvPlayback::MpvPlayback(QObject *parent) : PlaybackEngine(parent) {
+MpvPlayback::MpvPlayback(QObject *parent) : PlaybackEngine(parent), mpv(mpv_create()) {
 
     // 1. Create the reviewed native player with bounded playback buffers.
-    mpv = mpv_create();
     if (!mpv) throw std::runtime_error("Cannot create playback engine.");
 
-    for (const auto &option : QList<QPair<const char *, const char *>>{
-        {"config", "no"}, {"vo", "libmpv"}, {"hwdec", "auto-safe"}, {"pause", "yes"},
-        {"keep-open", "yes"}, {"volume", "60"}, {"sid", "no"},
-        // Paired with BLOCK_FOR_TARGET_TIME=0 in VideoRenderer.
-        {"video-timing-offset", "0"},
-        {"demuxer-max-bytes", "33554432"}, {"demuxer-max-back-bytes", "8388608"}}) {
-        if (mpv_set_option_string(mpv, option.first, option.second) < 0) {
-            mpv_terminate_destroy(mpv);
+    for (const auto &[name, value] : playbackOptions) {
+        if (mpv_set_option_string(mpv.get(), name, value) < 0) {
             throw std::runtime_error("Unsupported playback option.");
         }
     }
-    if (mpv_initialize(mpv) < 0) {
-        mpv_terminate_destroy(mpv);
+    if (mpv_initialize(mpv.get()) < 0) {
         throw std::runtime_error("Cannot initialize playback.");
     }
 
     // 2. Deliver native events to Qt's owning thread, without a polling UI timer.
-    mpv_observe_property(mpv, 1, "time-pos", MPV_FORMAT_DOUBLE);
-    mpv_observe_property(mpv, 2, "duration", MPV_FORMAT_DOUBLE);
-    mpv_observe_property(mpv, 3, "pause", MPV_FORMAT_FLAG);
-    mpv_observe_property(mpv, 4, "video-params", MPV_FORMAT_NODE);
-    mpv_set_wakeup_callback(mpv, [](void *context) {
+    mpv_observe_property(mpv.get(), positionProperty, "time-pos", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(mpv.get(), durationProperty, "duration", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(mpv.get(), pausedProperty, "pause", MPV_FORMAT_FLAG);
+    mpv_observe_property(mpv.get(), videoParametersProperty, "video-params", MPV_FORMAT_NODE);
+    mpv_set_wakeup_callback(mpv.get(), [](void *context) {
         auto *playback = static_cast<MpvPlayback *>(context);
         QMetaObject::invokeMethod(playback, [playback] { playback->drainEvents(); }, Qt::QueuedConnection);
     }, this);
 }
 
 MpvPlayback::~MpvPlayback() {
-    mpv_set_wakeup_callback(mpv, nullptr, nullptr);
-    mpv_terminate_destroy(mpv);
+    mpv_set_wakeup_callback(mpv.get(), nullptr, nullptr);
 }
 
 void MpvPlayback::command(const QStringList &arguments) {
@@ -70,7 +78,7 @@ void MpvPlayback::command(const QStringList &arguments) {
     QVector<const char *> pointers;
     for (const auto &argument : bytes) pointers.append(argument.constData());
     pointers.append(nullptr);
-    if (mpv_command(mpv, pointers.data()) < 0) emit failed();
+    if (mpv_command(mpv.get(), pointers.data()) < 0) emit failed();
 }
 
 void MpvPlayback::open(const QString &path, bool loop) {
@@ -114,18 +122,18 @@ void MpvPlayback::loadPendingMedia() {
 
     const auto path = pendingPath;
     pendingPath.clear();
-    mpv_set_property_string(mpv, "loop-file", pendingLoop ? "inf" : "no");
+    mpv_set_property_string(mpv.get(), "loop-file", pendingLoop ? "inf" : "no");
     command({"loadfile", path});
 }
 void MpvPlayback::seek(double seconds) { command({"seek", QString::number(seconds, 'g', 17), "absolute+exact"}); }
 double MpvPlayback::snapshotPosition() const {
     double seconds = positionSeconds;
-    mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &seconds);
+    mpv_get_property(mpv.get(), "time-pos", MPV_FORMAT_DOUBLE, &seconds);
     return seconds;
 }
 void MpvPlayback::setPaused(bool value) {
     int flag = value;
-    if (mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &flag) < 0) {
+    if (mpv_set_property(mpv.get(), "pause", MPV_FORMAT_FLAG, &flag) < 0) {
         emit failed();
         return;
     }
@@ -135,19 +143,19 @@ void MpvPlayback::setPaused(bool value) {
         emit pausedChanged();
     }
 }
-void MpvPlayback::rate(double value) { mpv_set_property(mpv, "speed", MPV_FORMAT_DOUBLE, &value); }
-void MpvPlayback::volume(double value) { mpv_set_property(mpv, "volume", MPV_FORMAT_DOUBLE, &value); }
+void MpvPlayback::rate(double value) { mpv_set_property(mpv.get(), "speed", MPV_FORMAT_DOUBLE, &value); }
+void MpvPlayback::volume(double value) { mpv_set_property(mpv.get(), "volume", MPV_FORMAT_DOUBLE, &value); }
 
 void MpvPlayback::drainEvents() {
-    while (auto *event = mpv_wait_event(mpv, 0)) {
+    while (auto *event = mpv_wait_event(mpv.get(), 0)) {
         if (event->event_id == MPV_EVENT_NONE) break;
 
         if (event->event_id == MPV_EVENT_FILE_LOADED) {
-            char *path = mpv_get_property_string(mpv, "path");
-            const auto loadedPath = mediaPathIdentity(QString::fromUtf8(path ? path : ""));
-            mpv_free(path);
+            const std::unique_ptr<char, decltype(&mpv_free)> path(
+                mpv_get_property_string(mpv.get(), "path"), &mpv_free);
+            const auto loadedPath = mediaPathIdentity(QString::fromUtf8(path ? path.get() : ""));
             if (loadedPath == requestedPath) {
-                mpv_get_property(mpv, "duration", MPV_FORMAT_DOUBLE, &durationSeconds);
+                mpv_get_property(mpv.get(), "duration", MPV_FORMAT_DOUBLE, &durationSeconds);
                 emit durationChanged();
                 emit loaded(loadedPath);
             }
@@ -156,7 +164,7 @@ void MpvPlayback::drainEvents() {
         if (event->event_id != MPV_EVENT_PROPERTY_CHANGE) continue;
 
         const auto *property = static_cast<mpv_event_property *>(event->data);
-        if (event->reply_userdata == 4) {
+        if (event->reply_userdata == videoParametersProperty) {
             const auto metadata = property->format == MPV_FORMAT_NODE
                 ? videoParameterMetadata(static_cast<const mpv_node *>(property->data)) : QJsonObject{};
             if (metadata == sourceParameters) continue;
@@ -176,13 +184,13 @@ void MpvPlayback::drainEvents() {
         }
         if (!property->data) continue;
 
-        if (event->reply_userdata == 1) {
+        if (event->reply_userdata == positionProperty) {
             const double value = *static_cast<double *>(property->data);
             if (positionSeconds != value) { positionSeconds = value; emit positionChanged(); }
-        } else if (event->reply_userdata == 2) {
+        } else if (event->reply_userdata == durationProperty) {
             const double value = *static_cast<double *>(property->data);
             if (durationSeconds != value) { durationSeconds = value; emit durationChanged(); }
-        } else if (event->reply_userdata == 3) {
+        } else if (event->reply_userdata == pausedProperty) {
             const bool value = *static_cast<int *>(property->data);
             if (isPaused != value) { isPaused = value; emit pausedChanged(); }
         }

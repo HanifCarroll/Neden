@@ -13,10 +13,10 @@ struct ConnectionSettings {
 };
 struct LearningSettings {
     QString sourceLanguage = "Turkish", explanationLanguage = "English", wordRegion;
-    enum WordProvider { ContextualAi, Off, Google, Microsoft };
-    enum PrimaryProvider { Configured, Luna };
-    WordProvider wordProvider = ContextualAi;
-    PrimaryProvider primaryProvider = Configured;
+    enum class WordProvider { ContextualAi, Off, Google, Microsoft };
+    enum class PrimaryProvider { Configured, Luna };
+    WordProvider wordProvider = WordProvider::ContextualAi;
+    PrimaryProvider primaryProvider = PrimaryProvider::Configured;
     bool includeSecondary = true, noKeyRequired = false, fallbackEnabled = false;
     QJsonObject json() const;
     static LearningSettings parse(const QVariantMap &values);

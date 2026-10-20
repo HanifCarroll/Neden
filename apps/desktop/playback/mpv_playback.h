@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QSize>
 #include <mpv/client.h>
+#include <memory>
 
 class MpvPlayback : public PlaybackEngine {
     Q_OBJECT
@@ -13,7 +14,7 @@ class MpvPlayback : public PlaybackEngine {
 public:
     explicit MpvPlayback(QObject *parent = nullptr);
     ~MpvPlayback() override;
-    mpv_handle *handle() const { return mpv; }
+    mpv_handle *handle() const { return mpv.get(); }
     void open(const QString &path, bool loop) override;
     void seek(double seconds) override;
     double snapshotPosition() const override;
@@ -32,7 +33,10 @@ private:
     void command(const QStringList &arguments);
     void drainEvents();
     void loadPendingMedia();
-    mpv_handle *mpv = nullptr;
+    struct HandleDeleter {
+        void operator()(mpv_handle *handle) const noexcept { mpv_terminate_destroy(handle); }
+    };
+    std::unique_ptr<mpv_handle, HandleDeleter> mpv;
     QSize sourceSize;
     QJsonObject sourceParameters;
     VideoRenderLifetime renderLifetime;

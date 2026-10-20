@@ -129,7 +129,7 @@ void CueModel::setTranslationCues(const QVector<Cue> &translations) {
 
         const auto next = std::upper_bound(translations.begin(), translations.end(), cue.startMs,
             [](qint64 time, const Cue &item) { return time < item.startMs; });
-        int index = qMax(0, int(next - translations.begin()) - 1);
+        int index = qMax(0, static_cast<int>(next - translations.begin()) - 1);
         QString bestText;
         qint64 bestOverlap = 0;
         int inspected = 0;

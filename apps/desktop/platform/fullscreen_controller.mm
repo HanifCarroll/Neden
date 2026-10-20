@@ -123,7 +123,7 @@ int FullscreenController::safeTopInset() const {
     if (!window || !fullscreenActive || nativeSession) return 0;
 
     NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
-    return int(view.window.screen.safeAreaInsets.top);
+    return static_cast<int>(view.window.screen.safeAreaInsets.top);
 }
 
 void FullscreenController::bindZoomButton() {
