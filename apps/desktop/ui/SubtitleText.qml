@@ -17,41 +17,61 @@ Item {
     property int wordOffset: -1
     property string wordText: ""
     readonly property bool selecting: selectionPointer.active
+    readonly property bool hovered: wordHover.hovered
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
     visible: textEditor.length > 0
 
     // Hover is presentation only: it never changes selection, focus, or requests a definition.
     readonly property var hoverRects: {
-        const layoutWidth = textEditor.width;
-        const layoutFont = textEditor.font;
-        if (!wordHover.hovered || !selectable || selecting || textEditor.selectedText.length)
+        if (!hovered || !selectable || selecting || textEditor.selectedText.length)
             return [];
-        const point = wordHover.point.position;
-        const range = wordLookup.wordRangeAt(textEditor.text, textEditor.positionAt(point.x, point.y));
-        if (range.start === undefined)
+        return wordRectanglesAt(wordHover.point.position, textEditor.width, textEditor.font);
+    }
+    function containsPoint(rectangle, point) {
+        return point.x >= rectangle.x && point.x <= rectangle.x + rectangle.width && point.y >= rectangle.y && point.y <= rectangle.y + rectangle.height;
+    }
+    function wordRectanglesAt(pointerPosition, layoutWidth, layoutFont) {
+        if (layoutWidth <= 0 || layoutFont.pixelSize <= 0)
             return [];
-        const rects = [];
-        for (let i = range.start; i < range.end; ++i) {
-            const first = textEditor.positionToRectangle(i);
-            const last = textEditor.positionToRectangle(i + 1);
-            const sameRow = Math.abs(first.y - last.y) < 1;
-            const left = sameRow ? Math.min(first.x, last.x) : first.x;
-            const right = sameRow ? Math.max(first.x, last.x) : first.x + fontMetrics.advanceWidth(textEditor.text.substring(i, i + 1));
-            if (right - left < 0.1)
+        const wordRange = wordLookup.wordRangeAt(textEditor.text, textEditor.positionAt(pointerPosition.x, pointerPosition.y));
+        if (wordRange.start === undefined)
+            return [];
+        const rectangles = [];
+        for (let characterIndex = wordRange.start; characterIndex < wordRange.end; ++characterIndex) {
+            const characterStart = textEditor.positionToRectangle(characterIndex);
+            const characterEnd = textEditor.positionToRectangle(characterIndex + 1);
+            const sameLine = Math.abs(characterStart.y - characterEnd.y) < 1;
+            const leftEdge = sameLine ? Math.min(characterStart.x, characterEnd.x) : characterStart.x;
+            const rightEdge = sameLine ? Math.max(characterStart.x, characterEnd.x) : characterStart.x + fontMetrics.advanceWidth(textEditor.text.substring(characterIndex, characterIndex + 1));
+            if (rightEdge - leftEdge < 0.1)
                 continue;
-            const previous = rects.length ? rects[rects.length - 1] : null;
-            if (previous && Math.abs(previous.y - first.y) < 1 && left <= previous.x + previous.width + 1 && right >= previous.x - 1) {
-                const edge = Math.max(previous.x + previous.width, right);
-                previous.x = Math.min(previous.x, left);
-                previous.width = edge - previous.x;
-            } else
-                rects.push({x: left, y: first.y, width: right - left, height: first.height});
+            const previousRectangle = rectangles.length ? rectangles[rectangles.length - 1] : null;
+            const touchesPrevious = previousRectangle && Math.abs(previousRectangle.y - characterStart.y) < 1 && leftEdge <= previousRectangle.x + previousRectangle.width + 1 && rightEdge >= previousRectangle.x - 1;
+            if (touchesPrevious) {
+                const combinedRightEdge = Math.max(previousRectangle.x + previousRectangle.width, rightEdge);
+                previousRectangle.x = Math.min(previousRectangle.x, leftEdge);
+                previousRectangle.width = combinedRightEdge - previousRectangle.x;
+            } else {
+                rectangles.push({
+                    x: leftEdge,
+                    y: characterStart.y,
+                    width: rightEdge - leftEdge,
+                    height: characterStart.height
+                });
+            }
         }
         // positionAt clamps to the nearest caret even in the empty margins.
-        return rects.some(rect => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height) ? rects : [];
+        for (const rectangle of rectangles) {
+            if (containsPoint(rectangle, pointerPosition))
+                return rectangles;
+        }
+        return [];
     }
-    FontMetrics { id: fontMetrics; font: textEditor.font }
+    FontMetrics {
+        id: fontMetrics
+        font: textEditor.font
+    }
     Repeater {
         model: line.hoverRects
         delegate: Rectangle {

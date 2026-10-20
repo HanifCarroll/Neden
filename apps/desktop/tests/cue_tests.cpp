@@ -5,7 +5,8 @@ class CueTests : public QObject {
     Q_OBJECT
 private slots:
     void webVttKeepsIndependentTimingsAndPlainText() {
-        const auto cues = parseSrt("WEBVTT\n\nNOTE ignored\nmetadata\n\nfirst\n00:01.250 --> 00:03.000 align:center\n<i>İstanbul</i>\n\n00:03.000 --> 00:05.100\n日本語\n");
+        const auto cues = parseSrt("WEBVTT\n\nNOTE ignored\nmetadata\n\nfirst\n00:01.250 --> 00:03.000 "
+                                   "align:center\n<i>İstanbul</i>\n\n00:03.000 --> 00:05.100\n日本語\n");
         QCOMPARE(cues.size(), 2);
         QCOMPARE(cues[0].startMs, 1250);
         QCOMPARE(cues[0].endMs, 3000);
@@ -23,8 +24,8 @@ private slots:
     void turkishSearch_data() {
         QTest::addColumn<QString>("query");
         QTest::addColumn<int>("expectedCount");
-        for (const auto &query : QStringList{"İSTANBUL", "istanbul", "IŞIK", "ışık", "ILIK", "ılık",
-                                            "ÇIĞ", "çığ", "izmir", "ŞÜPHE", "GÖL", "I\u0307STANBUL"}) {
+        for (const auto &query : QStringList{"İSTANBUL", "istanbul", "IŞIK", "ışık", "ILIK", "ılık", "ÇIĞ",
+                                             "çığ", "izmir", "ŞÜPHE", "GÖL", "I\u0307STANBUL"}) {
             QTest::newRow(query.toUtf8().constData()) << query << 1;
         }
         QTest::newRow("wrong dotless spelling") << QString("ızmir") << 0;
@@ -55,8 +56,8 @@ private slots:
         QFETCH(QList<int>, expectedIndices);
         CueModel model;
         model.setSearchLanguage(CueModel::Turkish);
-        model.replace({{0, 1000, "i", {}}, {1000, 2000, "İ", {}},
-                       {2000, 3000, "ı", {}}, {3000, 4000, "I", {}}});
+        model.replace(
+            {{0, 1000, "i", {}}, {1000, 2000, "İ", {}}, {2000, 3000, "ı", {}}, {3000, 4000, "I", {}}});
         model.search(query);
         QList<int> actualIndices;
         for (int row = 0; row < model.count(); ++row) {
@@ -114,17 +115,20 @@ private slots:
         QCOMPARE(cueAt(cues, 3000), -1);
     }
     void recognizedFormattingIsPlainTextAndUnknownMarkupStaysInert() {
-        const auto cues = parseSrt("1\n00:00:01,000 --> 00:00:03,000\nOo <i>yeah</i>! <B>İstanbul</B><br/>ışık &amp; çay <font color=\"red\">şüphe</font>");
+        const auto cues = parseSrt("1\n00:00:01,000 --> 00:00:03,000\nOo <i>yeah</i>! "
+                                   "<B>İstanbul</B><br/>ışık &amp; çay <font color=\"red\">şüphe</font>");
         QCOMPARE(cues.first().text, QString("Oo yeah! İstanbul\nışık & çay şüphe"));
         QCOMPARE(subtitlePlainText("<img src=\"https://evil.test/a\"> <script>bad</script>"),
-            QString("<img src=\"https://evil.test/a\"> <script>bad</script>"));
-        QCOMPARE(subtitlePlainText("日本語 <i>字幕</i> — <u>مرحبا</u> — río"), QString("日本語 字幕 — مرحبا — río"));
+                 QString("<img src=\"https://evil.test/a\"> <script>bad</script>"));
+        QCOMPARE(subtitlePlainText("日本語 <i>字幕</i> — <u>مرحبا</u> — río"),
+                 QString("日本語 字幕 — مرحبا — río"));
     }
     void transcriptTranslationsUseGreatestOverlapAndPreserveFilteredIdentity() {
         CueModel model;
         model.replace({{1000, 5000, "İstanbul ışığı", {}}, {6000, 8000, "yağmur", {}}});
         model.search("yağmur");
-        model.setTranslationCues({{1000, 2000, "Istanbul", {}}, {2000, 4500, "light", {}}, {6500, 7500, "rain", {}}});
+        model.setTranslationCues(
+            {{1000, 2000, "Istanbul", {}}, {2000, 4500, "light", {}}, {6500, 7500, "rain", {}}});
         QCOMPARE(model.count(), 1);
         QCOMPARE(model.rowForCue(1), 0);
         QCOMPARE(model.rowForCue(0), -1);
@@ -138,7 +142,8 @@ private slots:
     }
     void sortsAndFiltersWithoutLosingCueIdentity() {
         CueModel model;
-        model.replace(parseSrt("2\n00:00:04,000 --> 00:00:05,000\nSecond\n\n1\n00:00:01,000 --> 00:00:03,000\nFirst"));
+        model.replace(
+            parseSrt("2\n00:00:04,000 --> 00:00:05,000\nSecond\n\n1\n00:00:01,000 --> 00:00:03,000\nFirst"));
         model.search("SECOND");
         QCOMPARE(model.count(), 1);
         QCOMPARE(model.data(model.index(0), CueModel::CueIndex).toInt(), 1);

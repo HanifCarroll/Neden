@@ -17,69 +17,82 @@ class StudyTests : public QObject {
 private slots:
     void settingsDraftCommitsAllFieldsOnlyAfterSuccessfulPersistence() {
         QTemporaryDir directory;
-        StudyServices services(directory.path(),[](const QString &) { return QByteArray(); });
-        auto *settings=services.settings();
-        const auto originalEndpoint=settings->endpoint();
-        auto draft=settings->learningSettings();
-        draft.insert("endpoint","https://example.org/v1"); draft.insert("model","new-model");
-        draft.insert("dictionary","https://example.org/dictionary/%s"); draft.insert("automaticSubtitles",true);
-        draft.insert("wordProvider","unknown");
-        QSignalSpy changes(settings,&AppSettings::changed);
+        StudyServices services(directory.path(), [](const QString &) { return QByteArray(); });
+        auto *settings = services.settings();
+        const auto originalEndpoint = settings->endpoint();
+        auto draft = settings->learningSettings();
+        draft.insert("endpoint", "https://example.org/v1");
+        draft.insert("model", "new-model");
+        draft.insert("dictionary", "https://example.org/dictionary/%s");
+        draft.insert("automaticSubtitles", true);
+        draft.insert("wordProvider", "unknown");
+        QSignalSpy changes(settings, &AppSettings::changed);
         QVERIFY(!settings->applyDraft(draft));
-        QCOMPARE(settings->endpoint(),originalEndpoint);
-        QCOMPARE(changes.count(),0);
-        draft.insert("wordProvider","ai");
+        QCOMPARE(settings->endpoint(), originalEndpoint);
+        QCOMPARE(changes.count(), 0);
+        draft.insert("wordProvider", "ai");
         QVERIFY(settings->applyDraft(draft));
-        QCOMPARE(settings->endpoint(),QString("https://example.org/v1"));
-        QCOMPARE(settings->model(),QString("new-model"));
-        QCOMPARE(changes.count(),1);
-        const auto savedValues=settings->learningSettings();
-        QVERIFY(QFile::rename(directory.filePath("study.json"),directory.filePath("preserved.json")));
+        QCOMPARE(settings->endpoint(), QString("https://example.org/v1"));
+        QCOMPARE(settings->model(), QString("new-model"));
+        QCOMPARE(changes.count(), 1);
+        const auto savedValues = settings->learningSettings();
+        QVERIFY(QFile::rename(directory.filePath("study.json"), directory.filePath("preserved.json")));
         QVERIFY(QDir().mkdir(directory.filePath("study.json"))); // Force atomic replacement to fail.
-        draft.insert("endpoint","https://different.example/v1"); draft.insert("sourceLanguage","Japanese");
+        draft.insert("endpoint", "https://different.example/v1");
+        draft.insert("sourceLanguage", "Japanese");
         QVERIFY(!settings->applyDraft(draft));
-        QCOMPARE(settings->endpoint(),QString("https://example.org/v1"));
-        QCOMPARE(settings->learningSettings(),savedValues);
-        QCOMPARE(changes.count(),1);
+        QCOMPARE(settings->endpoint(), QString("https://example.org/v1"));
+        QCOMPARE(settings->learningSettings(), savedValues);
+        QCOMPARE(changes.count(), 1);
     }
 
     void featureStatusMessagesDoNotOverwriteAnExplanation() {
         QTemporaryDir directory;
-        StudyServices services(directory.path(),[](const QString &) { return QByteArray(); });
-        services.explanation()->explain("ışık","Bir ışık gördüm.");
-        QCOMPARE(services.explanation()->state(),QString("failed"));
-        const auto error=services.explanation()->message();
-        services.deck()->saveCard("ışık","Bir ışık gördüm.","light",1.5);
+        StudyServices services(directory.path(), [](const QString &) { return QByteArray(); });
+        services.explanation()->explain("ışık", "Bir ışık gördüm.");
+        QCOMPARE(services.explanation()->state(), QString("failed"));
+        const auto error = services.explanation()->message();
+        services.deck()->saveCard("ışık", "Bir ışık gördüm.", "light", 1.5);
         QVERIFY(services.deck()->message().contains("saved"));
-        QCOMPARE(services.explanation()->message(),error);
+        QCOMPARE(services.explanation()->message(), error);
         services.subtitles()->findSubtitles("invalid");
-        QCOMPARE(services.explanation()->message(),error);
+        QCOMPARE(services.explanation()->message(), error);
         QVERIFY(!services.subtitles()->message().isEmpty());
-        StudyServices restored(directory.path(),[](const QString &) { return QByteArray(); });
-        QCOMPARE(restored.deck()->cards().size(),1);
+        StudyServices restored(directory.path(), [](const QString &) { return QByteArray(); });
+        QCOMPARE(restored.deck()->cards().size(), 1);
     }
 
     void contextualWordCardsRequireCompleteBoundedStructuredAnswers() {
         const auto envelope = [](const QJsonObject &card, const QString &finish = "stop") {
-            return QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{{"finish_reason", finish},
-                {"message", QJsonObject{{"content", QString::fromUtf8(QJsonDocument(card).toJson())}}}}}}}).toJson();
+            return QJsonDocument(
+                       QJsonObject{
+                           {"choices",
+                            QJsonArray{QJsonObject{
+                                {"finish_reason", finish},
+                                {"message", QJsonObject{{"content", QString::fromUtf8(
+                                                                        QJsonDocument(card).toJson())}}}}}}})
+                .toJson();
         };
-        QJsonObject card{{"lemma", "dalmak"}, {"meaning", "I became absorbed"},
-            {"explanation", "The speaker was absorbed in watching television."},
-            {"otherMeanings", QJsonArray{"to dive into water", "to fall asleep"}}};
+        QJsonObject card{{"lemma", "dalmak"},
+                         {"meaning", "I became absorbed"},
+                         {"explanation", "The speaker was absorbed in watching television."},
+                         {"otherMeanings", QJsonArray{"to dive into water", "to fall asleep"}}};
         const auto parsed = WordLookup::parseContextMeaning(envelope(card));
         QCOMPARE(parsed.value("lemma").toString(), QString("dalmak"));
         QCOMPARE(parsed.value("meaning").toString(), QString("I became absorbed"));
         QCOMPARE(parsed.value("otherMeanings").toStringList().size(), 2);
-        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card, "length")));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,
+                                 WordLookup::parseContextMeaning(envelope(card, "length")));
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning("{}"));
         card.insert("otherMeanings", QJsonArray{});
-        QVERIFY(WordLookup::parseContextMeaning(envelope(card)).value("otherMeanings").toStringList().isEmpty());
+        QVERIFY(
+            WordLookup::parseContextMeaning(envelope(card)).value("otherMeanings").toStringList().isEmpty());
         card.insert("meaning", QString(601, 'x'));
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
         card.insert("meaning", "<img src='https://invalid.example/tracker'>");
         // Returned text is never interpreted as HTML by the card.
-        QVERIFY(WordLookup::parseContextMeaning(envelope(card)).value("meaning").toString().startsWith("<img"));
+        QVERIFY(
+            WordLookup::parseContextMeaning(envelope(card)).value("meaning").toString().startsWith("<img"));
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(QByteArray(64001, 'x')));
     }
 
@@ -96,46 +109,69 @@ private slots:
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket, bytes] {
                 *bytes += socket->readAll();
                 const int split = bytes->indexOf("\r\n\r\n");
-                if (split < 0 || socket->property("sent").toBool()) return;
+                if (split < 0 || socket->property("sent").toBool())
+                    return;
                 int length = 0;
                 for (const auto &line : bytes->left(split).split('\n'))
-                    if (line.toLower().startsWith("content-length:")) length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
-                if (bytes->size() < split + 4 + length) return;
+                    if (line.toLower().startsWith("content-length:"))
+                        length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
+                if (bytes->size() < split + 4 + length)
+                    return;
                 socket->setProperty("sent", true);
                 ++requests;
                 headers = bytes->left(split);
                 submitted = QJsonDocument::fromJson(bytes->mid(split + 4, length)).object();
-                const QString content = R"({"lemma":"dalmak","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","otherMeanings":["to dive"]})";
-                const auto body = QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{{"finish_reason", "stop"},
-                    {"message", QJsonObject{{"content", content}}}}}}}).toJson();
-                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) + "\r\n\r\n" + body.left(10));
-                QTimer::singleShot(150, socket, [socket, body] { socket->write(body.mid(10)); socket->disconnectFromHost(); });
+                const QString content =
+                    R"({"lemma":"dalmak","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","otherMeanings":["to dive"]})";
+                const auto body =
+                    QJsonDocument(
+                        QJsonObject{{"choices", QJsonArray{QJsonObject{
+                                                    {"finish_reason", "stop"},
+                                                    {"message", QJsonObject{{"content", content}}}}}}})
+                        .toJson();
+                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) +
+                              "\r\n\r\n" + body.left(10));
+                QTimer::singleShot(150, socket, [socket, body] {
+                    socket->write(body.mid(10));
+                    socket->disconnectFromHost();
+                });
             });
         });
         QString credentialEndpoint;
-        StudyServices study(directory.path(), [&](const QString &endpoint) { credentialEndpoint = endpoint; return QByteArray("synthetic-test-key"); });
+        StudyServices study(directory.path(), [&](const QString &endpoint) {
+            credentialEndpoint = endpoint;
+            return QByteArray("synthetic-test-key");
+        });
         const auto endpoint = QString("http://127.0.0.1:%1").arg(server.serverPort());
         QVERIFY(study.settings()->configure(endpoint, "mock", "https://example.org/%s", false));
         QCOMPARE(study.settings()->learningSettings().value("wordProvider").toString(), QString("ai"));
         const QJsonObject context{{"clickedSubtitle", "Ben televizyona dalmışım ya."},
-            {"before", QJsonArray{"Açık bile değil televizyon."}}, {"after", QJsonArray{"Öyle mi?"}},
-            {"secondary", QJsonArray{"I was watching TV."}}, {"explanationLanguage", "English"}};
-        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(), study.settings()->model());
+                                  {"before", QJsonArray{"Açık bile değil televizyon."}},
+                                  {"after", QJsonArray{"Öyle mi?"}},
+                                  {"secondary", QJsonArray{"I was watching TV."}},
+                                  {"explanationLanguage", "English"}};
+        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(),
+                                     study.settings()->model());
         QTRY_COMPARE(study.words()->state(), QString("complete"));
         QCOMPARE(requests, 1);
         QCOMPARE(credentialEndpoint, endpoint);
         QVERIFY(headers.contains("Bearer synthetic-test-key"));
         QVERIFY(!QJsonDocument(submitted).toJson().contains("synthetic-test-key"));
         QCOMPARE(submitted.value("stream").toBool(), false);
-        QCOMPARE(submitted.value("response_format").toObject().value("type").toString(), QString("json_object"));
-        const auto sentContext = QJsonDocument::fromJson(submitted.value("messages").toArray().last().toObject().value("content").toString().toUtf8()).object();
+        QCOMPARE(submitted.value("response_format").toObject().value("type").toString(),
+                 QString("json_object"));
+        const auto sentContext =
+            QJsonDocument::fromJson(
+                submitted.value("messages").toArray().last().toObject().value("content").toString().toUtf8())
+                .object();
         QCOMPARE(sentContext.value("word").toString(), QString("dalmışım"));
         QCOMPARE(sentContext.value("before"), context.value("before"));
         QCOMPARE(sentContext.value("after"), context.value("after"));
         QCOMPARE(sentContext.value("secondary"), context.value("secondary"));
         QCOMPARE(study.words()->lemma(), QString("dalmak"));
         QCOMPARE(study.words()->otherMeanings(), QStringList{"to dive"});
-        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(), study.settings()->model());
+        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(),
+                                     study.settings()->model());
         QTRY_COMPARE(requests, 2);
         study.words()->cancel();
         QTest::qWait(250);
@@ -170,15 +206,23 @@ private slots:
         QCOMPARE(WordLookup::wordAt("日本語 العربية", 1), QString("日本語"));
         QCOMPARE(WordLookup::languageCode("Turkish"), QString("tr"));
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::languageCode("bad/host"));
-        QCOMPARE(WordLookup::parseMeanings(R"({"data":{"translations":[{"translatedText":"light &amp; bright"}]}})", true, false), QStringList{"light & bright"});
-        QCOMPARE(WordLookup::parseMeanings(R"([{"translations":[{"displayTarget":"light"},{"displayTarget":"light"},{"displayTarget":"brightness"}]}])", false, true), (QStringList{"light", "brightness"}));
-        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseMeanings(QByteArray(64001, 'x'), false, false));
+        QCOMPARE(WordLookup::parseMeanings(
+                     R"({"data":{"translations":[{"translatedText":"light &amp; bright"}]}})", true, false),
+                 QStringList{"light & bright"});
+        QCOMPARE(
+            WordLookup::parseMeanings(
+                R"([{"translations":[{"displayTarget":"light"},{"displayTarget":"light"},{"displayTarget":"brightness"}]}])",
+                false, true),
+            (QStringList{"light", "brightness"}));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,
+                                 WordLookup::parseMeanings(QByteArray(64001, 'x'), false, false));
     }
     void learningSettingsWhitelistFieldsAndNeverPersistKeys() {
         QTemporaryDir directory;
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
         const QVariantMap settings{{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"},
-            {"includeSecondary", true}, {"primaryProvider", "configured"}, {"wordProvider", "off"}, {"apiKey", "should-not-save"}};
+                                   {"includeSecondary", true},    {"primaryProvider", "configured"},
+                                   {"wordProvider", "off"},       {"apiKey", "should-not-save"}};
         QVERIFY(study.settings()->configureLearning(settings));
         QFile file(directory.filePath("study.json"));
         QVERIFY(file.open(QIODevice::ReadOnly));
@@ -212,7 +256,8 @@ private slots:
             auto *socket = primary.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
                 socket->readAll();
-                if (socket->property("counted").toBool()) return;
+                if (socket->property("counted").toBool())
+                    return;
 
                 socket->setProperty("counted", true);
                 ++primaryRequests;
@@ -222,21 +267,29 @@ private slots:
             auto *socket = alternate.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
                 socket->readAll();
-                if (socket->property("sent").toBool()) return;
+                if (socket->property("sent").toBool())
+                    return;
 
                 socket->setProperty("sent", true);
                 ++alternateRequests;
-                const QByteArray answer = "data: {\"choices\":[{\"delta\":{\"content\":\"Light\"}}]}\n\ndata: [DONE]\n\n";
-                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(answer.size()) + "\r\nConnection: close\r\n\r\n" + answer);
+                const QByteArray answer =
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Light\"}}]}\n\ndata: [DONE]\n\n";
+                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(answer.size()) +
+                              "\r\nConnection: close\r\n\r\n" + answer);
                 socket->disconnectFromHost();
             });
         });
         const QString local = QString("http://127.0.0.1:%1");
-        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
+        StudyServices study(
+            directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
             "https://api.opensubtitles.com/api/v1", local.arg(alternate.serverPort()));
-        QVERIFY(study.settings()->configure(local.arg(primary.serverPort()), "mock", "https://example.org/%s", false));
-        QVariantMap settings{{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}, {"wordProvider", "off"},
-            {"primaryProvider", "configured"}, {"fallbackEnabled", true}};
+        QVERIFY(study.settings()->configure(local.arg(primary.serverPort()), "mock", "https://example.org/%s",
+                                            false));
+        QVariantMap settings{{"sourceLanguage", "Turkish"},
+                             {"explanationLanguage", "English"},
+                             {"wordProvider", "off"},
+                             {"primaryProvider", "configured"},
+                             {"fallbackEnabled", true}};
         QVERIFY(study.settings()->configureLearning(settings));
         study.explanation()->explain("ışık", "Bir ışık gördüm.");
         QTRY_COMPARE(primaryRequests, 1);
@@ -246,7 +299,8 @@ private slots:
         QCOMPARE(primaryRequests, 1);
         QCOMPARE(alternateRequests, 1);
         QCOMPARE(study.explanation()->turns().first().toMap().value("fallback").toBool(), true);
-        QCOMPARE(study.explanation()->turns().first().toMap().value("provider").toString(), QString("gpt-6-luna"));
+        QCOMPARE(study.explanation()->turns().first().toMap().value("provider").toString(),
+                 QString("gpt-6-luna"));
     }
     void wordLookupStreamsOneBoundedResponseAndCancellationRejectsLateCallbacks() {
         QTcpServer server;
@@ -256,18 +310,24 @@ private slots:
             auto *socket = server.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
                 socket->readAll();
-                if (socket->property("sent").toBool()) return;
+                if (socket->property("sent").toBool())
+                    return;
 
                 socket->setProperty("sent", true);
                 ++requests;
                 const QByteArray body = R"({"data":{"translations":[{"translatedText":"light"}]}})";
-                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body.left(10));
-                QTimer::singleShot(150, socket, [socket, body] { socket->write(body.mid(10)); socket->disconnectFromHost(); });
+                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) +
+                              "\r\nConnection: close\r\n\r\n" + body.left(10));
+                QTimer::singleShot(150, socket, [socket, body] {
+                    socket->write(body.mid(10));
+                    socket->disconnectFromHost();
+                });
             });
         });
         WordLookup words([](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
-            QUrl(QString("http://127.0.0.1:%1").arg(server.serverPort())));
-        const QVariantMap settings{{"wordProvider", "google"}, {"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}};
+                         QUrl(QString("http://127.0.0.1:%1").arg(server.serverPort())));
+        const QVariantMap settings{
+            {"wordProvider", "google"}, {"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}};
         words.lookup("ışık", settings);
         QTRY_COMPARE(words.state(), QString("complete"));
         QCOMPARE(words.meanings(), QStringList{"light"});
@@ -302,11 +362,16 @@ private slots:
         QVERIFY(!restored.background());
     }
     void networkErrorsGiveSpecificRecovery() {
-        QVERIFY(networkFailureMessage(0, QNetworkReply::HostNotFoundError, "Explanation failed").contains("server could not be found"));
-        QVERIFY(networkFailureMessage(0, QNetworkReply::SslHandshakeFailedError, "Explanation failed").contains("secure connection"));
-        QVERIFY(networkFailureMessage(401, QNetworkReply::AuthenticationRequiredError, "Explanation failed").contains("Settings"));
-        QVERIFY(networkFailureMessage(429, QNetworkReply::UnknownContentError, "Explanation failed").contains("allowance"));
-        QVERIFY(networkFailureMessage(503, QNetworkReply::ServiceUnavailableError, "Explanation failed").contains("temporarily unavailable"));
+        QVERIFY(networkFailureMessage(0, QNetworkReply::HostNotFoundError, "Explanation failed")
+                    .contains("server could not be found"));
+        QVERIFY(networkFailureMessage(0, QNetworkReply::SslHandshakeFailedError, "Explanation failed")
+                    .contains("secure connection"));
+        QVERIFY(networkFailureMessage(401, QNetworkReply::AuthenticationRequiredError, "Explanation failed")
+                    .contains("Settings"));
+        QVERIFY(networkFailureMessage(429, QNetworkReply::UnknownContentError, "Explanation failed")
+                    .contains("allowance"));
+        QVERIFY(networkFailureMessage(503, QNetworkReply::ServiceUnavailableError, "Explanation failed")
+                    .contains("temporarily unavailable"));
     }
     void failedRequestDoesNotRetryAndAnExplicitRetryCanSucceed() {
         QTemporaryDir directory;
@@ -317,20 +382,27 @@ private slots:
             auto *socket = server.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
                 socket->readAll();
-                if (socket->property("sent").toBool()) return;
+                if (socket->property("sent").toBool())
+                    return;
 
                 socket->setProperty("sent", true);
                 ++requests;
-                const auto body = requests == 1 ? QByteArray("{\"error\":\"private provider details\"}")
-                    : QByteArray("data: {\"choices\":[{\"delta\":{\"content\":\"Light\"}}]}\n\ndata: [DONE]\n\n");
-                const auto status = requests == 1 ? QByteArray("429 Too Many Requests") : QByteArray("200 OK");
-                socket->write("HTTP/1.1 " + status + "\r\nConnection: close\r\nContent-Length: "
-                    + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                const auto body =
+                    requests == 1
+                        ? QByteArray("{\"error\":\"private provider details\"}")
+                        : QByteArray("data: {\"choices\":[{\"delta\":{\"content\":\"Light\"}}]}\n\ndata: "
+                                     "[DONE]\n\n");
+                const auto status =
+                    requests == 1 ? QByteArray("429 Too Many Requests") : QByteArray("200 OK");
+                socket->write("HTTP/1.1 " + status + "\r\nConnection: close\r\nContent-Length: " +
+                              QByteArray::number(body.size()) + "\r\n\r\n" + body);
                 socket->disconnectFromHost();
             });
         });
-        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        StudyServices study(directory.path(),
+                            [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock",
+                                            "https://example.org/%s", false));
         study.explanation()->explain("ışık", "Bir ışık gördüm.");
         QTRY_COMPARE(study.explanation()->state(), QString("failed"));
         QVERIFY(study.explanation()->message().contains("allowance"));
@@ -373,7 +445,8 @@ private slots:
         QTemporaryDir directory;
         QFile file(directory.filePath("study.json"));
         QVERIFY(file.open(QIODevice::WriteOnly));
-        file.write("broken data"); file.close();
+        file.write("broken data");
+        file.close();
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
         study.deck()->saveCard("ışık", "", "light", 0);
         QCOMPARE(study.deck()->cards().size(), 0);
@@ -385,7 +458,8 @@ private slots:
         QFile file(directory.filePath("study.json"));
         QVERIFY(file.open(QIODevice::WriteOnly));
         const QByteArray data = R"({"version":1,"cards":[{"front":"ışık"}]})";
-        file.write(data); file.close();
+        file.write(data);
+        file.close();
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
         study.deck()->saveCard("ışık", "", "light", 0);
         QCOMPARE(study.deck()->cards().size(), 0);
@@ -396,7 +470,8 @@ private slots:
         QTemporaryDir directory;
         QFile file(directory.filePath("video"));
         QVERIFY(file.open(QIODevice::WriteOnly));
-        file.write(QByteArray(131072, '\0')); file.close();
+        file.write(QByteArray(131072, '\0'));
+        file.close();
         QCOMPARE(SubtitleService::movieHash(file.fileName()), QString("0000000000020000"));
     }
     void missingCredentialSendsNothing() {
@@ -412,7 +487,8 @@ private slots:
         QTemporaryDir directory;
         QFile media(directory.filePath("video"));
         QVERIFY(media.open(QIODevice::WriteOnly));
-        media.write(QByteArray(131072, '\0')); media.close();
+        media.write(QByteArray(131072, '\0'));
+        media.close();
         QTcpServer server;
         QVERIFY(server.listen(QHostAddress::LocalHost));
         const auto base = QString("http://127.0.0.1:%1").arg(server.serverPort());
@@ -425,42 +501,52 @@ private slots:
             auto bytes = std::make_shared<QByteArray>();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket, bytes] {
                 *bytes += socket->readAll();
-                if (!bytes->contains("\r\n\r\n") || socket->property("sent").toBool()) return;
+                if (!bytes->contains("\r\n\r\n") || socket->property("sent").toBool())
+                    return;
                 socket->setProperty("sent", true);
                 const auto target = QString::fromUtf8(bytes->split(' ').value(1));
                 requests.append(target);
                 if (requests.size() == 1) {
-                    socket->write("HTTP/1.1 301 Moved\r\nLocation: " + target.toUtf8() + "&canonical=1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+                    socket->write("HTTP/1.1 301 Moved\r\nLocation: " + target.toUtf8() +
+                                  "&canonical=1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
                     socket->disconnectFromHost();
                     return;
                 }
                 QByteArray body;
                 if (target.startsWith("/subtitles?")) {
                     apiAuthenticated &= bytes->toLower().contains("api-key: synthetic-test-key");
-                    body = R"({"data":[{"attributes":{"release":"Original fixture","language":"tr","moviehash_match":true,"files":[{"file_id":42}]}}]})";
+                    body =
+                        R"({"data":[{"attributes":{"release":"Original fixture","language":"tr","moviehash_match":true,"files":[{"file_id":42}]}}]})";
                 } else if (target == "/login") {
                     apiAuthenticated &= bytes->toLower().contains("api-key: synthetic-test-key");
                     body = R"({"token":"synthetic-session-token","base_url":"127.0.0.1"})";
                 } else if (target == "/download") {
                     apiAuthenticated &= bytes->toLower().contains("api-key: synthetic-test-key");
-                    downloadAuthenticated = bytes->toLower().contains("authorization: bearer synthetic-session-token");
+                    downloadAuthenticated =
+                        bytes->toLower().contains("authorization: bearer synthetic-session-token");
                     body = ("{\"link\":\"" + base + "/file\"}").toUtf8();
                 } else {
-                    fileUnauthenticated = !bytes->toLower().contains("api-key:") && !bytes->toLower().contains("authorization:");
+                    fileUnauthenticated = !bytes->toLower().contains("api-key:") &&
+                                          !bytes->toLower().contains("authorization:");
                     body = QString("1\n00:00:01,000 --> 00:00:02,000\nİstanbul ışığı\n").toUtf8();
                 }
-                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " +
+                              QByteArray::number(body.size()) + "\r\n\r\n" + body);
                 socket->disconnectFromHost();
             });
         });
-        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
-        study.subtitles()->setSubtitleLoginReader([] { return QByteArray(R"({"username":"synthetic-user","password":"synthetic-password"})"); });
+        StudyServices study(
+            directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
+            base);
+        study.subtitles()->setSubtitleLoginReader(
+            [] { return QByteArray(R"({"username":"synthetic-user","password":"synthetic-password"})"); });
         QVector<Cue> received;
         QString savedPath;
-        connect(study.subtitles(), &SubtitleService::subtitlesReady, this, [&](QVector<Cue> cues, QString path) {
-            received = cues;
-            savedPath = path;
-        });
+        connect(study.subtitles(), &SubtitleService::subtitlesReady, this,
+                [&](QVector<Cue> cues, QString path) {
+                    received = cues;
+                    savedPath = path;
+                });
 
         // 2. An exact match may auto-download, but signed file requests never receive the key.
         study.subtitles()->setMedia(media.fileName());
@@ -469,7 +555,8 @@ private slots:
         QCOMPARE(received.first().text, QString("İstanbul ışığı"));
         QFile savedSubtitle(savedPath);
         QVERIFY(savedSubtitle.open(QIODevice::ReadOnly));
-        QCOMPARE(parseSrt(QString::fromUtf8(savedSubtitle.readAll())).first().text, QString("İstanbul ışığı"));
+        QCOMPARE(parseSrt(QString::fromUtf8(savedSubtitle.readAll())).first().text,
+                 QString("İstanbul ışığı"));
         QCOMPARE(requests.size(), 5);
         QVERIFY(requests.first().contains("languages=tr&moviehash=0000000000020000"));
         QVERIFY(apiAuthenticated);
@@ -500,16 +587,20 @@ private slots:
             auto *socket = server.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
                 socket->readAll();
-                if (socket->property("sent").toBool()) return;
+                if (socket->property("sent").toBool())
+                    return;
 
                 socket->setProperty("sent", true);
                 requests++;
-                socket->write("HTTP/1.1 301 Moved\r\nLocation: /unexpected\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+                socket->write("HTTP/1.1 301 Moved\r\nLocation: /unexpected\r\nConnection: "
+                              "close\r\nContent-Length: 0\r\n\r\n");
                 socket->disconnectFromHost();
             });
         });
         const auto base = QString("http://127.0.0.1:%1").arg(server.serverPort());
-        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr, base);
+        StudyServices study(
+            directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
+            base);
         study.subtitles()->setMedia(directory.filePath("video"));
         study.subtitles()->findSubtitles("tr", false, "Original show");
         QTRY_VERIFY(study.subtitles()->message().contains("failed"));
@@ -519,8 +610,10 @@ private slots:
     void incompleteStreams_data() {
         QTest::addColumn<QByteArray>("ending");
         QTest::newRow("missing-done") << QByteArray();
-        QTest::newRow("token-limit") << QByteArray("data: {\"choices\":[{\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n");
-        QTest::newRow("filtered") << QByteArray("data: {\"choices\":[{\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n");
+        QTest::newRow("token-limit") << QByteArray(
+            "data: {\"choices\":[{\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n");
+        QTest::newRow("filtered") << QByteArray(
+            "data: {\"choices\":[{\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n");
     }
     void incompleteStreams() {
         QFETCH(QByteArray, ending);
@@ -531,15 +624,20 @@ private slots:
             auto *socket = server.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [socket, ending] {
                 socket->readAll();
-                if (socket->property("sent").toBool()) return;
+                if (socket->property("sent").toBool())
+                    return;
                 socket->setProperty("sent", true);
-                const auto body = QByteArray("data: {\"choices\":[{\"delta\":{\"content\":\"light\"}}]}\n\n") + ending;
-                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
+                const auto body =
+                    QByteArray("data: {\"choices\":[{\"delta\":{\"content\":\"light\"}}]}\n\n") + ending;
+                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) +
+                              "\r\nConnection: close\r\n\r\n" + body);
                 socket->disconnectFromHost();
             });
         });
-        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        StudyServices study(directory.path(),
+                            [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock",
+                                            "https://example.org/%s", false));
         study.explanation()->explain("ışık", "Bir ışık gördüm.");
         QTRY_COMPARE(study.explanation()->state(), QString("incomplete"));
         QCOMPARE(study.explanation()->answer(), QString("light"));
@@ -557,18 +655,26 @@ private slots:
             connect(socket, &QTcpSocket::disconnected, this, [&] { disconnected = true; });
             connect(socket, &QTcpSocket::readyRead, socket, [socket, received] {
                 *received += socket->readAll();
-                if (!received->contains("\r\n\r\n") || socket->property("started").toBool()) return;
+                if (!received->contains("\r\n\r\n") || socket->property("started").toBool())
+                    return;
                 socket->setProperty("started", true);
-                socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n");
-                const auto event = QString("data: {\"choices\":[{\"delta\":{\"content\":\"ışık\"}}]}\n\n").toUtf8();
+                socket->write(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n");
+                const auto event =
+                    QString("data: {\"choices\":[{\"delta\":{\"content\":\"ışık\"}}]}\n\n").toUtf8();
                 const auto split = event.indexOf(QString("ı").toUtf8()) + 1;
                 socket->write(event.left(split));
                 QTimer::singleShot(40, socket, [socket, event, split] { socket->write(event.mid(split)); });
-                QTimer::singleShot(1000, socket, [socket] { socket->write("data: [DONE]\n\n"); socket->disconnectFromHost(); });
+                QTimer::singleShot(1000, socket, [socket] {
+                    socket->write("data: [DONE]\n\n");
+                    socket->disconnectFromHost();
+                });
             });
         });
-        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock", "https://example.org/%s", false));
+        StudyServices study(directory.path(),
+                            [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock",
+                                            "https://example.org/%s", false));
 
         // 2. Prove visible text precedes completion, then cancel and reject late output.
         study.explanation()->explain("ışık", "Bir ışık gördüm.");

@@ -8,10 +8,10 @@ import Neden
 Rectangle {
     id: pane
     required property LearningSession session
-    readonly property StudyServices study: session.study
+    readonly property StudyServices studyServices: session.study
     property int revealedCard: -1
     property alias currentTab: tabs.currentIndex
-    readonly property bool busy: study.explanation.state === "loading" || study.explanation.state === "streaming"
+    readonly property bool busy: studyServices.explanation.state === "loading" || studyServices.explanation.state === "streaming"
     signal dictionaryRequested(string term)
     signal dismissed
     color: Theme.background
@@ -22,7 +22,7 @@ Rectangle {
         fileMode: FileDialog.SaveFile
         nameFilters: ["Tab-separated text (*.tsv)"]
         defaultSuffix: "tsv"
-        onAccepted: pane.study.deck.exportCards(selectedFile)
+        onAccepted: pane.studyServices.deck.exportCards(selectedFile)
     }
     ColumnLayout {
         anchors.fill: parent
@@ -65,7 +65,7 @@ Rectangle {
             ColumnLayout {
                 RowLayout {
                     Label {
-                        text: pane.study.deck.cards.length + " cards on this device"
+                        text: pane.studyServices.deck.cards.length + " cards on this device"
                         Layout.fillWidth: true
                         color: Theme.muted
                     }
@@ -80,7 +80,7 @@ Rectangle {
                     Layout.fillHeight: true
                     clip: true
                     spacing: Theme.space3
-                    model: pane.study.deck.cards
+                    model: pane.studyServices.deck.cards
                     delegate: Rectangle {
                         id: card
                         required property var modelData
@@ -123,7 +123,7 @@ Rectangle {
                                     text: "Again"
                                     enabled: pane.revealedCard === card.index
                                     onClicked: {
-                                        pane.study.deck.reviewCard(card.index, false);
+                                        pane.studyServices.deck.reviewCard(card.index, false);
                                         pane.revealedCard = -1;
                                     }
                                 }
@@ -131,7 +131,7 @@ Rectangle {
                                     text: "Remembered"
                                     enabled: pane.revealedCard === card.index
                                     onClicked: {
-                                        pane.study.deck.reviewCard(card.index, true);
+                                        pane.studyServices.deck.reviewCard(card.index, true);
                                         pane.revealedCard = -1;
                                     }
                                 }
@@ -140,7 +140,7 @@ Rectangle {
                                 text: "Remove"
                                 flat: true
                                 onClicked: {
-                                    pane.study.deck.removeCard(card.index);
+                                    pane.studyServices.deck.removeCard(card.index);
                                     pane.revealedCard = -1;
                                 }
                             }
@@ -188,11 +188,11 @@ Rectangle {
                 RowLayout {
                     ActionButton {
                         text: "Find Turkish"
-                        onClicked: pane.study.subtitles.findSubtitles("tr", false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
+                        onClicked: pane.studyServices.subtitles.findSubtitles("tr", false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
                     }
                     ActionButton {
                         text: "Find English"
-                        onClicked: pane.study.subtitles.findSubtitles("en", false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
+                        onClicked: pane.studyServices.subtitles.findSubtitles("en", false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
                     }
                 }
                 ListView {
@@ -200,7 +200,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: pane.study.subtitles.subtitleResults
+                    model: pane.studyServices.subtitles.subtitleResults
                     delegate: ItemDelegate {
                         id: result
                         required property var modelData
@@ -213,7 +213,7 @@ Rectangle {
                             elide: Text.ElideRight
                             color: Theme.ink
                         }
-                        onClicked: pane.study.subtitles.downloadSubtitle(result.index)
+                        onClicked: pane.studyServices.subtitles.downloadSubtitle(result.index)
                     }
                 }
                 Label {
@@ -226,7 +226,7 @@ Rectangle {
         }
         Label {
             visible: tabs.currentIndex !== 0
-            text: tabs.currentIndex === 1 ? pane.study.deck.message : pane.study.subtitles.message
+            text: tabs.currentIndex === 1 ? pane.studyServices.deck.message : pane.studyServices.subtitles.message
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText

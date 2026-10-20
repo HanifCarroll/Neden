@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <stdexcept>
 const QVector<Cue> &SubtitleTimeline::entries(SubtitleRole role) const {
-    return role == SubtitleRole::Primary ? model.entries() : secondary;
+    return role == SubtitleRole::Primary ? transcriptModel.entries() : secondaryCues;
 }
 int SubtitleTimeline::count(SubtitleRole role) const {
     return static_cast<int>(entries(role).size());
@@ -14,30 +14,30 @@ const Cue *SubtitleTimeline::cue(int index, SubtitleRole role) const {
     const auto &track = entries(role);
     return index >= 0 && index < track.size() ? &track[index] : nullptr;
 }
-int SubtitleTimeline::active(qint64 ms, SubtitleRole role) const {
-    return cueAt(entries(role), ms);
+int SubtitleTimeline::active(qint64 positionMs, SubtitleRole role) const {
+    return cueAt(entries(role), positionMs);
 }
-QString SubtitleTimeline::text(qint64 ms, SubtitleRole role) const {
-    const auto *item = cue(active(ms, role), role);
+QString SubtitleTimeline::text(qint64 positionMs, SubtitleRole role) const {
+    const auto *item = cue(active(positionMs, role), role);
     if (item)
         return item->text;
-    const auto *primary = cue(active(ms));
-    return role == SubtitleRole::Secondary && secondary.isEmpty() && primary ? primary->translation
-                                                                             : QString();
+    const auto *primary = cue(active(positionMs));
+    return role == SubtitleRole::Secondary && secondaryCues.isEmpty() && primary ? primary->translation
+                                                                                 : QString();
 }
 QString SubtitleTimeline::path(SubtitleRole role) const {
-    return role == SubtitleRole::Primary ? primaryPath : secondaryPath;
+    return role == SubtitleRole::Primary ? primarySubtitlePath : secondarySubtitlePath;
 }
 QString SubtitleTimeline::name(SubtitleRole role) const {
     return QFileInfo(path(role)).fileName();
 }
 QVariantList SubtitleTimeline::tracks() const {
     QVariantList result;
-    for (const auto &path : loadedPaths)
+    for (const auto &path : loadedSubtitlePaths)
         result.append(QVariantMap{{"path", path},
                                   {"name", QFileInfo(path).fileName()},
-                                  {"primary", path == primaryPath},
-                                  {"secondary", path == secondaryPath}});
+                                  {"primary", path == primarySubtitlePath},
+                                  {"secondary", path == secondarySubtitlePath}});
     return result;
 }
 QVector<Cue> SubtitleTimeline::read(const QUrl &url) {
@@ -54,49 +54,49 @@ QVector<Cue> SubtitleTimeline::read(const QUrl &url) {
 }
 void SubtitleTimeline::publish(QVector<Cue> cues, const QString &path, SubtitleRole role) {
     if (role == SubtitleRole::Primary) {
-        primaryPath = path;
-        model.replace(std::move(cues));
+        primarySubtitlePath = path;
+        transcriptModel.replace(std::move(cues));
     } else {
-        secondaryPath = path;
-        secondary = std::move(cues);
+        secondarySubtitlePath = path;
+        secondaryCues = std::move(cues);
     }
-    if (!path.isEmpty() && !loadedPaths.contains(path))
-        loadedPaths.append(path);
-    model.setTranslationCues(secondary);
+    if (!path.isEmpty() && !loadedSubtitlePaths.contains(path))
+        loadedSubtitlePaths.append(path);
+    transcriptModel.setTranslationCues(secondaryCues);
 }
 void SubtitleTimeline::load(const QUrl &url, SubtitleRole role) {
     publish(read(url), QFileInfo(url.toLocalFile()).absoluteFilePath(), role);
 }
 void SubtitleTimeline::replacePrimary(QVector<Cue> cues) {
-    model.replace(std::move(cues));
-    model.setTranslationCues(secondary);
+    transcriptModel.replace(std::move(cues));
+    transcriptModel.setTranslationCues(secondaryCues);
 }
 void SubtitleTimeline::clear(SubtitleRole role) {
     publish({}, {}, role);
 }
 void SubtitleTimeline::reset() {
-    secondary.clear();
-    model.replace({});
-    primaryPath.clear();
-    secondaryPath.clear();
-    loadedPaths.clear();
+    secondaryCues.clear();
+    transcriptModel.replace({});
+    primarySubtitlePath.clear();
+    secondarySubtitlePath.clear();
+    loadedSubtitlePaths.clear();
 }
-int SubtitleTimeline::previous(qint64 ms, int pending) const {
+int SubtitleTimeline::previous(qint64 positionMs, int pending) const {
     if (pending >= 0)
         return pending - 1;
-    const int current = active(ms);
+    const int current = active(positionMs);
     if (current >= 0)
         return current - 1;
     const auto &track = entries(SubtitleRole::Primary);
-    const auto next = std::lower_bound(track.begin(), track.end(), ms,
+    const auto next = std::lower_bound(track.begin(), track.end(), positionMs,
                                        [](const Cue &cue, qint64 time) { return cue.startMs < time; });
     return next == track.begin() ? -1 : static_cast<int>(next - track.begin()) - 1;
 }
-int SubtitleTimeline::next(qint64 ms, int pending) const {
+int SubtitleTimeline::next(qint64 positionMs, int pending) const {
     if (pending >= 0)
         return pending + 1 < count() ? pending + 1 : -1;
     const auto &track = entries(SubtitleRole::Primary);
-    const auto next = std::upper_bound(track.begin(), track.end(), ms,
+    const auto next = std::upper_bound(track.begin(), track.end(), positionMs,
                                        [](qint64 time, const Cue &cue) { return time < cue.startMs; });
     return next == track.end() ? -1 : static_cast<int>(next - track.begin());
 }
@@ -119,12 +119,14 @@ StudyTarget SubtitleTimeline::capture(StudyTarget target, bool includeSecondary)
     if (role == SubtitleRole::Secondary)
         target.sourceLanguage = "auto";
     const auto &track = entries(role);
-    for (int i = qMax(0, index - 3); i < index; ++i)
-        target.before.append(track[i].text);
-    for (int i = index + 1; i < qMin(static_cast<int>(track.size()), index + 4); ++i)
-        target.after.append(track[i].text);
-    const auto other = role == SubtitleRole::Primary ? SubtitleRole::Secondary : SubtitleRole::Primary;
-    for (const auto &clue : entries(other)) {
+    for (int neighborIndex = qMax(0, index - 3); neighborIndex < index; ++neighborIndex)
+        target.before.append(track[neighborIndex].text);
+    for (int neighborIndex = index + 1; neighborIndex < qMin(static_cast<int>(track.size()), index + 4);
+         ++neighborIndex)
+        target.after.append(track[neighborIndex].text);
+    const auto otherTrackRole =
+        role == SubtitleRole::Primary ? SubtitleRole::Secondary : SubtitleRole::Primary;
+    for (const auto &clue : entries(otherTrackRole)) {
         if (clue.startMs < item->endMs && clue.endMs > item->startMs) {
             if (target.translation.isEmpty())
                 target.translation = clue.text;

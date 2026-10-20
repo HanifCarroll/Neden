@@ -10,13 +10,18 @@ class VideoRenderer : public QQuickFramebufferObject::Renderer {
 public:
     explicit VideoRenderer(const Video *item)
         : window(item->window()), videoItem(item), playback(item->playback()) {
-        swapConnection = QObject::connect(window, &QQuickWindow::frameSwapped, window, [this] {
-            if (context) mpv_render_context_report_swap(context);
-        }, Qt::DirectConnection);
+        swapConnection = QObject::connect(
+            window, &QQuickWindow::frameSwapped, window,
+            [this] {
+                if (context)
+                    mpv_render_context_report_swap(context);
+            },
+            Qt::DirectConnection);
     }
     ~VideoRenderer() override {
         QObject::disconnect(swapConnection);
-        if (!context) return;
+        if (!context)
+            return;
 
         playback->detachVideoRenderer(renderToken);
         mpv_render_context_set_update_callback(context, nullptr, nullptr);
@@ -37,14 +42,16 @@ public:
         // A color texture is sufficient for mpv; it does not use depth or stencil.
         const QSize selectedSize = hasVideo ? size : QSize(64, 64);
         auto *buffer = new QOpenGLFramebufferObject(selectedSize, QOpenGLFramebufferObject::NoAttachment);
-        if (!buffer->isValid()) qFatal("Cannot allocate the OpenGL video framebuffer.");
+        if (!buffer->isValid())
+            qFatal("Cannot allocate the OpenGL video framebuffer.");
 
         return buffer;
     }
     void render() override {
 
         // 1. Allocate mpv's GPU resources only when a media request needs them.
-        if (!context && outputRequested) initializeContext();
+        if (!context && outputRequested)
+            initializeContext();
 
         QQuickOpenGLUtils::resetOpenGLState();
         if (!context) {
@@ -62,21 +69,23 @@ public:
         int flip = 1;
         int blockForTargetTime = 0;
         mpv_render_param parameters[] = {{MPV_RENDER_PARAM_OPENGL_FBO, &framebuffer},
-            {MPV_RENDER_PARAM_FLIP_Y, &flip},
-            {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &blockForTargetTime},
-            {MPV_RENDER_PARAM_INVALID, nullptr}};
+                                         {MPV_RENDER_PARAM_FLIP_Y, &flip},
+                                         {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &blockForTargetTime},
+                                         {MPV_RENDER_PARAM_INVALID, nullptr}};
         mpv_render_context_update(context);
         mpv_render_context_render(context, parameters);
         QQuickOpenGLUtils::resetOpenGLState();
     }
+
 private:
     void initializeContext() {
 
         // 1. Bind libmpv to the scene graph's current OpenGL context.
-        mpv_opengl_init_params initialization{
-            [](void *, const char *name) -> void * {
-                return reinterpret_cast<void *>(QOpenGLContext::currentContext()->getProcAddress(name));
-            }, nullptr};
+        mpv_opengl_init_params initialization{[](void *, const char *name) -> void * {
+                                                  return reinterpret_cast<void *>(
+                                                      QOpenGLContext::currentContext()->getProcAddress(name));
+                                              },
+                                              nullptr};
         mpv_render_param parameters[] = {
             {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)},
             {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &initialization},
@@ -86,9 +95,12 @@ private:
         }
 
         // 2. Publish ownership only after the context can accept a media load.
-        mpv_render_context_set_update_callback(context, [](void *data) {
-            QMetaObject::invokeMethod(static_cast<Video *>(data), "update", Qt::QueuedConnection);
-        }, const_cast<Video *>(videoItem));
+        mpv_render_context_set_update_callback(
+            context,
+            [](void *data) {
+                QMetaObject::invokeMethod(static_cast<Video *>(data), "update", Qt::QueuedConnection);
+            },
+            const_cast<Video *>(videoItem));
         renderToken = playback->attachVideoRenderer();
     }
 
@@ -101,4 +113,6 @@ private:
     mpv_render_context *context = nullptr;
     QMetaObject::Connection swapConnection;
 };
-QQuickFramebufferObject::Renderer *Video::createRenderer() const { return new VideoRenderer(this); }
+QQuickFramebufferObject::Renderer *Video::createRenderer() const {
+    return new VideoRenderer(this);
+}

@@ -10,6 +10,10 @@ Rectangle {
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
     property bool windowDragEnabled: false
+    HoverHandler {
+        id: stageHover
+        blocking: false
+    }
     signal fullscreenRequested
     signal moveWindowRequested
     readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
@@ -44,13 +48,10 @@ Rectangle {
         DragHandler {
             target: null
             onActiveChanged: {
-                if (active) stage.moveWindowRequested();
+                if (active)
+                    stage.moveWindowRequested();
             }
         }
-    }
-    HoverHandler {
-        id: videoHover
-        blocking: false
     }
     Item {
         id: subtitleOverlay
@@ -110,30 +111,26 @@ Rectangle {
     ActionButton {
         id: explainLine
         objectName: "primarySubtitleTextExplainButton"
-        readonly property real textRight: subtitleOverlay.x + subtitle.x + Math.min(subtitle.width, (subtitle.width + subtitle.paintedWidth) / 2)
+        z: 2 // A floating word card must not cover this action.
+        readonly property bool hasCaptions: subtitle.visible || translation.visible
+        readonly property SubtitleText caption: subtitle.visible ? subtitle : translation
+        readonly property real textRight: subtitleOverlay.x + caption.x + Math.min(caption.width, (caption.width + caption.paintedWidth) / 2)
         readonly property bool fitsBesideText: textRight + Theme.space2 + width <= stage.width - Theme.space4
-        readonly property real preferredY: fitsBesideText ? subtitleOverlay.y + subtitle.y + (subtitle.height - height) / 2 : subtitleOverlay.y - height - Theme.space2
-        // Keep one hover target across both tracks and the detached action.
-        readonly property bool captionHovered: {
-            if (!videoHover.hovered)
-                return false;
-
-            const position = videoHover.point.position;
-            const left = Math.min(subtitleOverlay.x, x) - Theme.space3;
-            const right = Math.max(subtitleOverlay.x + subtitleOverlay.width, x + width) + Theme.space3;
-            const top = Math.min(subtitleOverlay.y, y) - Theme.space3;
-            const bottom = Math.max(subtitleOverlay.y + subtitleOverlay.height, y + height) + Theme.space3;
-            return position.x >= left && position.x <= right && position.y >= top && position.y <= bottom;
-        }
+        readonly property real preferredX: fitsBesideText ? textRight + Theme.space2 : textRight - width
+        readonly property real preferredY: fitsBesideText ? subtitleOverlay.y + caption.y + (caption.height - height) / 2 : subtitleOverlay.y - height - Theme.space2
+        readonly property bool captionHovered: captionHoverRegion.hovered || subtitle.hovered || translation.hovered
+        readonly property bool selectionInProgress: subtitle.selecting || translation.selecting
+        readonly property bool actionInUse: hovered || down || activeFocus
+        readonly property bool shouldShow: captionHovered || hoverRetained || actionInUse || selectionInProgress
         property bool hoverRetained: false
         text: "Explain line"
         implicitHeight: 30
         focusPolicy: Qt.TabFocus
         font.pixelSize: Theme.caption
-        x: Math.max(Theme.space2, Math.min(fitsBesideText ? textRight + Theme.space2 : textRight - width, stage.width - width - Theme.space2))
+        x: Math.max(Theme.space2, Math.min(preferredX, stage.width - width - Theme.space2))
         y: Math.max(Theme.space2, Math.min(preferredY, stage.height - height - Theme.space2))
-        visible: stage.appearance.selectable && subtitle.visible && !subtitle.selecting && (captionHovered || hoverRetained || hovered || activeFocus)
-        Accessible.name: "Explain the full primary subtitle"
+        visible: hasCaptions && shouldShow
+        Accessible.name: subtitle.visible ? "Explain the full primary subtitle" : "Explain the full secondary subtitle"
         onCaptionHoveredChanged: {
             if (captionHovered) {
                 hideExplanation.stop();
@@ -142,8 +139,25 @@ Rectangle {
                 hideExplanation.restart();
         }
         onClicked: {
-            stage.session.explainCue();
+            stage.session.explainCue(!subtitle.visible);
         }
+    }
+    // One continuous region spans both tracks and the action. Observe from the stage,
+    // rather than placing an input layer above the editors and their word-hover handlers.
+    Item {
+        id: captionHoverRegion
+        z: 1
+        visible: explainLine.hasCaptions
+        readonly property real leftEdge: Math.min(subtitleOverlay.x, explainLine.x) - Theme.space3
+        readonly property real topEdge: Math.min(subtitleOverlay.y, explainLine.y) - Theme.space3
+        readonly property real rightEdge: Math.max(subtitleOverlay.x + subtitleOverlay.width, explainLine.x + explainLine.width) + Theme.space3
+        readonly property real bottomEdge: Math.max(subtitleOverlay.y + subtitleOverlay.height, explainLine.y + explainLine.height) + Theme.space3
+        x: Math.max(0, leftEdge)
+        y: Math.max(0, topEdge)
+        width: Math.min(stage.width, rightEdge) - x
+        height: Math.min(stage.height, bottomEdge) - y
+        readonly property point pointerPosition: stageHover.point.position
+        readonly property bool hovered: stageHover.hovered && pointerPosition.x >= x && pointerPosition.x <= x + width && pointerPosition.y >= y && pointerPosition.y <= y + height
     }
     Timer {
         id: hideExplanation
@@ -156,15 +170,16 @@ Rectangle {
         visible: stage.session.study.words.state !== "idle"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Math.max(16, Math.min(parent.height - height - 16,
-            subtitleOverlay.height + subtitleOverlay.anchors.bottomMargin + 12))
+        anchors.bottomMargin: Math.max(16, Math.min(parent.height - height - 16, subtitleOverlay.height + subtitleOverlay.anchors.bottomMargin + 12))
         width: Math.min(400, parent.width - 32)
         height: Math.min(wordContents.implicitHeight + 32, parent.height - 32)
         radius: Theme.panelRadius
         color: Theme.surface
         border.color: Theme.border
         // Keep clicks inside the floating card from reaching the video gestures.
-        MouseArea { anchors.fill: parent }
+        MouseArea {
+            anchors.fill: parent
+        }
         Flickable {
             anchors.fill: parent
             anchors.margins: 16
@@ -242,9 +257,7 @@ Rectangle {
                 }
                 Label {
                     visible: stage.session.study.words.state !== "complete"
-                    text: stage.session.study.words.state === "loading"
-                        ? (stage.session.study.words.contextual ? "Finding the meaning in this scene…" : "Looking up…")
-                        : stage.session.study.words.message
+                    text: stage.session.study.words.state === "loading" ? (stage.session.study.words.contextual ? "Finding the meaning in this scene…" : "Looking up…") : stage.session.study.words.message
                     textFormat: Text.PlainText
                     wrapMode: Text.WordWrap
                     color: Theme.muted

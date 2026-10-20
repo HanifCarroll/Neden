@@ -34,6 +34,7 @@ signals:
     void settingsRequested();
     void activeChanged();
     void nativeModeChanged();
+
 private:
     void bindZoomButton();
     struct NativeState;

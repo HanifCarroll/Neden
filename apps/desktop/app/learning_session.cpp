@@ -8,38 +8,38 @@
 #include <QStringDecoder>
 
 LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
-    : QObject(parent), interaction(*playback, timeline, this), engine(playback) {
-    connect(engine, &PlaybackEngine::positionChanged, this, &LearningSession::positionChanged);
-    connect(engine, &PlaybackEngine::durationChanged, this, &LearningSession::durationChanged);
-    connect(engine, &PlaybackEngine::pausedChanged, this, &LearningSession::pausedChanged);
-    connect(engine, &PlaybackEngine::positionChanged, this, &LearningSession::syncPosition);
-    connect(engine, &PlaybackEngine::loaded, this, &LearningSession::finishOpening);
-    connect(&interaction, &StudyInteraction::selectionChanged, this, &LearningSession::selectionChanged);
-    connect(&interaction, &StudyInteraction::started, this, &LearningSession::stopReplay);
-    connect(&interaction, &StudyInteraction::explanationRequested, this,
+    : QObject(parent), studyInteraction(*playback, subtitleTimeline, this), playbackEngine(playback) {
+    connect(playbackEngine, &PlaybackEngine::positionChanged, this, &LearningSession::positionChanged);
+    connect(playbackEngine, &PlaybackEngine::durationChanged, this, &LearningSession::durationChanged);
+    connect(playbackEngine, &PlaybackEngine::pausedChanged, this, &LearningSession::pausedChanged);
+    connect(playbackEngine, &PlaybackEngine::positionChanged, this, &LearningSession::syncPosition);
+    connect(playbackEngine, &PlaybackEngine::loaded, this, &LearningSession::finishOpening);
+    connect(&studyInteraction, &StudyInteraction::selectionChanged, this, &LearningSession::selectionChanged);
+    connect(&studyInteraction, &StudyInteraction::started, this, &LearningSession::stopReplay);
+    connect(&studyInteraction, &StudyInteraction::explanationRequested, this,
             &LearningSession::explanationRequested);
-    connect(&interaction, &StudyInteraction::error, this, [this](const QString &message) {
+    connect(&studyInteraction, &StudyInteraction::error, this, [this](const QString &message) {
         statusText = message;
         emit statusChanged();
     });
     checkpointTimer.setInterval(5000);
     connect(&checkpointTimer, &QTimer::timeout, this, &LearningSession::checkpoint);
     checkpointTimer.start();
-    connect(engine, &PlaybackEngine::failed, this, [this] {
+    connect(playbackEngine, &PlaybackEngine::failed, this, [this] {
         statusText = "Cannot play this file.";
         emit statusChanged();
     });
 }
-void LearningSession::setStudyServices(StudyServices *tools) {
-    services = tools;
-    interaction.setServices(tools);
-    connect(tools->subtitles(), &SubtitleService::subtitlesReady, this,
+void LearningSession::setStudyServices(StudyServices *providedStudyServices) {
+    studyServices = providedStudyServices;
+    studyInteraction.setServices(providedStudyServices);
+    connect(providedStudyServices->subtitles(), &SubtitleService::subtitlesReady, this,
             [this](const QVector<Cue> &cues, const QString &path) {
                 stopReplay();
                 resetInteraction(true);
-                timeline.publish(cues, path, SubtitleRole::Primary);
+                subtitleTimeline.publish(cues, path, SubtitleRole::Primary);
                 rememberedSourceSubtitlePath = path;
-                currentCue = -1;
+                currentPrimaryCueIndex = -1;
                 syncPosition();
                 emit tracksChanged();
                 checkpoint();
@@ -62,10 +62,10 @@ QString LearningSession::mediaTitle() const {
     return QFileInfo(currentMediaPath).completeBaseName();
 }
 QString LearningSession::sourceSubtitleName() const {
-    return timeline.name(SubtitleRole::Primary);
+    return subtitleTimeline.name(SubtitleRole::Primary);
 }
 QString LearningSession::translationSubtitleName() const {
-    return timeline.name(SubtitleRole::Secondary);
+    return subtitleTimeline.name(SubtitleRole::Secondary);
 }
 
 void LearningSession::checkpoint() {
@@ -73,9 +73,9 @@ void LearningSession::checkpoint() {
         return;
 
     // 1. Save the current viewing position, preserving a pending resume target.
-    const double seconds = restorePosition >= 0      ? restorePosition
-                           : subtitleSeekTarget >= 0 ? subtitleSeekTarget
-                                                     : engine->snapshotPosition();
+    const double seconds = pendingResumeSeconds >= 0         ? pendingResumeSeconds
+                           : pendingSubtitleSeekSeconds >= 0 ? pendingSubtitleSeekSeconds
+                                                             : playbackEngine->snapshotPosition();
     if (!std::isfinite(seconds) || seconds < 0)
         return;
 
@@ -101,13 +101,13 @@ void LearningSession::finishOpening(const QString &path) {
 
     // 2. Restore the precise position and start playback even if a subtitle file is unavailable.
     mediaReady = true;
-    restorePosition = saved ? saved->position : -1;
-    if (restorePosition > 0) {
+    pendingResumeSeconds = saved ? saved->position : -1;
+    if (pendingResumeSeconds > 0) {
         if (duration() > 0)
-            restorePosition = qMin(restorePosition, duration());
-        engine->seek(restorePosition);
+            pendingResumeSeconds = qMin(pendingResumeSeconds, duration());
+        playbackEngine->seek(pendingResumeSeconds);
     } else {
-        restorePosition = -1;
+        pendingResumeSeconds = -1;
     }
     setPaused(false);
     statusText = trackWarning.isEmpty() ? "Ready to explore" : trackWarning;
@@ -115,10 +115,10 @@ void LearningSession::finishOpening(const QString &path) {
 
     // 3. Promote only successful opens, retaining the target until playback reaches it.
     if (recentVideos && rememberCurrent) {
-        recentVideos->remember({currentMediaPath, restorePosition >= 0 ? restorePosition : position(),
-                                qMax(0.0, duration()), rememberedSourceSubtitlePath,
-                                rememberedTranslationSubtitlePath},
-                               true);
+        recentVideos->remember(
+            {currentMediaPath, pendingResumeSeconds >= 0 ? pendingResumeSeconds : position(),
+             qMax(0.0, duration()), rememberedSourceSubtitlePath, rememberedTranslationSubtitlePath},
+            true);
     }
 }
 
@@ -129,13 +129,13 @@ QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
     if (rememberedSourceSubtitlePath.isEmpty() && !saved.primarySubtitlePath.isEmpty()) {
         rememberedSourceSubtitlePath = saved.primarySubtitlePath;
         openSubtitles(QUrl::fromLocalFile(saved.primarySubtitlePath));
-        if (timeline.path(SubtitleRole::Primary).isEmpty())
+        if (subtitleTimeline.path(SubtitleRole::Primary).isEmpty())
             unavailable.append("primary");
     }
     if (rememberedTranslationSubtitlePath.isEmpty() && !saved.secondarySubtitlePath.isEmpty()) {
         rememberedTranslationSubtitlePath = saved.secondarySubtitlePath;
         openTranslation(QUrl::fromLocalFile(saved.secondarySubtitlePath));
-        if (timeline.path(SubtitleRole::Secondary).isEmpty())
+        if (subtitleTimeline.path(SubtitleRole::Secondary).isEmpty())
             unavailable.append("secondary");
     }
 
@@ -148,11 +148,11 @@ QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
 }
 
 void LearningSession::explainSelection() {
-    interaction.explainSelection();
+    studyInteraction.explainSelection();
 }
 
 bool LearningSession::followUp(const QString &question) {
-    return interaction.followUp(question);
+    return studyInteraction.followUp(question);
 }
 
 void LearningSession::replayExplainedCue() {
@@ -160,8 +160,8 @@ void LearningSession::replayExplainedCue() {
         stopReplay();
         return;
     }
-    if (services && services->explanation()->target()) {
-        const auto &target = *services->explanation()->target();
+    if (studyServices && studyServices->explanation()->target()) {
+        const auto &target = *studyServices->explanation()->target();
         playSpan(target.startMs / 1000.0, target.endMs / 1000.0);
     }
 }
@@ -170,12 +170,14 @@ void LearningSession::openTranslation(const QUrl &url) {
     if (!url.isLocalFile())
         return;
     try {
-        timeline.load(url, SubtitleRole::Secondary); // Validation completes before replacing the track.
+        subtitleTimeline.load(url,
+                              SubtitleRole::Secondary); // Validation completes before replacing the track.
         stopReplay();
         closeDefinition();
         resetInteraction(true);
-        translationCue = timeline.active(qRound64(position() * 1000), SubtitleRole::Secondary);
-        rememberedTranslationSubtitlePath = timeline.path(SubtitleRole::Secondary);
+        currentSecondaryCueIndex =
+            subtitleTimeline.active(qRound64(position() * 1000), SubtitleRole::Secondary);
+        rememberedTranslationSubtitlePath = subtitleTimeline.path(SubtitleRole::Secondary);
         statusText = "Secondary subtitles loaded";
         emit cueChanged();
         emit tracksChanged();
@@ -187,24 +189,24 @@ void LearningSession::openTranslation(const QUrl &url) {
 }
 
 void LearningSession::setPaused(bool value) {
-    engine->setPaused(value);
+    playbackEngine->setPaused(value);
 }
 void LearningSession::replaceCues(QVector<Cue> next) {
     stopReplay();
     resetInteraction(true);
-    if (services)
-        services->subtitles()->cancel();
-    currentCue = -1;
-    timeline.replacePrimary(std::move(next));
+    if (studyServices)
+        studyServices->subtitles()->cancel();
+    currentPrimaryCueIndex = -1;
+    subtitleTimeline.replacePrimary(std::move(next));
     syncPosition();
     emit cueChanged();
 }
 void LearningSession::resetInteraction(bool clearConversation) {
-    interaction.reset(clearConversation);
+    studyInteraction.reset(clearConversation);
     replayActive = false;
     replayArmed = false;
-    subtitleSeekTarget = -1;
-    subtitleSeekIndex = -1;
+    pendingSubtitleSeekSeconds = -1;
+    pendingSubtitleCueIndex = -1;
     emit replayingChanged();
 }
 void LearningSession::openVideo(const QUrl &url) {
@@ -220,15 +222,15 @@ void LearningSession::openVideo(const QUrl &url) {
     // 2. Checkpoint the old video before clearing its interaction and subtitle state.
     checkpoint();
     mediaReady = false;
-    restorePosition = -1;
+    pendingResumeSeconds = -1;
     rememberCurrent = true;
     resetInteraction(true);
     setPaused(true);
     currentMediaPath = mediaPathIdentity(file.absoluteFilePath());
-    currentCue = -1;
-    timeline.reset();
-    interaction.setMedia(currentMediaPath);
-    translationCue = -1;
+    currentPrimaryCueIndex = -1;
+    subtitleTimeline.reset();
+    studyInteraction.setMedia(currentMediaPath);
+    currentSecondaryCueIndex = -1;
     rememberedSourceSubtitlePath.clear();
     rememberedTranslationSubtitlePath.clear();
     statusText = "Loading local video…";
@@ -238,26 +240,27 @@ void LearningSession::openVideo(const QUrl &url) {
     emit cueChanged();
 
     // 3. Bind study requests to this media before the adapter can finish loading it.
-    if (services) {
+    if (studyServices) {
         const auto saved = recentVideos ? recentVideos->find(currentMediaPath) : std::nullopt;
-        services->subtitles()->setMedia(currentMediaPath, !saved || saved->primarySubtitlePath.isEmpty());
+        studyServices->subtitles()->setMedia(currentMediaPath,
+                                             !saved || saved->primarySubtitlePath.isEmpty());
     }
-    engine->open(currentMediaPath, false);
+    playbackEngine->open(currentMediaPath, false);
 }
 void LearningSession::openSubtitles(const QUrl &url) {
     if (!url.isLocalFile())
         return;
     try {
-        timeline.load(url, SubtitleRole::Primary);
+        subtitleTimeline.load(url, SubtitleRole::Primary);
         stopReplay();
         closeDefinition();
         resetInteraction(true);
-        if (services)
-            services->subtitles()->cancel();
-        currentCue = -1;
+        if (studyServices)
+            studyServices->subtitles()->cancel();
+        currentPrimaryCueIndex = -1;
         syncPosition();
         emit cueChanged();
-        rememberedSourceSubtitlePath = timeline.path(SubtitleRole::Primary);
+        rememberedSourceSubtitlePath = subtitleTimeline.path(SubtitleRole::Primary);
         statusText = "Primary subtitles loaded";
         emit tracksChanged();
         checkpoint();
@@ -277,43 +280,43 @@ void LearningSession::toggle() {
 }
 void LearningSession::seek(double seconds) {
     resetInteraction();
-    restorePosition = -1;
-    engine->seek(qBound(0.0, seconds, duration()));
+    pendingResumeSeconds = -1;
+    playbackEngine->seek(qBound(0.0, seconds, duration()));
 }
 void LearningSession::volume(double level) {
     if (!std::isfinite(level))
         return;
 
-    audioLevel = qBound(0.0, level, 100.0);
-    if (audioLevel > 0)
-        unmutedLevel = audioLevel;
-    engine->volume(audioLevel);
+    volumePercent = qBound(0.0, level, 100.0);
+    if (volumePercent > 0)
+        unmutedVolumePercent = volumePercent;
+    playbackEngine->volume(volumePercent);
     emit volumeChanged();
 }
 void LearningSession::toggleMute() {
-    volume(audioLevel > 0 ? 0 : unmutedLevel);
+    volume(volumePercent > 0 ? 0 : unmutedVolumePercent);
 }
 void LearningSession::rate(double speed) {
-    engine->rate(speed);
+    playbackEngine->rate(speed);
 }
 QString LearningSession::subtitle() const {
-    return timeline.text(qRound64(position() * 1000), SubtitleRole::Primary);
+    return subtitleTimeline.text(qRound64(position() * 1000), SubtitleRole::Primary);
 }
 QString LearningSession::translation() const {
-    return timeline.text(qRound64(position() * 1000), SubtitleRole::Secondary);
+    return subtitleTimeline.text(qRound64(position() * 1000), SubtitleRole::Secondary);
 }
 void LearningSession::select(const QString &text, bool secondary) {
-    interaction.select(text, secondary);
+    studyInteraction.select(text, secondary);
 }
 void LearningSession::closeDefinition() {
-    interaction.closeDefinition();
+    studyInteraction.closeDefinition();
 }
 int LearningSession::previousSubtitleIndex() const {
-    return timeline.previous(qRound64(position() * 1000), subtitleSeekIndex);
+    return subtitleTimeline.previous(qRound64(position() * 1000), pendingSubtitleCueIndex);
 }
 
 int LearningSession::nextSubtitleIndex() const {
-    return timeline.next(qRound64(position() * 1000), subtitleSeekIndex);
+    return subtitleTimeline.next(qRound64(position() * 1000), pendingSubtitleCueIndex);
 }
 
 void LearningSession::seekSubtitle(double seconds) {
@@ -322,11 +325,11 @@ void LearningSession::seekSubtitle(double seconds) {
 
     // Pause before seeking so neither an asynchronous seek nor closing a definition resumes playback.
     resetInteraction();
-    restorePosition = -1;
+    pendingResumeSeconds = -1;
     setPaused(true);
-    subtitleSeekTarget = qBound(0.0, seconds, duration());
-    subtitleSeekIndex = timeline.active(qRound64(subtitleSeekTarget * 1000));
-    engine->seek(subtitleSeekTarget);
+    pendingSubtitleSeekSeconds = qBound(0.0, seconds, duration());
+    pendingSubtitleCueIndex = subtitleTimeline.active(qRound64(pendingSubtitleSeekSeconds * 1000));
+    playbackEngine->seek(pendingSubtitleSeekSeconds);
     emit cueChanged();
 }
 
@@ -345,12 +348,12 @@ void LearningSession::replay() {
         stopReplay();
         return;
     }
-    const int cueIndex = subtitleSeekIndex >= 0 ? subtitleSeekIndex : currentCue;
+    const int cueIndex = pendingSubtitleCueIndex >= 0 ? pendingSubtitleCueIndex : currentPrimaryCueIndex;
     playSubtitle(cueIndex);
 }
 
 void LearningSession::playSubtitle(int index) {
-    const auto *cue = timeline.cue(index);
+    const auto *cue = subtitleTimeline.cue(index);
     if (!cue)
         return;
     playSpan(cue->startMs / 1000.0, cue->endMs / 1000.0);
@@ -358,16 +361,16 @@ void LearningSession::playSubtitle(int index) {
 
 void LearningSession::playSpan(double start, double end) {
     resetInteraction();
-    restorePosition = -1;
+    pendingResumeSeconds = -1;
     setPaused(true);
-    replayStart = start;
-    replayEnd = end;
+    replayStartSeconds = start;
+    replayEndSeconds = end;
     replayArmed = false;
     replayActive = true;
-    subtitleSeekTarget = start;
-    subtitleSeekIndex = timeline.active(qRound64(start * 1000));
+    pendingSubtitleSeekSeconds = start;
+    pendingSubtitleCueIndex = subtitleTimeline.active(qRound64(start * 1000));
     emit replayingChanged();
-    engine->seek(start);
+    playbackEngine->seek(start);
     setPaused(false);
     emit cueChanged();
 }
@@ -385,52 +388,52 @@ void LearningSession::stopReplay() {
 void LearningSession::finishReplay() {
     stopReplay();
     // Keep the final subtitle visible for study rather than advancing into the next cue or gap.
-    engine->seek(qMax(replayStart, replayEnd - 0.050));
+    playbackEngine->seek(qMax(replayStartSeconds, replayEndSeconds - 0.050));
 }
 
 void LearningSession::saveCard() {
-    interaction.saveCard();
+    studyInteraction.saveCard();
 }
 void LearningSession::syncPosition() {
-    if (restorePosition >= 0 && std::abs(position() - restorePosition) < 1)
-        restorePosition = -1;
-    if (subtitleSeekTarget >= 0 && std::abs(position() - subtitleSeekTarget) < 0.05) {
-        subtitleSeekTarget = -1;
-        subtitleSeekIndex = -1;
+    if (pendingResumeSeconds >= 0 && std::abs(position() - pendingResumeSeconds) < 1)
+        pendingResumeSeconds = -1;
+    if (pendingSubtitleSeekSeconds >= 0 && std::abs(position() - pendingSubtitleSeekSeconds) < 0.05) {
+        pendingSubtitleSeekSeconds = -1;
+        pendingSubtitleCueIndex = -1;
     }
 
     // 1. Notify subtitle views only when their cue actually changes.
-    const int translated = timeline.active(qRound64(position() * 1000), SubtitleRole::Secondary);
-    if (translated != translationCue) {
-        translationCue = translated;
-        interaction.cueChanged();
+    const int translated = subtitleTimeline.active(qRound64(position() * 1000), SubtitleRole::Secondary);
+    if (translated != currentSecondaryCueIndex) {
+        currentSecondaryCueIndex = translated;
+        studyInteraction.cueChanged();
         emit cueChanged();
     }
-    const int next = timeline.active(qRound64(position() * 1000));
-    if (next != currentCue) {
-        currentCue = next;
-        interaction.cueChanged();
+    const int next = subtitleTimeline.active(qRound64(position() * 1000));
+    if (next != currentPrimaryCueIndex) {
+        currentPrimaryCueIndex = next;
+        studyInteraction.cueChanged();
         emit cueChanged();
     }
 
     // 2. Finish replay only after its requested start has been observed.
     if (replayActive) {
-        if (position() >= replayStart - 0.1 && position() < replayEnd) {
+        if (position() >= replayStartSeconds - 0.1 && position() < replayEndSeconds) {
             replayArmed = true;
-            subtitleSeekTarget = -1;
-            subtitleSeekIndex = -1;
+            pendingSubtitleSeekSeconds = -1;
+            pendingSubtitleCueIndex = -1;
         }
-        if (replayArmed && position() >= replayEnd)
+        if (replayArmed && position() >= replayEndSeconds)
             finishReplay();
     }
 }
 
 QVariantList LearningSession::subtitleTracks() const {
-    return timeline.tracks();
+    return subtitleTimeline.tracks();
 }
 
 void LearningSession::chooseTrack(const QString &path, bool secondary) {
-    if (!timeline.knows(path))
+    if (!subtitleTimeline.knows(path))
         return;
 
     if (secondary)
@@ -443,12 +446,12 @@ void LearningSession::clearTrack(bool secondary) {
     closeWordCard();
     closeDefinition();
     resetInteraction(true);
-    timeline.clear(secondary ? SubtitleRole::Secondary : SubtitleRole::Primary);
+    subtitleTimeline.clear(secondary ? SubtitleRole::Secondary : SubtitleRole::Primary);
     if (secondary) {
-        translationCue = -1;
+        currentSecondaryCueIndex = -1;
         rememberedTranslationSubtitlePath.clear();
     } else {
-        currentCue = -1;
+        currentPrimaryCueIndex = -1;
         rememberedSourceSubtitlePath.clear();
     }
     emit tracksChanged();
@@ -457,30 +460,30 @@ void LearningSession::clearTrack(bool secondary) {
 }
 
 void LearningSession::lookupWordAt(const QString &text, int offset, bool secondary) {
-    interaction.lookupWordAt(text, offset, secondary);
+    studyInteraction.lookupWordAt(text, offset, secondary);
 }
 
 void LearningSession::closeWordCard(bool resume) {
-    interaction.closeWordCard(resume);
+    studyInteraction.closeWordCard(resume);
 }
 
 void LearningSession::retryWordLookup() {
-    interaction.retryWordLookup();
+    studyInteraction.retryWordLookup();
 }
 
 void LearningSession::translateWord() {
-    interaction.translateWord();
+    studyInteraction.translateWord();
 }
 
 void LearningSession::commitSelection(bool secondary) {
-    interaction.commitSelection(secondary);
+    studyInteraction.commitSelection(secondary);
 }
 void LearningSession::explainCue(bool secondary) {
-    interaction.explainCue(secondary);
+    studyInteraction.explainCue(secondary);
 }
 void LearningSession::explainWord() {
-    interaction.explainWord();
+    studyInteraction.explainWord();
 }
 void LearningSession::invalidateStudy() {
-    interaction.dismiss();
+    studyInteraction.dismiss();
 }

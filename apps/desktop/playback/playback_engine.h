@@ -23,6 +23,7 @@ signals:
     void pausedChanged();
     void loaded(QString path);
     void failed();
+
 protected:
     double positionSeconds = 0;
     double durationSeconds = 0;

@@ -7,8 +7,10 @@ class ConversationTests : public QObject {
 private slots:
     void followUpsKeepFrozenContextAndCompletedHistory() {
         Conversation chat;
-        QJsonObject context{{"selection", "dalmışım"}, {"sourceCue", "Ben televizyona dalmışım ya."},
-            {"before", QJsonArray{"Önceki cümle."}}, {"secondary", QJsonArray{"I was watching TV."}}};
+        QJsonObject context{{"selection", "dalmışım"},
+                            {"sourceCue", "Ben televizyona dalmışım ya."},
+                            {"before", QJsonArray{"Önceki cümle."}},
+                            {"secondary", QJsonArray{"I was watching TV."}}};
         chat.begin(context);
         chat.append("### Natural meaning\nI was absorbed in it.");
         chat.finish("complete");

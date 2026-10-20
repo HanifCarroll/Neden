@@ -38,28 +38,31 @@ int main(int argc, char **argv) {
     application.setApplicationDisplayName("Neden");
     application.setWindowIcon(QIcon(":/branding/neden.png"));
     QQuickStyle::setStyle("Basic");
-    for (const auto &weight : {"Regular", "Medium", "SemiBold"}) {
-        QFontDatabase::addApplicationFont(QString(":/fonts/Inter-%1.otf").arg(weight));
+    for (const auto &fontWeight : {"Regular", "Medium", "SemiBold"}) {
+        QFontDatabase::addApplicationFont(QString(":/fonts/Inter-%1.otf").arg(fontWeight));
     }
     application.setFont(QFont("Inter"));
 
     // 2. Keep playback alive until QML and its rendering resources have been released.
-    QCommandLineParser parser;
-    parser.addHelpOption();
-    parser.addOption({"profile", "Use a separate local data directory for development checks.", "directory"});
-    parser.addPositionalArgument("video", "Local video to open.", "[video]");
-    parser.process(application);
+    QCommandLineParser commandLineParser;
+    commandLineParser.addHelpOption();
+    commandLineParser.addOption(
+        {"profile", "Use a separate local data directory for development checks.", "directory"});
+    commandLineParser.addPositionalArgument("video", "Local video to open.", "[video]");
+    commandLineParser.process(application);
     // Retain existing study data while using Neden for every visible application name.
-    const auto storage = parser.isSet("profile") ? QDir(parser.value("profile")).absolutePath()
-        : QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Neden Qt Lab";
-    SubtitleAppearance appearance(storage);
-    MpvPlayback playback;
+    const auto storage =
+        commandLineParser.isSet("profile")
+            ? QDir(commandLineParser.value("profile")).absolutePath()
+            : QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Neden Qt Lab";
+    SubtitleAppearance subtitleAppearance(storage);
+    MpvPlayback playbackEngine;
     RecentVideos recentVideos(storage);
     StudyServices study(storage, readSavedCredential);
     study.settings()->setCredentialAuthorizer(authorizeSavedCredential);
     study.settings()->setCredentialWriter(saveCredential);
     study.subtitles()->setSubtitleLoginReader(readSavedSubtitleLogin);
-    LearningSession session(&playback);
+    LearningSession session(&playbackEngine);
     session.setStudyServices(&study);
     session.setRecentVideos(&recentVideos);
     QObject::connect(&application, &DesktopApplication::fileOpened, &session, &LearningSession::openVideo);
@@ -70,23 +73,25 @@ int main(int argc, char **argv) {
     });
     session.cueModel()->setSearchLanguage(CueModel::Turkish);
     FullscreenController fullscreen;
-    QQmlApplicationEngine engine;
-    engine.setInitialProperties({{"appearance", QVariant::fromValue(&appearance)},{"session", QVariant::fromValue(&session)},
-        {"playback", QVariant::fromValue(&playback)},
-        {"recentVideos", QVariant::fromValue(&recentVideos)},
-        {"fullscreenController", QVariant::fromValue(&fullscreen)}});
-    engine.loadFromModule("Neden", "Main");
-    if (engine.rootObjects().isEmpty()) {
+    QQmlApplicationEngine qmlEngine;
+    qmlEngine.setInitialProperties({{"appearance", QVariant::fromValue(&subtitleAppearance)},
+                                    {"session", QVariant::fromValue(&session)},
+                                    {"playback", QVariant::fromValue(&playbackEngine)},
+                                    {"recentVideos", QVariant::fromValue(&recentVideos)},
+                                    {"fullscreenController", QVariant::fromValue(&fullscreen)}});
+    qmlEngine.loadFromModule("Neden", "Main");
+    if (qmlEngine.rootObjects().isEmpty()) {
         return 3;
     }
 
     // 3. Attach native window controls after the main window exists.
-    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
-    fullscreen.attach(window);
-    window->raise();
-    window->requestActivate();
-    if (!parser.positionalArguments().isEmpty()) {
-        session.openVideo(QUrl::fromLocalFile(QFileInfo(parser.positionalArguments().first()).absoluteFilePath()));
+    auto *mainWindow = qobject_cast<QQuickWindow *>(qmlEngine.rootObjects().first());
+    fullscreen.attach(mainWindow);
+    mainWindow->raise();
+    mainWindow->requestActivate();
+    if (!commandLineParser.positionalArguments().isEmpty()) {
+        session.openVideo(QUrl::fromLocalFile(
+            QFileInfo(commandLineParser.positionalArguments().first()).absoluteFilePath()));
     }
     return application.exec();
 }

@@ -10,14 +10,14 @@ class SubtitleService : public QObject {
     Q_PROPERTY(QVariantList subtitleResults READ subtitleResults NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
 public:
-    SubtitleService(QString directory, AppSettings &settings, AiClient::CredentialReader reader,
+    SubtitleService(QString directory, AppSettings &settings, AiClient::CredentialReader credentialReader,
                     QObject *parent = nullptr, QString endpoint = "https://api.opensubtitles.com/api/v1");
     ~SubtitleService() override { cancel(); }
     QVariantList subtitleResults() const { return results; }
     QString message() const { return statusText; }
     void setMedia(const QString &path, bool search = true);
-    void setSubtitleLoginReader(std::function<QByteArray()> reader) {
-        subtitleLoginReader = std::move(reader);
+    void setSubtitleLoginReader(std::function<QByteArray()> credentialReader) {
+        subtitleLoginReader = std::move(credentialReader);
     }
     void cancel();
     Q_INVOKABLE void findSubtitles(const QString &language = "tr", bool autoDownload = false,
@@ -34,15 +34,15 @@ private:
         emit changed();
     }
     QNetworkRequest authenticatedRequest(const QUrl &url);
-    void fetchSubtitle(const QUrl &url, quint64 owner);
-    void requestSubtitleDownload(int index, quint64 owner);
+    void fetchSubtitle(const QUrl &url, quint64 requestGenerationAtStart);
+    void requestSubtitleDownload(int index, quint64 requestGenerationAtStart);
     QString storage, subtitleEndpoint, mediaPath, statusText;
     AppSettings &settings;
-    AiClient::CredentialReader credentials;
-    QNetworkAccessManager network;
+    AiClient::CredentialReader readCredential;
+    QNetworkAccessManager networkAccessManager;
     QPointer<QNetworkReply> subtitleReply;
     std::function<QByteArray()> subtitleLoginReader;
     QByteArray subtitleToken;
     QVariantList results;
-    quint64 subtitleOwner = 0;
+    quint64 requestGeneration = 0;
 };

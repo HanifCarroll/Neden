@@ -19,8 +19,14 @@ class RecentVideos : public QAbstractListModel {
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
 public:
-    enum Role { MediaTitle = Qt::UserRole + 1, MediaUrl, FilePath, ResumePosition,
-                DurationSeconds, FileAvailable };
+    enum Role {
+        MediaTitle = Qt::UserRole + 1,
+        MediaUrl,
+        FilePath,
+        ResumePosition,
+        DurationSeconds,
+        FileAvailable
+    };
     explicit RecentVideos(QString directory, QObject *parent = nullptr);
     int rowCount(const QModelIndex &parent = {}) const override;
     QVariant data(const QModelIndex &index, int role) const override;
@@ -34,6 +40,7 @@ signals:
     void countChanged();
     void errorChanged();
     void removed(QString path);
+
 private:
     void load();
     bool persist(const QList<RecentVideo> &next);

@@ -7,8 +7,9 @@
 #include <QUrlQuery>
 #include <stdexcept>
 
-WordLookup::WordLookup(CredentialReader reader, QObject *parent, QUrl origin)
-    : QObject(parent), credentials(std::move(reader)), ai(credentials), testOrigin(std::move(origin)) {
+WordLookup::WordLookup(CredentialReader credentialReader, QObject *parent, QUrl origin)
+    : QObject(parent), readCredential(std::move(credentialReader)), aiClient(readCredential),
+      testOrigin(std::move(origin)) {
     if (!testOrigin.isEmpty() && !(testOrigin.scheme() == "http" && testOrigin.host() == "127.0.0.1")) {
         throw std::invalid_argument("A word test origin must be loopback HTTP.");
     }
@@ -56,24 +57,26 @@ QString WordLookup::languageCode(const QString &language) {
     return code;
 }
 
-QStringList WordLookup::parseMeanings(const QByteArray &body, bool google, bool dictionary) {
+QStringList WordLookup::parseMeanings(const QByteArray &body, bool usesGoogleFormat,
+                                      bool usesDictionaryFormat) {
     if (body.size() > 64000)
         throw std::runtime_error("The word response exceeded its size limit.");
 
     const auto document = QJsonDocument::fromJson(body);
-    const auto translations = google ? document.object()["data"].toObject()["translations"].toArray()
-                              : document.array().isEmpty()
-                                  ? QJsonArray()
-                                  : document.array().first().toObject()["translations"].toArray();
+    QJsonArray translations;
+    if (usesGoogleFormat)
+        translations = document.object()["data"].toObject()["translations"].toArray();
+    else if (!document.array().isEmpty())
+        translations = document.array().first().toObject()["translations"].toArray();
+    QString meaningField = "text";
+    if (usesGoogleFormat)
+        meaningField = "translatedText";
+    else if (usesDictionaryFormat)
+        meaningField = "displayTarget";
     QStringList meanings;
     for (const auto &translation : translations) {
-        QString meaning =
-            translation.toObject()[google       ? "translatedText"
-                                   : dictionary ? "displayTarget"
-                                                : "text"]
-                .toString()
-                .trimmed();
-        if (google) {
+        QString meaning = translation.toObject()[meaningField].toString().trimmed();
+        if (usesGoogleFormat) {
             meaning.replace("&quot;", "\"")
                 .replace("&#39;", "'")
                 .replace("&apos;", "'")
@@ -127,7 +130,7 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
                                const QString &model, bool noKeyRequired) {
     cancel();
     selectedWord = word;
-    contextLookup = true;
+    isContextualLookup = true;
     try {
         if (word.isEmpty() || word.size() > 100 || wordAt(word, 0) != word)
             throw std::runtime_error("Select one word of at most 100 characters.");
@@ -176,7 +179,17 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
             QJsonObject{{"role", "system"}, {"content", instruction}},
             QJsonObject{{"role", "user"},
                         {"content", QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))}}};
-        observe(ai.post({endpoint, model, messages, false, true, noKeyRequired, 900, 30000, 64000}));
+        ChatRequest request;
+        request.endpoint = endpoint;
+        request.model = model;
+        request.messages = messages;
+        request.streamResponse = false;
+        request.requireJsonResponse = true;
+        request.noKeyRequired = noKeyRequired;
+        request.maxTokens = 900;
+        request.timeoutMs = 30000;
+        request.responseLimitBytes = 64000;
+        observe(aiClient.post(request));
     } catch (const std::exception &error) {
         requestState = "failed";
         statusText = QString::fromUtf8(error.what());
@@ -184,53 +197,55 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
     }
 }
 
-void WordLookup::observe(QNetworkReply *current, bool google, bool dictionary) {
+void WordLookup::observe(QNetworkReply *networkReply, bool usesGoogleFormat, bool usesDictionaryFormat) {
     requestState = "loading";
-    reply = current;
-    current->setReadBufferSize(64001);
-    connect(current, &QNetworkReply::readyRead, this, [this, current] {
-        if (reply != current || current->bytesAvailable() <= 64000)
+    reply = networkReply;
+    networkReply->setReadBufferSize(64001);
+    connect(networkReply, &QNetworkReply::readyRead, this, [this, networkReply] {
+        if (reply != networkReply || networkReply->bytesAvailable() <= 64000)
             return;
         reply = nullptr;
-        current->disconnect(this);
-        current->abort();
-        current->deleteLater();
+        networkReply->disconnect(this);
+        networkReply->abort();
+        networkReply->deleteLater();
         requestState = "failed";
         statusText = "The word response exceeded its size limit.";
         emit changed();
     });
-    connect(current, &QNetworkReply::finished, this, [this, current, google, dictionary] {
-        if (reply != current) {
-            current->deleteLater();
-            return;
-        }
-        reply = nullptr;
-        const int code = current->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (current->error() != QNetworkReply::NoError || code != 200) {
-            requestState = "failed";
-            statusText = networkFailureMessage(code, current->error(), "Word lookup failed");
-        } else {
-            try {
-                if (contextLookup) {
-                    const auto answer = parseContextMeaning(current->readAll());
-                    definitions = {answer.value("meaning").toString()};
-                    baseWord = answer.value("lemma").toString();
-                    usageNote = answer.value("explanation").toString();
-                    alternatives = answer.value("otherMeanings").toStringList();
-                } else
-                    definitions = parseMeanings(current->readAll(), google, dictionary);
-                requestState = definitions.isEmpty() ? "failed" : "complete";
-                statusText = definitions.isEmpty()
-                                 ? "No meaning found. Try the dictionary or an AI explanation."
-                                 : QString();
-            } catch (const std::exception &error) {
-                requestState = "failed";
-                statusText = QString::fromUtf8(error.what());
-            }
-        }
-        current->deleteLater();
-        emit changed();
-    });
+    connect(networkReply, &QNetworkReply::finished, this,
+            [this, networkReply, usesGoogleFormat, usesDictionaryFormat] {
+                if (reply != networkReply) {
+                    networkReply->deleteLater();
+                    return;
+                }
+                reply = nullptr;
+                const int code = networkReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                if (networkReply->error() != QNetworkReply::NoError || code != 200) {
+                    requestState = "failed";
+                    statusText = networkFailureMessage(code, networkReply->error(), "Word lookup failed");
+                } else {
+                    try {
+                        if (isContextualLookup) {
+                            const auto answer = parseContextMeaning(networkReply->readAll());
+                            definitions = {answer.value("meaning").toString()};
+                            baseWord = answer.value("lemma").toString();
+                            usageNote = answer.value("explanation").toString();
+                            alternatives = answer.value("otherMeanings").toStringList();
+                        } else
+                            definitions = parseMeanings(networkReply->readAll(), usesGoogleFormat,
+                                                        usesDictionaryFormat);
+                        requestState = definitions.isEmpty() ? "failed" : "complete";
+                        statusText = definitions.isEmpty()
+                                         ? "No meaning found. Try the dictionary or an AI explanation."
+                                         : QString();
+                    } catch (const std::exception &error) {
+                        requestState = "failed";
+                        statusText = QString::fromUtf8(error.what());
+                    }
+                }
+                networkReply->deleteLater();
+                emit changed();
+            });
     emit changed();
 }
 
@@ -247,7 +262,7 @@ void WordLookup::cancel() {
     baseWord.clear();
     usageNote.clear();
     alternatives.clear();
-    contextLookup = false;
+    isContextualLookup = false;
     requestState = "idle";
     statusText.clear();
     emit changed();
@@ -267,38 +282,43 @@ void WordLookup::lookup(const QString &word, const QVariantMap &settings, bool t
 
         const auto source = languageCode(settings.value("sourceLanguage", "Turkish").toString());
         const auto target = languageCode(settings.value("explanationLanguage", "English").toString());
-        const bool google = provider == "google";
-        const bool dictionary = !google && target == "en" && !translationOnly;
-        const QString endpoint =
-            google ? "https://translation.googleapis.com" : "https://api.cognitive.microsofttranslator.com";
-        auto key = credentials(endpoint);
+        const bool usesGoogleFormat = provider == "google";
+        const bool usesDictionaryFormat = !usesGoogleFormat && target == "en" && !translationOnly;
+        const QString endpoint = usesGoogleFormat ? "https://translation.googleapis.com"
+                                                  : "https://api.cognitive.microsofttranslator.com";
+        auto key = readCredential(endpoint);
         if (key.isEmpty() || key.size() > 512 || key.contains('\r') || key.contains('\n'))
             throw std::runtime_error("Connect or save this provider’s key in Settings.");
 
-        QUrl url((testOrigin.isEmpty() ? endpoint : testOrigin.toString(QUrl::StripTrailingSlash)) +
-                 (google       ? "/language/translate/v2"
-                  : dictionary ? "/dictionary/lookup"
-                               : "/translate"));
-        if (!google)
+        QString requestPath = "/translate";
+        if (usesGoogleFormat)
+            requestPath = "/language/translate/v2";
+        else if (usesDictionaryFormat)
+            requestPath = "/dictionary/lookup";
+        const QString requestOrigin =
+            testOrigin.isEmpty() ? endpoint : testOrigin.toString(QUrl::StripTrailingSlash);
+        QUrl url(requestOrigin + requestPath);
+        if (!usesGoogleFormat)
             url.setQuery(QUrlQuery{{"api-version", "3.0"}, {"from", source}, {"to", target}});
         QNetworkRequest request(url);
         request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
         request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
         request.setTransferTimeout(15000);
-        request.setRawHeader(google ? "x-goog-api-key" : "Ocp-Apim-Subscription-Key", key);
+        request.setRawHeader(usesGoogleFormat ? "x-goog-api-key" : "Ocp-Apim-Subscription-Key", key);
         key.fill(0);
         const auto region = settings.value("wordRegion").toString();
         if (!QRegularExpression("^[a-zA-Z0-9-]{0,100}$").match(region).hasMatch())
             throw std::runtime_error("Use a valid Microsoft region in Settings.");
-        if (!google && !region.isEmpty())
+        if (!usesGoogleFormat && !region.isEmpty())
             request.setRawHeader("Ocp-Apim-Subscription-Region", region.toUtf8());
         const QByteArray body =
-            google ? QJsonDocument(
-                         QJsonObject{{"q", word}, {"source", source}, {"target", target}, {"format", "text"}})
-                         .toJson()
-                   : QJsonDocument(QJsonArray{QJsonObject{{"Text", word}}}).toJson();
+            usesGoogleFormat
+                ? QJsonDocument(
+                      QJsonObject{{"q", word}, {"source", source}, {"target", target}, {"format", "text"}})
+                      .toJson()
+                : QJsonDocument(QJsonArray{QJsonObject{{"Text", word}}}).toJson();
 
-        observe(network.post(request, body), google, dictionary);
+        observe(networkAccessManager.post(request, body), usesGoogleFormat, usesDictionaryFormat);
     } catch (const std::exception &error) {
         requestState = "failed";
         statusText = QString::fromUtf8(error.what());

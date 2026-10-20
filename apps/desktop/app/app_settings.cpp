@@ -7,19 +7,20 @@ const QStringList wordIds{"ai", "off", "google", "microsoft"};
 const QStringList primaryIds{"configured", "luna"};
 QVariantList choices(const QStringList &ids, const QStringList &names) {
     QVariantList result;
-    for (int i = 0; i < ids.size(); ++i)
-        result.append(QVariantMap{{"id", ids[i]}, {"name", names[i]}});
+    for (int optionIndex = 0; optionIndex < ids.size(); ++optionIndex)
+        result.append(QVariantMap{{"id", ids[optionIndex]}, {"name", names[optionIndex]}});
     return result;
 }
 } // namespace
 QJsonObject LearningSettings::json() const {
-    return {
-        {"sourceLanguage", sourceLanguage},           {"explanationLanguage", explanationLanguage},
-        {"includeSecondary", includeSecondary},       {"noKeyRequired", noKeyRequired},
-        {"fallbackEnabled", fallbackEnabled},
-        {"primaryProvider", primaryIds[static_cast<int>(primaryProvider)]},
-        {"wordProvider", wordIds[static_cast<int>(wordProvider)]},
-        {"wordRegion", wordRegion}};
+    return {{"sourceLanguage", sourceLanguage},
+            {"explanationLanguage", explanationLanguage},
+            {"includeSecondary", includeSecondary},
+            {"noKeyRequired", noKeyRequired},
+            {"fallbackEnabled", fallbackEnabled},
+            {"primaryProvider", primaryIds[static_cast<int>(primaryProvider)]},
+            {"wordProvider", wordIds[static_cast<int>(wordProvider)]},
+            {"wordRegion", wordRegion}};
 }
 LearningSettings LearningSettings::parse(const QVariantMap &values) {
     LearningSettings next;

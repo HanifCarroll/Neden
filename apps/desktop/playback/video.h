@@ -11,9 +11,11 @@ public:
     Renderer *createRenderer() const override;
     MpvPlayback *playback() const { return engine; }
     void setPlayback(MpvPlayback *value) {
-        if (engine == value) return;
+        if (engine == value)
+            return;
 
-        if (engine) disconnect(engine, nullptr, this, nullptr);
+        if (engine)
+            disconnect(engine, nullptr, this, nullptr);
         engine = value;
         if (engine) {
             connect(engine, &MpvPlayback::videoGeometryChanged, this, &Video::update);
@@ -23,6 +25,7 @@ public:
     }
 signals:
     void playbackChanged();
+
 private:
     MpvPlayback *engine = nullptr;
 };

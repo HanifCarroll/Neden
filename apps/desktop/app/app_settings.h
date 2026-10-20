@@ -70,9 +70,11 @@ public:
     bool configureLearning(const QVariantMap &values);
     Q_INVOKABLE QUrl dictionaryUrl(const QString &term);
     static QUrl buildDictionaryUrl(const QString &pattern, const QString &term);
-    void setCredentialAuthorizer(std::function<QString(const QString &)> fn) { authorizer = std::move(fn); }
-    void setCredentialWriter(std::function<QString(const QString &, QByteArray)> fn) {
-        writer = std::move(fn);
+    void setCredentialAuthorizer(std::function<QString(const QString &)> credentialHandler) {
+        authorizer = std::move(credentialHandler);
+    }
+    void setCredentialWriter(std::function<QString(const QString &, QByteArray)> credentialHandler) {
+        writer = std::move(credentialHandler);
     }
     Q_INVOKABLE void saveServiceKey(const QString &service, const QString &key);
     Q_INVOKABLE void connectServiceKey(const QString &service);

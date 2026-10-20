@@ -29,6 +29,7 @@ signals:
     void videoOutputNeeded();
     void videoGeometryChanged();
     void videoGeometryInvalid();
+
 private:
     void command(const QStringList &arguments);
     void drainEvents();

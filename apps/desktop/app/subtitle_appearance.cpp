@@ -12,17 +12,18 @@ SubtitleAppearance::SubtitleAppearance(const QString &directory, QObject *parent
     boxed = settings.value("background", false).toBool();
     semibold = settings.value("bold", true).toBool();
     QVariantMap values = snapshot();
-    for (auto it = values.begin(); it != values.end(); ++it) *it = settings.value(it.key(), it.value());
+    for (auto it = values.begin(); it != values.end(); ++it)
+        *it = settings.value(it.key(), it.value());
     preview(values);
     savedValues = snapshot();
 }
 
-bool SubtitleAppearance::configure(int primary, int secondary, int bottom, bool outline,
-                                   bool background, bool bold, const QString &textColor) {
+bool SubtitleAppearance::configure(int primary, int secondary, int bottom, bool outline, bool background,
+                                   bool bold, const QString &textColor) {
 
     // 1. Bound visual preferences without interpreting arbitrary style or rich text.
-    if (primary < 16 || primary > 64 || secondary < 12 || secondary > 56 || bottom < 8 || bottom > 160
-        || !QRegularExpression("^#[0-9a-fA-F]{6}$").match(textColor).hasMatch()) {
+    if (primary < 16 || primary > 64 || secondary < 12 || secondary > 56 || bottom < 8 || bottom > 160 ||
+        !QRegularExpression("^#[0-9a-fA-F]{6}$").match(textColor).hasMatch()) {
         return false;
     }
 
@@ -39,10 +40,18 @@ bool SubtitleAppearance::configure(int primary, int secondary, int bottom, bool 
 }
 
 QVariantMap SubtitleAppearance::snapshot() const {
-    return {{"primarySize", sourceSize}, {"secondarySize", translationSize}, {"bottomMargin", margin},
-        {"outline", outlined}, {"background", boxed}, {"bold", semibold}, {"textColor", color},
-        {"secondaryColor", translationColor}, {"gap", trackGap}, {"reversed", reverseOrder},
-        {"selectable", selectionEnabled}, {"bottomPercent", relativeBottom}};
+    return {{"primarySize", sourceSize},
+            {"secondarySize", translationSize},
+            {"bottomMargin", margin},
+            {"outline", outlined},
+            {"background", boxed},
+            {"bold", semibold},
+            {"textColor", color},
+            {"secondaryColor", translationColor},
+            {"gap", trackGap},
+            {"reversed", reverseOrder},
+            {"selectable", selectionEnabled},
+            {"bottomPercent", relativeBottom}};
 }
 
 bool SubtitleAppearance::preview(const QVariantMap &values) {
@@ -54,10 +63,11 @@ bool SubtitleAppearance::preview(const QVariantMap &values) {
     const int gap = values.value("gap").toInt();
     const double percent = values.value("bottomPercent").toDouble();
     const QRegularExpression hex("^#[0-9a-fA-F]{6}$");
-    if (primary < 16 || primary > 64 || secondary < 12 || secondary > 56 || bottom < 8 || bottom > 160
-        || gap < 0 || gap > 80 || !std::isfinite(percent) || percent < 0 || percent > 40
-        || !hex.match(values.value("textColor").toString()).hasMatch()
-        || !hex.match(values.value("secondaryColor").toString()).hasMatch()) return false;
+    if (primary < 16 || primary > 64 || secondary < 12 || secondary > 56 || bottom < 8 || bottom > 160 ||
+        gap < 0 || gap > 80 || !std::isfinite(percent) || percent < 0 || percent > 40 ||
+        !hex.match(values.value("textColor").toString()).hasMatch() ||
+        !hex.match(values.value("secondaryColor").toString()).hasMatch())
+        return false;
 
     // 2. Publish a reversible, non-persistent preview to the player.
     sourceSize = primary;
@@ -78,19 +88,32 @@ bool SubtitleAppearance::preview(const QVariantMap &values) {
 
 bool SubtitleAppearance::applyPreview() {
     const auto values = snapshot();
-    for (auto it = values.begin(); it != values.end(); ++it) settings.setValue(it.key(), it.value());
+    for (auto it = values.begin(); it != values.end(); ++it)
+        settings.setValue(it.key(), it.value());
     settings.sync();
-    if (settings.status() != QSettings::NoError) return false;
+    if (settings.status() != QSettings::NoError)
+        return false;
 
     savedValues = values;
     return true;
 }
 
-void SubtitleAppearance::cancelPreview() { preview(savedValues); }
+void SubtitleAppearance::cancelPreview() {
+    preview(savedValues);
+}
 
 void SubtitleAppearance::reset() {
-    preview({{"primarySize", 28}, {"secondarySize", 24}, {"bottomMargin", 36},
-        {"outline", true}, {"background", false}, {"bold", true}, {"textColor", "#ffffff"},
-        {"secondaryColor", "#ffffff"}, {"gap", 12}, {"reversed", false}, {"selectable", true}, {"bottomPercent", 0}});
+    preview({{"primarySize", 28},
+             {"secondarySize", 24},
+             {"bottomMargin", 36},
+             {"outline", true},
+             {"background", false},
+             {"bold", true},
+             {"textColor", "#ffffff"},
+             {"secondaryColor", "#ffffff"},
+             {"gap", 12},
+             {"reversed", false},
+             {"selectable", true},
+             {"bottomPercent", 0}});
     applyPreview();
 }

@@ -9,9 +9,9 @@ class StudyInteraction : public QObject {
 public:
     StudyInteraction(PlaybackEngine &playback, SubtitleTimeline &timeline, QObject *parent = nullptr)
         : QObject(parent), playback(playback), timeline(timeline) {}
-    void setServices(StudyServices *value) { services = value; }
-    void setMedia(const QString &value) { media = value; }
-    QString selection() const { return selected; }
+    void setServices(StudyServices *value) { studyServices = value; }
+    void setMedia(const QString &value) { mediaPath = value; }
+    QString selection() const { return selectedText; }
     void select(const QString &text, bool secondary = false);
     void commitSelection(bool secondary = false);
     void explainSelection();
@@ -30,14 +30,14 @@ public:
 
 private:
     StudyTarget capture(const QString &text, SubtitleRole role) const;
-    void request(const StudyTarget &target);
+    void requestExplanation(const StudyTarget &target);
     PlaybackEngine &playback;
     SubtitleTimeline &timeline;
-    StudyServices *services = nullptr;
-    QString selected, media;
+    StudyServices *studyServices = nullptr;
+    QString selectedText, mediaPath;
     std::optional<StudyTarget> lastCommitted;
     SubtitleRole selectedRole = SubtitleRole::Primary;
-    bool resumeDefinition = false, wordActive = false, resumeWord = false;
+    bool resumeAfterExplanation = false, wordCardOpen = false, resumeAfterWordCard = false;
     std::optional<StudyTarget> wordTarget;
 signals:
     void selectionChanged();

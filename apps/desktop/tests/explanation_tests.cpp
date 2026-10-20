@@ -26,7 +26,8 @@ private slots:
         QVERIFY(!text.contains("**"));
     }
     void partialStreamRemainsReadable() {
-        for (const auto &input : {QString("### Breakdown\n\n- **ış"), QString("### Breakdown\n\n- **ışık**: light")}) {
+        for (const auto &input :
+             {QString("### Breakdown\n\n- **ış"), QString("### Breakdown\n\n- **ışık**: light")}) {
             QTextDocument document;
             document.setHtml(ExplanationFormat::render(input));
             QVERIFY(document.toPlainText().contains("ış"));

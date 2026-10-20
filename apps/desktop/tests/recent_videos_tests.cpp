@@ -81,7 +81,8 @@ private slots:
         RecentVideos videos(directory.path());
         QVERIFY(!videos.remember({"https://example.invalid/video.mp4", 1, 2}));
         QVERIFY(!videos.remember({directory.filePath("video.mp4"), qQNaN(), 2}));
-        QVERIFY(!videos.remember({directory.filePath("video.mp4"), 1, 2, "https://example.org/subtitles.srt", {}}));
+        QVERIFY(!videos.remember(
+            {directory.filePath("video.mp4"), 1, 2, "https://example.org/subtitles.srt", {}}));
         QCOMPARE(videos.count(), 0);
     }
 };

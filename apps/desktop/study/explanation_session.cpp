@@ -6,9 +6,10 @@
 namespace {
 constexpr qsizetype maximumResponse = 8 * 1024 * 1024;
 }
-ExplanationSession::ExplanationSession(AppSettings &preferences, AiClient::CredentialReader reader,
-                                       QObject *parent, QString alternate)
-    : QObject(parent), settings(preferences), ai(std::move(reader)), alternateEndpoint(std::move(alternate)) {
+ExplanationSession::ExplanationSession(AppSettings &preferences, AiClient::CredentialReader credentialReader,
+                                       QObject *parent, QString alternateApiEndpoint)
+    : QObject(parent), settings(preferences), aiClient(std::move(credentialReader)),
+      alternateEndpoint(std::move(alternateApiEndpoint)) {
     if (!AiClient::allowedEndpoint(QUrl(alternateEndpoint)))
         throw std::invalid_argument("Invalid alternate API endpoint.");
     connect(&settings, &AppSettings::changed, this, &ExplanationSession::stop);
@@ -57,11 +58,14 @@ void ExplanationSession::launchConversation(bool fallback) {
     // 1. Build the entire frozen context and completed conversation; never truncate it.
     answerText.clear();
     requestState = "loading";
-    const quint64 owner = ++aiOwner;
+    if (!fallback)
+        emit replyStarted();
+    const quint64 requestGenerationAtStart = ++requestGeneration;
     fallbackWaiting = !fallback && settings.learningJson().value("fallbackEnabled").toBool();
     if (fallbackWaiting) {
-        QTimer::singleShot(5000, this, [this, owner] {
-            if (owner != aiOwner || !fallbackWaiting || !answerText.trimmed().isEmpty())
+        QTimer::singleShot(5000, this, [this, requestGenerationAtStart] {
+            if (requestGenerationAtStart != requestGeneration || !fallbackWaiting ||
+                !answerText.trimmed().isEmpty())
                 return;
 
             // Only an explicitly enabled fallback can replace an unanswered attempt.
@@ -80,9 +84,11 @@ void ExplanationSession::launchConversation(bool fallback) {
         const bool luna = fallback ? !useLunaFirst : useLunaFirst;
         const QString endpoint = luna ? alternateEndpoint : settings.endpoint();
         const QString model = luna ? "gpt-6-luna" : settings.model();
-        const ChatRequest request{endpoint, model, conversation.messages(),
-                                  true,     false, !luna && settings.learning().noKeyRequired,
-                                  1600,     60000};
+        ChatRequest request;
+        request.endpoint = endpoint;
+        request.model = model;
+        request.messages = conversation.messages();
+        request.noKeyRequired = !luna && settings.learning().noKeyRequired;
         conversation.setProvider(model, fallback);
 
         // 2. Bind chunks, completion and cancellation to this exact network reply.
@@ -91,7 +97,7 @@ void ExplanationSession::launchConversation(bool fallback) {
         truncated = false;
         requestState = "loading";
         statusText = "Requesting explanation…";
-        auto *reply = ai.post(request);
+        auto *reply = aiClient.post(request);
         aiReply = reply;
         connect(reply, &QNetworkReply::readyRead, this, &ExplanationSession::consumeEvents);
         connect(reply, &QNetworkReply::finished, this, [this, reply] {
@@ -203,7 +209,7 @@ void ExplanationSession::stop() {
     if (!aiReply && !fallbackWaiting)
         return;
 
-    ++aiOwner;
+    ++requestGeneration;
     fallbackWaiting = false;
     if (aiReply) {
         auto *reply = aiReply.data();

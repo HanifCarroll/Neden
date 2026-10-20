@@ -4,9 +4,10 @@
 #include <QSslSocket>
 #include <stdexcept>
 bool AiClient::allowedEndpoint(const QUrl &url) {
-    const bool local = url.scheme() == "http" &&
-                       (url.host() == "127.0.0.1" || url.host() == "localhost" || url.host() == "::1");
-    return url.isValid() && !url.host().isEmpty() && (url.scheme() == "https" || local) &&
+    const bool isLoopbackEndpoint =
+        url.scheme() == "http" &&
+        (url.host() == "127.0.0.1" || url.host() == "localhost" || url.host() == "::1");
+    return url.isValid() && !url.host().isEmpty() && (url.scheme() == "https" || isLoopbackEndpoint) &&
            url.userInfo().isEmpty() && !url.hasQuery() && !url.hasFragment();
 }
 QNetworkReply *AiClient::post(const ChatRequest &options) {
@@ -22,7 +23,7 @@ QNetworkReply *AiClient::post(const ChatRequest &options) {
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     request.setTransferTimeout(options.timeoutMs);
     if (!options.noKeyRequired) {
-        auto key = credentials(options.endpoint);
+        auto key = readCredential(options.endpoint);
         if (key.isEmpty() || key.size() > 512 || key.contains('\r') || key.contains('\n'))
             throw std::runtime_error(
                 "The saved credential is missing or Keychain access is unavailable. No request was sent.");
@@ -30,10 +31,10 @@ QNetworkReply *AiClient::post(const ChatRequest &options) {
         key.fill(0);
     }
     QJsonObject body{{"model", options.model},
-                     {"stream", options.stream},
+                     {"stream", options.streamResponse},
                      {"max_tokens", options.maxTokens},
                      {"messages", options.messages}};
-    if (options.json)
+    if (options.requireJsonResponse)
         body.insert("response_format", QJsonObject{{"type", "json_object"}});
     if (QUrl(options.endpoint).host() == "api.deepseek.com")
         body.insert("thinking", QJsonObject{{"type", "disabled"}});
@@ -44,7 +45,7 @@ QNetworkReply *AiClient::post(const ChatRequest &options) {
     const auto bytes = QJsonDocument(body).toJson(QJsonDocument::Compact);
     if (bytes.size() > 100000)
         throw std::runtime_error("The complete AI request exceeds its size limit. Nothing was sent.");
-    auto *reply = network.post(request, bytes);
-    reply->setReadBufferSize(options.responseLimit + 1);
+    auto *reply = networkAccessManager.post(request, bytes);
+    reply->setReadBufferSize(options.responseLimitBytes + 1);
     return reply;
 }

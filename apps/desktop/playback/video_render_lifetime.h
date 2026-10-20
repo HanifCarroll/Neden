@@ -13,9 +13,7 @@ public:
         return token;
     }
 
-    void release(Token token) {
-        activeToken.compare_exchange_strong(token, 0);
-    }
+    void release(Token token) { activeToken.compare_exchange_strong(token, 0); }
 
     bool owns(Token token) const { return token != 0 && activeToken.load() == token; }
     bool available() const { return activeToken.load() != 0; }

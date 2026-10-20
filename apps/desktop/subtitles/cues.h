@@ -18,7 +18,8 @@ class CueModel : public QAbstractListModel {
     QML_ELEMENT
     QML_UNCREATABLE("Model is owned by the learning session")
     Q_PROPERTY(int count READ count NOTIFY countChanged)
-    Q_PROPERTY(SearchLanguage searchLanguage READ searchLanguage WRITE setSearchLanguage NOTIFY searchLanguageChanged)
+    Q_PROPERTY(SearchLanguage searchLanguage READ searchLanguage WRITE setSearchLanguage NOTIFY
+                   searchLanguageChanged)
 public:
     enum SearchLanguage { Unicode, Turkish };
     Q_ENUM(SearchLanguage)
@@ -38,6 +39,7 @@ public:
 signals:
     void countChanged();
     void searchLanguageChanged();
+
 private:
     QVector<Cue> cues;
     QString searchKey(const QString &text) const;

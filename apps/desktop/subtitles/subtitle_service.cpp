@@ -20,9 +20,10 @@ namespace {
 constexpr qsizetype maximumResponse = 8 * 1024 * 1024;
 }
 SubtitleService::SubtitleService(QString directory, AppSettings &preferences,
-                                 AiClient::CredentialReader reader, QObject *parent, QString endpoint)
+                                 AiClient::CredentialReader credentialReader, QObject *parent,
+                                 QString endpoint)
     : QObject(parent), storage(std::move(directory)), subtitleEndpoint(std::move(endpoint)),
-      settings(preferences), credentials(std::move(reader)) {
+      settings(preferences), readCredential(std::move(credentialReader)) {
     if (!AiClient::allowedEndpoint(QUrl(subtitleEndpoint)))
         throw std::invalid_argument("Invalid subtitle API endpoint.");
 }
@@ -41,7 +42,7 @@ QNetworkRequest SubtitleService::authenticatedRequest(const QUrl &url) {
             "This installation is missing secure networking support. Reinstall Neden; no request was sent.");
     }
 
-    auto key = credentials(subtitleEndpoint);
+    auto key = readCredential(subtitleEndpoint);
     if (key.isEmpty() || key.size() > 512 || key.contains('\r') || key.contains('\n')) {
         throw std::runtime_error(
             "The saved credential is missing or Keychain access is unavailable. No request was sent.");
@@ -79,7 +80,7 @@ QString SubtitleService::movieHash(const QString &path) {
 }
 
 void SubtitleService::cancel() {
-    subtitleOwner++;
+    requestGeneration++;
     if (!subtitleReply)
         return;
     subtitleReply->disconnect(this);
@@ -127,7 +128,7 @@ void SubtitleService::findSubtitles(const QString &language, bool autoDownload, 
         request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                              QNetworkRequest::UserVerifiedRedirectPolicy);
         request.setMaximumRedirectsAllowed(2);
-        auto *reply = network.get(request);
+        auto *reply = networkAccessManager.get(request);
         connect(reply, &QNetworkReply::redirected, this, [reply, url](const QUrl &redirect) {
             const auto destination = reply->url().resolved(redirect);
             if (destination.scheme() == url.scheme() && destination.host() == url.host() &&
@@ -139,14 +140,14 @@ void SubtitleService::findSubtitles(const QString &language, bool autoDownload, 
             }
         });
         subtitleReply = reply;
-        const auto owner = subtitleOwner;
+        const auto requestGenerationAtStart = requestGeneration;
         connect(reply, &QNetworkReply::readyRead, this, [reply] {
             if (reply->bytesAvailable() > maximumResponse)
                 reply->abort();
         });
-        connect(reply, &QNetworkReply::finished, this, [this, reply, owner, autoDownload] {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, requestGenerationAtStart, autoDownload] {
             reply->deleteLater();
-            if (owner != subtitleOwner)
+            if (requestGenerationAtStart != requestGeneration)
                 return;
             subtitleReply = nullptr;
             if (reply->error() != QNetworkReply::NoError ||
@@ -191,9 +192,9 @@ void SubtitleService::downloadSubtitle(int index) {
     if (index < 0 || index >= results.size())
         return;
     cancel();
-    const auto owner = subtitleOwner;
+    const auto requestGenerationAtStart = requestGeneration;
     if (!subtitleToken.isEmpty() || !subtitleLoginReader) {
-        requestSubtitleDownload(index, owner);
+        requestSubtitleDownload(index, requestGenerationAtStart);
         return;
     }
 
@@ -207,16 +208,16 @@ void SubtitleService::downloadSubtitle(int index) {
             return;
         }
         const auto request = authenticatedRequest(QUrl(subtitleEndpoint + "/login"));
-        auto *reply = network.post(request, login);
+        auto *reply = networkAccessManager.post(request, login);
         login.fill(0);
         subtitleReply = reply;
         connect(reply, &QNetworkReply::readyRead, this, [reply] {
             if (reply->bytesAvailable() > maximumResponse)
                 reply->abort();
         });
-        connect(reply, &QNetworkReply::finished, this, [this, reply, owner, index] {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, requestGenerationAtStart, index] {
             reply->deleteLater();
-            if (owner != subtitleOwner)
+            if (requestGenerationAtStart != requestGeneration)
                 return;
             subtitleReply = nullptr;
             const auto data = QJsonDocument::fromJson(reply->readAll()).object();
@@ -238,7 +239,7 @@ void SubtitleService::downloadSubtitle(int index) {
             subtitleToken = token;
 
             // 2. Continue the original download only while its media still owns it.
-            requestSubtitleDownload(index, owner);
+            requestSubtitleDownload(index, requestGenerationAtStart);
         });
         setMessage("Signing in to OpenSubtitles…");
     } catch (const std::exception &error) {
@@ -246,22 +247,22 @@ void SubtitleService::downloadSubtitle(int index) {
     }
 }
 
-void SubtitleService::requestSubtitleDownload(int index, quint64 owner) {
-    if (owner != subtitleOwner || index < 0 || index >= results.size())
+void SubtitleService::requestSubtitleDownload(int index, quint64 requestGenerationAtStart) {
+    if (requestGenerationAtStart != requestGeneration || index < 0 || index >= results.size())
         return;
     try {
         const auto request = authenticatedRequest(QUrl(subtitleEndpoint + "/download"));
         const QJsonObject body{{"file_id", results[index].toMap().value("fileId").toInt()},
                                {"sub_format", "srt"}};
-        auto *reply = network.post(request, QJsonDocument(body).toJson());
+        auto *reply = networkAccessManager.post(request, QJsonDocument(body).toJson());
         subtitleReply = reply;
         connect(reply, &QNetworkReply::readyRead, this, [reply] {
             if (reply->bytesAvailable() > maximumResponse)
                 reply->abort();
         });
-        connect(reply, &QNetworkReply::finished, this, [this, reply, owner] {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, requestGenerationAtStart] {
             reply->deleteLater();
-            if (owner != subtitleOwner)
+            if (requestGenerationAtStart != requestGeneration)
                 return;
             subtitleReply = nullptr;
             if (reply->error() != QNetworkReply::NoError ||
@@ -283,7 +284,7 @@ void SubtitleService::requestSubtitleDownload(int index, quint64 owner) {
                 setMessage("OpenSubtitles returned an invalid download link.");
                 return;
             }
-            fetchSubtitle(link, owner);
+            fetchSubtitle(link, requestGenerationAtStart);
         });
         setMessage("Downloading selected subtitle…");
     } catch (const std::exception &error) {
@@ -291,21 +292,21 @@ void SubtitleService::requestSubtitleDownload(int index, quint64 owner) {
     }
 }
 
-void SubtitleService::fetchSubtitle(const QUrl &url, quint64 owner) {
+void SubtitleService::fetchSubtitle(const QUrl &url, quint64 requestGenerationAtStart) {
 
     // 1. Fetch the signed file URL without an API key or authorization header.
     QNetworkRequest request(url);
     request.setTransferTimeout(60000);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
-    auto *reply = network.get(request);
+    auto *reply = networkAccessManager.get(request);
     subtitleReply = reply;
     connect(reply, &QNetworkReply::readyRead, this, [reply] {
         if (reply->bytesAvailable() > maximumResponse)
             reply->abort();
     });
-    connect(reply, &QNetworkReply::finished, this, [this, reply, owner] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, requestGenerationAtStart] {
         reply->deleteLater();
-        if (owner != subtitleOwner)
+        if (requestGenerationAtStart != requestGeneration)
             return;
         subtitleReply = nullptr;
         if (reply->error() != QNetworkReply::NoError ||

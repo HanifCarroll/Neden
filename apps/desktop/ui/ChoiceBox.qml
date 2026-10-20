@@ -58,9 +58,7 @@ ComboBox {
     popup: Popup {
         objectName: control.objectName + "Popup"
         y: control.height + Theme.space1
-        width: control.textRole.length
-            ? Math.max(control.width, Math.min(360, control.ApplicationWindow.window ? control.ApplicationWindow.window.width - Theme.space6 : 360))
-            : control.width
+        width: control.textRole.length ? Math.max(control.width, Math.min(360, control.ApplicationWindow.window ? control.ApplicationWindow.window.width - Theme.space6 : 360)) : control.width
         margins: Theme.space2
         padding: Theme.space1
         implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding

@@ -9,7 +9,7 @@ class OfflineDocument : public QTextDocument {
 protected:
     QVariant loadResource(int, const QUrl &) override { return QByteArray(); }
 };
-}
+} // namespace
 
 QString ExplanationFormat::render(const QString &markdown) {
 
@@ -18,14 +18,16 @@ QString ExplanationFormat::render(const QString &markdown) {
     QFont bodyFont("Inter");
     bodyFont.setPixelSize(15);
     document.setDefaultFont(bodyFont);
-    document.setMarkdown(markdown, QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub) | QTextDocument::MarkdownNoHTML);
+    document.setMarkdown(markdown, QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub) |
+                                       QTextDocument::MarkdownNoHTML);
 
     // 2. Replace image objects with their labels and remove link destinations.
     QList<QTextCursor> fragments;
     for (auto block = document.begin(); block.isValid(); block = block.next()) {
         for (auto iterator = block.begin(); !iterator.atEnd(); ++iterator) {
             const auto fragment = iterator.fragment();
-            if (!fragment.isValid()) continue;
+            if (!fragment.isValid())
+                continue;
 
             QTextCursor cursor(&document);
             cursor.setPosition(fragment.position());

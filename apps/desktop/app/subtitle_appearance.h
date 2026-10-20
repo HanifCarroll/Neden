@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE void reset();
 signals:
     void changed();
+
 private:
     QSettings settings;
     int sourceSize = 28;

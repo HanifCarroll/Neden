@@ -28,6 +28,7 @@ public:
     const QJsonObject &context() const { return frozenContext; }
     const ConversationTurn &latest() const { return history.last(); }
     QVariantList turns() const;
+
 private:
     void startLatest();
     QJsonObject frozenContext;

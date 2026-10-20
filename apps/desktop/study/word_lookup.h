@@ -22,7 +22,7 @@ class WordLookup : public QObject {
     Q_PROPERTY(bool contextual READ contextual NOTIFY changed)
 public:
     using CredentialReader = std::function<QByteArray(const QString &)>;
-    WordLookup(CredentialReader reader, QObject *parent = nullptr, QUrl testOrigin = {});
+    WordLookup(CredentialReader credentialReader, QObject *parent = nullptr, QUrl testOrigin = {});
     QString word() const { return selectedWord; }
     QString state() const { return requestState; }
     QString message() const { return statusText; }
@@ -30,7 +30,7 @@ public:
     QString lemma() const { return baseWord; }
     QString contextNote() const { return usageNote; }
     QStringList otherMeanings() const { return alternatives; }
-    bool contextual() const { return contextLookup; }
+    bool contextual() const { return isContextualLookup; }
     void lookup(const QString &word, const QVariantMap &settings, bool translationOnly = false);
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
                        const QString &model, bool noKeyRequired = false);
@@ -38,17 +38,18 @@ public:
     static QString wordAt(const QString &text, int offset);
     Q_INVOKABLE QVariantMap wordRangeAt(const QString &text, int offset) const;
     static QString languageCode(const QString &language);
-    static QStringList parseMeanings(const QByteArray &body, bool google, bool dictionary);
+    static QStringList parseMeanings(const QByteArray &body, bool usesGoogleFormat,
+                                     bool usesDictionaryFormat);
     static QVariantMap parseContextMeaning(const QByteArray &body);
 signals:
     void changed();
 
 private:
-    void observe(QNetworkReply *reply, bool google = false, bool dictionary = false);
-    CredentialReader credentials;
-    AiClient ai;
+    void observe(QNetworkReply *reply, bool usesGoogleFormat = false, bool usesDictionaryFormat = false);
+    CredentialReader readCredential;
+    AiClient aiClient;
     QUrl testOrigin;
-    QNetworkAccessManager network;
+    QNetworkAccessManager networkAccessManager;
     QPointer<QNetworkReply> reply;
     QString selectedWord;
     QString requestState = "idle";
@@ -57,5 +58,5 @@ private:
     QString baseWord;
     QString usageNote;
     QStringList alternatives;
-    bool contextLookup = false;
+    bool isContextualLookup = false;
 };

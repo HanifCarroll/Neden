@@ -12,7 +12,12 @@ ApplicationWindow {
     required property RecentVideos recentVideos
     required property MpvPlayback playback
     required property FullscreenController fullscreenController
-    enum InspectorMode { Hidden, Transcript, Meaning, Dictionary }
+    enum InspectorMode {
+        Hidden,
+        Transcript,
+        Meaning,
+        Dictionary
+    }
     property int inspectorMode: Main.Transcript
     readonly property bool dictionaryOpen: inspectorMode === Main.Dictionary
     readonly property bool transcriptOpen: inspectorMode !== Main.Hidden
@@ -201,7 +206,9 @@ ApplicationWindow {
     }
     Connections {
         target: root.session
-        function onExplanationRequested() { root.openMeaning(); }
+        function onExplanationRequested() {
+            root.openMeaning();
+        }
         function onMediaChanged() {
             root.showRecent = false;
         }
@@ -511,7 +518,8 @@ ApplicationWindow {
                     if (sidebarOpen) {
                         root.closeSelection();
                         root.inspectorMode = Main.Hidden;
-                    } else root.toggleTranscript();
+                    } else
+                        root.toggleTranscript();
                 }
                 onFullscreen: root.fullscreen()
             }

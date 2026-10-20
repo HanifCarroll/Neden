@@ -8,7 +8,9 @@ ToolButton {
     implicitWidth: 36
     implicitHeight: 36
     hoverEnabled: true
-    HoverHandler { cursorShape: control.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor }
+    HoverHandler {
+        cursorShape: control.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+    }
     opacity: enabled ? 1 : 0.3
     Accessible.name: description
     ToolTip.visible: hovered

@@ -12,6 +12,8 @@ The desktop CMake configuration exports `build/desktop/compile_commands.json`. T
 
 ## Desktop C++ conventions
 
+Prefer descriptive domain names, including units for playback times, and names that distinguish request generation from object ownership. Expand dense conditionals and control flow rather than saving lines. Construct requests through named fields instead of long lists of positional booleans. Keep Qt's API names and familiar local conventions where they already communicate the role. Use the root `.clang-format` for native code and `qmlformat` for QML.
+
 Use standard C++17 with compiler extensions disabled. Prefer scoped enums for application state, explicit numeric casts at API boundaries, and automatic resource ownership. The libmpv handle and returned strings use `std::unique_ptr` with libmpv's own release functions; fixed playback options are a `constexpr std::array`. Keep `nullptr`, value members, range loops, and existing `override` declarations.
 
 Raw Qt pointers usually borrow an object or refer to a parent-owned child; do not give them a second smart-pointer owner. Qt model roles remain integer-compatible enums, and renderer factories transfer their allocated objects to Qt. C/Objective-C interop casts and matching render-context cleanup remain localized to their adapters. New compiler warnings cover application and test code; deprecated Apple Keychain APIs and Qt-generated-code diagnostics require separate platform/dependency decisions rather than cosmetic suppression.

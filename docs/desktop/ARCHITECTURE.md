@@ -35,7 +35,9 @@ apps/desktop/
 
 `ExplanationFormat` keeps model links inert and replaces images with text; model HTML and remote resources are not executed. Word-card fields render as plain text. The shared `ChoiceBox` honors named model roles and keeps full subtitle filenames readable.
 
-Subtitle text keeps the I-beam cursor. A subtle word hover uses the same Unicode word boundaries as lookup and the editor's glyph positions; it never changes selection, steals focus, or requests a definition. Hover disappears during selection and outside the text. Buttons use a pointing-hand cursor.
+Subtitle text keeps the I-beam cursor. A subtle word highlight uses the same Unicode word boundaries as lookup and the editor's glyph positions; it never changes selection, steals focus, or requests a definition. That highlight disappears during selection and outside the text. The separate Explain line action stays available over either track, during selection, and while other controls have focus. Its hover region spans the captions and button without adding an input layer over the editors. The action uses the current primary cue, falling back to the secondary cue when no primary cue is visible, and sits above the floating word card. Buttons use a pointing-hand cursor.
+
+The conversation view anchors each new reply to the beginning of its turn, keeping the latest question visible above the answer. Space below a pending turn allows that placement before any text arrives. Streaming chunks do not change the reading position; a new request or explicit retry anchors once. Provider/model metadata stays in the native conversation for request handling and does not appear in the chat.
 
 The rendering and platform adapters retain the established behavior: sRGB video texture, nonblocking mpv rendering, small idle framebuffer, native Mac text/window buttons, borderless fullscreen by default, optional native fullscreen, and protected Keychain access. The video and sidebar reach the top edge without an episode-title toolbar; sidebar controls respect safe areas.
 

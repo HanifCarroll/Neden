@@ -1,7 +1,8 @@
 #include "fullscreen_controller.h"
 
 struct FullscreenController::NativeState {};
-FullscreenController::FullscreenController(QObject *parent) : QObject(parent), native(std::make_unique<NativeState>()) {}
+FullscreenController::FullscreenController(QObject *parent)
+    : QObject(parent), native(std::make_unique<NativeState>()) {}
 FullscreenController::~FullscreenController() = default;
 
 void FullscreenController::attach(QQuickWindow *target) {
@@ -14,14 +15,19 @@ void FullscreenController::attach(QQuickWindow *target) {
         }
     });
 }
-int FullscreenController::safeTopInset() const { return 0; }
+int FullscreenController::safeTopInset() const {
+    return 0;
+}
 void FullscreenController::bindZoomButton() {}
 void FullscreenController::setNativeMode(bool) {
     // Other platforms use the window manager's fullscreen mechanism without macOS Spaces.
 }
-void FullscreenController::toggle() { setActive(!fullscreenActive); }
+void FullscreenController::toggle() {
+    setActive(!fullscreenActive);
+}
 void FullscreenController::setActive(bool enabled) {
-    if (!window || enabled == fullscreenActive) return;
+    if (!window || enabled == fullscreenActive)
+        return;
 
     if (enabled) {
         savedVisibility = window->visibility();

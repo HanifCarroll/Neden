@@ -9,14 +9,27 @@ ColumnLayout {
     required property SubtitleAppearance appearance
     required property LearningSession session
     required property FullscreenController fullscreenController
-    readonly property AppSettings study: session.study.settings
+    readonly property AppSettings settings: session.study.settings
+    function providerIndex(providerOptions, providerId) {
+        for (let optionIndex = 0; optionIndex < providerOptions.length; ++optionIndex) {
+            if (providerOptions[optionIndex].id === providerId)
+                return optionIndex;
+        }
+        return 0;
+    }
     function saveSettings() {
-        return study.applyDraft({
-            endpoint: endpointField.text, model: modelField.text, dictionary: dictionaryField.text,
-            automaticSubtitles: automaticField.checked, sourceLanguage: sourceLanguage.text,
-            explanationLanguage: explanationLanguage.text, includeSecondary: includeSecondary.checked,
-            noKeyRequired: noKeyRequired.checked, primaryProvider: primaryProvider.currentValue,
-            fallbackEnabled: fallbackEnabled.checked, wordProvider: wordProvider.currentValue,
+        return settings.applyDraft({
+            endpoint: endpointField.text,
+            model: modelField.text,
+            dictionary: dictionaryField.text,
+            automaticSubtitles: automaticField.checked,
+            sourceLanguage: sourceLanguage.text,
+            explanationLanguage: explanationLanguage.text,
+            includeSecondary: includeSecondary.checked,
+            noKeyRequired: noKeyRequired.checked,
+            primaryProvider: primaryProvider.currentValue,
+            fallbackEnabled: fallbackEnabled.checked,
+            wordProvider: wordProvider.currentValue,
             wordRegion: wordRegion.text
         });
     }
@@ -282,7 +295,7 @@ ColumnLayout {
             SearchField {
                 id: endpointField
                 objectName: "aiEndpointField"
-                text: pane.study.endpoint
+                text: pane.settings.endpoint
                 Layout.fillWidth: true
                 Accessible.name: "AI API base URL"
             }
@@ -293,7 +306,7 @@ ColumnLayout {
             SearchField {
                 id: modelField
                 objectName: "aiModelField"
-                text: pane.study.model
+                text: pane.settings.model
                 Layout.fillWidth: true
                 Accessible.name: "AI model ID"
             }
@@ -304,13 +317,13 @@ ColumnLayout {
             SearchField {
                 id: dictionaryField
                 objectName: "dictionaryTemplate"
-                text: pane.study.dictionaryTemplate
+                text: pane.settings.dictionaryTemplate
                 Layout.fillWidth: true
                 Accessible.name: "Dictionary URL template"
             }
             CheckBox {
                 id: automaticField
-                checked: pane.study.automaticSubtitles
+                checked: pane.settings.automaticSubtitles
                 text: "Find and download Turkish hash matches on open"
             }
             Label {
@@ -326,14 +339,14 @@ ColumnLayout {
             }
             SearchField {
                 id: sourceLanguage
-                text: pane.study.sourceLanguage
+                text: pane.settings.sourceLanguage
                 placeholderText: "Source language"
                 Layout.fillWidth: true
                 Accessible.name: "Source language"
             }
             SearchField {
                 id: explanationLanguage
-                text: pane.study.explanationLanguage
+                text: pane.settings.explanationLanguage
                 placeholderText: "Explanation language"
                 Layout.fillWidth: true
                 Accessible.name: "Explanation language"
@@ -341,12 +354,12 @@ ColumnLayout {
             CheckBox {
                 id: includeSecondary
                 text: "Use overlapping secondary subtitles as context"
-                checked: pane.study.includeSecondary
+                checked: pane.settings.includeSecondary
             }
             CheckBox {
                 id: noKeyRequired
                 text: "Configured endpoint does not require an API key"
-                checked: pane.study.noKeyRequired
+                checked: pane.settings.noKeyRequired
             }
             Label {
                 text: "Primary explanation provider"
@@ -354,17 +367,17 @@ ColumnLayout {
             }
             ChoiceBox {
                 id: primaryProvider
-                model: pane.study.primaryProviders
+                model: pane.settings.primaryProviders
                 textRole: "name"
                 valueRole: "id"
-                currentIndex: { for (let i=0; i<count; ++i) if (model[i].id === pane.study.primaryProvider) return i; return 0; }
+                currentIndex: pane.providerIndex(model, pane.settings.primaryProvider)
                 Layout.fillWidth: true
                 Accessible.name: "Primary explanation provider"
             }
             CheckBox {
                 id: fallbackEnabled
                 text: "Use the other provider after 5 seconds without an answer"
-                checked: pane.study.fallbackEnabled
+                checked: pane.settings.fallbackEnabled
             }
             Label {
                 text: "Fallback is optional and may bill both attempts. It never switches after an answer starts. Each provider needs its own saved key."
@@ -380,16 +393,16 @@ ColumnLayout {
             ChoiceBox {
                 id: wordProvider
                 objectName: "wordProviderChoice"
-                model: pane.study.wordProviders
+                model: pane.settings.wordProviders
                 textRole: "name"
                 valueRole: "id"
-                currentIndex: { for (let i=0; i<count; ++i) if (model[i].id === pane.study.wordProvider) return i; return 0; }
+                currentIndex: pane.providerIndex(model, pane.settings.wordProvider)
                 Layout.fillWidth: true
                 Accessible.name: "Word translation provider"
             }
             SearchField {
                 id: wordRegion
-                text: pane.study.wordRegion
+                text: pane.settings.wordRegion
                 placeholderText: "Microsoft region (if required)"
                 Layout.fillWidth: true
                 Accessible.name: "Microsoft Translator region"
@@ -412,7 +425,7 @@ ColumnLayout {
             }
             ChoiceBox {
                 id: keyService
-                model: pane.study.credentialServices
+                model: pane.settings.credentialServices
                 textRole: "name"
                 valueRole: "id"
                 Layout.fillWidth: true
@@ -433,7 +446,7 @@ ColumnLayout {
                     enabled: newKey.text.length > 0
                     onClicked: {
                         if (keyService.currentValue !== "ai" || pane.saveSettings()) {
-                            pane.study.saveServiceKey(keyService.currentValue, newKey.text);
+                            pane.settings.saveServiceKey(keyService.currentValue, newKey.text);
                             newKey.clear();
                         }
                     }
@@ -442,7 +455,7 @@ ColumnLayout {
                     text: "Connect saved key"
                     onClicked: {
                         if (keyService.currentValue !== "ai" || pane.saveSettings())
-                            pane.study.connectServiceKey(keyService.currentValue);
+                            pane.settings.connectServiceKey(keyService.currentValue);
                     }
                 }
             }
@@ -456,7 +469,7 @@ ColumnLayout {
     }
     Label {
         visible: categories.currentIndex === 1
-        text: pane.study.message
+        text: pane.settings.message
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText

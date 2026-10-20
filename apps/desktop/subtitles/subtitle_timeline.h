@@ -7,7 +7,7 @@
 // Owns both timelines, file decoding, transcript projection and context capture.
 class SubtitleTimeline {
 public:
-    CueModel *transcript() { return &model; }
+    CueModel *transcript() { return &transcriptModel; }
     const Cue *cue(int index, SubtitleRole role = SubtitleRole::Primary) const;
     int count(SubtitleRole role = SubtitleRole::Primary) const;
     int active(qint64 milliseconds, SubtitleRole role = SubtitleRole::Primary) const;
@@ -22,14 +22,14 @@ public:
     void replacePrimary(QVector<Cue> cues);
     void clear(SubtitleRole role);
     void reset();
-    bool knows(const QString &path) const { return loadedPaths.contains(path); }
+    bool knows(const QString &path) const { return loadedSubtitlePaths.contains(path); }
     StudyTarget capture(StudyTarget selection, bool includeSecondary) const;
     static QVector<Cue> read(const QUrl &url);
 
 private:
     const QVector<Cue> &entries(SubtitleRole role) const;
-    CueModel model;
-    QVector<Cue> secondary;
-    QString primaryPath, secondaryPath;
-    QStringList loadedPaths;
+    CueModel transcriptModel;
+    QVector<Cue> secondaryCues;
+    QString primarySubtitlePath, secondarySubtitlePath;
+    QStringList loadedSubtitlePaths;
 };

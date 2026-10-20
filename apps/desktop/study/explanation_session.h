@@ -16,8 +16,8 @@ class ExplanationSession : public QObject {
     Q_PROPERTY(QString state READ state NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
 public:
-    ExplanationSession(AppSettings &settings, AiClient::CredentialReader reader, QObject *parent = nullptr,
-                       QString alternate = "https://api.openai.com/v1");
+    ExplanationSession(AppSettings &settings, AiClient::CredentialReader credentialReader,
+                       QObject *parent = nullptr, QString alternateApiEndpoint = "https://api.openai.com/v1");
     ~ExplanationSession() override { stop(); }
     QString answer() const { return answerText; }
     QString subject() const { return subjectText; }
@@ -36,6 +36,7 @@ public:
     void invalidateContext();
 signals:
     void changed();
+    void replyStarted();
 
 private:
     void begin(const StudyTarget &target, const QJsonObject &context);
@@ -46,7 +47,7 @@ private:
         emit changed();
     }
     AppSettings &settings;
-    AiClient ai;
+    AiClient aiClient;
     QString alternateEndpoint;
     QPointer<QNetworkReply> aiReply;
     QByteArray pendingEvents;
@@ -55,5 +56,5 @@ private:
     Conversation conversation;
     std::optional<StudyTarget> activeTarget;
     bool fallbackWaiting = false, sawDone = false, truncated = false;
-    quint64 aiOwner = 0;
+    quint64 requestGeneration = 0;
 };

@@ -2,64 +2,64 @@
 #include <QFileInfo>
 #include <stdexcept>
 StudyTarget StudyInteraction::capture(const QString &text, SubtitleRole role) const {
-    const auto &settings = *services->settings();
+    const auto &settings = *studyServices->settings();
     StudyTarget target;
     target.positionMs = qRound64(playback.position() * 1000);
     target.selection = text;
     target.role = role;
-    target.mediaPath = media;
+    target.mediaPath = mediaPath;
     target.sourceLanguage = settings.sourceLanguage();
     target.explanationLanguage = settings.explanationLanguage();
     return timeline.capture(std::move(target), settings.includeSecondary());
 }
 void StudyInteraction::select(const QString &text, bool secondary) {
     const auto role = secondary ? SubtitleRole::Secondary : SubtitleRole::Primary;
-    if (text.trimmed().isEmpty() || (selected == text.trimmed() && role == selectedRole))
+    if (text.trimmed().isEmpty() || (selectedText == text.trimmed() && role == selectedRole))
         return;
     const bool playing = !playback.paused();
-    if (selected.isEmpty())
-        resumeDefinition = wordActive ? resumeWord : playing;
+    if (selectedText.isEmpty())
+        resumeAfterExplanation = wordCardOpen ? resumeAfterWordCard : playing;
     emit started();
     closeWordCard(false);
-    if (services)
-        services->explanation()->stop();
-    selected = text.trimmed();
+    if (studyServices)
+        studyServices->explanation()->stop();
+    selectedText = text.trimmed();
     selectedRole = role;
     lastCommitted.reset();
     emit selectionChanged();
     playback.setPaused(true);
 }
-void StudyInteraction::request(const StudyTarget &target) {
-    services->explanation()->explainTarget(target);
+void StudyInteraction::requestExplanation(const StudyTarget &target) {
+    studyServices->explanation()->explainTarget(target);
     emit explanationRequested();
 }
 void StudyInteraction::explainSelection() {
-    if (!services)
+    if (!studyServices)
         return;
     try {
-        if (selected.isEmpty())
+        if (selectedText.isEmpty())
             select(timeline.text(qRound64(playback.position() * 1000), selectedRole),
                    selectedRole == SubtitleRole::Secondary);
-        if (!selected.isEmpty())
-            request(capture(selected, selectedRole));
-    } catch (const std::exception &e) {
-        emit error(QString::fromUtf8(e.what()));
+        if (!selectedText.isEmpty())
+            requestExplanation(capture(selectedText, selectedRole));
+    } catch (const std::exception &exception) {
+        emit error(QString::fromUtf8(exception.what()));
     }
 }
 void StudyInteraction::commitSelection(bool secondary) {
     selectedRole = secondary ? SubtitleRole::Secondary : SubtitleRole::Primary;
-    if (!services || selected.isEmpty())
+    if (!studyServices || selectedText.isEmpty())
         return;
     try {
-        const auto target = capture(selected, selectedRole);
+        const auto target = capture(selectedText, selectedRole);
         if (lastCommitted && lastCommitted->mediaPath == target.mediaPath &&
             lastCommitted->role == target.role && lastCommitted->startMs == target.startMs &&
             lastCommitted->selection == target.selection)
             return;
         lastCommitted = target;
-        request(target);
-    } catch (const std::exception &e) {
-        emit error(QString::fromUtf8(e.what()));
+        requestExplanation(target);
+    } catch (const std::exception &exception) {
+        emit error(QString::fromUtf8(exception.what()));
     }
 }
 void StudyInteraction::explainCue(bool secondary) {
@@ -68,24 +68,25 @@ void StudyInteraction::explainCue(bool secondary) {
     explainSelection();
 }
 void StudyInteraction::explainWord() {
-    if (!services || !wordTarget)
+    if (!studyServices || !wordTarget)
         return;
     const auto target = *wordTarget;
     select(target.selection, target.role == SubtitleRole::Secondary);
-    request(target);
+    requestExplanation(target);
 }
 bool StudyInteraction::followUp(const QString &question) {
-    if (!services || services->explanation()->subject().isEmpty())
+    if (!studyServices || studyServices->explanation()->subject().isEmpty())
         return false;
-    const auto &target = services->explanation()->target();
-    select(services->explanation()->subject(), target && target->role == SubtitleRole::Secondary);
-    const bool sent = services->explanation()->followUp(question);
+    const auto &target = studyServices->explanation()->target();
+    select(studyServices->explanation()->subject(), target && target->role == SubtitleRole::Secondary);
+    const bool sent = studyServices->explanation()->followUp(question);
     if (sent)
         playback.setPaused(true);
     return sent;
 }
 void StudyInteraction::lookupWordAt(const QString &text, int offset, bool secondary) {
-    if (!services || services->settings()->learning().wordProvider == LearningSettings::WordProvider::Off)
+    if (!studyServices ||
+        studyServices->settings()->learning().wordProvider == LearningSettings::WordProvider::Off)
         return;
     const auto word = WordLookup::wordAt(text, offset);
     if (word.isEmpty())
@@ -94,56 +95,57 @@ void StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
         auto target = capture(word, secondary ? SubtitleRole::Secondary : SubtitleRole::Primary);
         if (target.sourceCue != text)
             return; // A delayed gesture cannot attach to another cue.
-        const bool resume = wordActive ? resumeWord : !playback.paused();
+        const bool resume = wordCardOpen ? resumeAfterWordCard : !playback.paused();
         emit started();
         closeWordCard(false);
-        resumeWord = resume;
-        wordActive = true;
+        resumeAfterWordCard = resume;
+        wordCardOpen = true;
         wordTarget = target;
         playback.setPaused(true);
-        const auto &settings = *services->settings();
+        const auto &settings = *studyServices->settings();
         if (settings.learning().wordProvider == LearningSettings::WordProvider::ContextualAi)
-            services->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
-                                             settings.learning().noKeyRequired);
+            studyServices->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
+                                                  settings.learning().noKeyRequired);
         else
-            services->words()->lookup(word, settings.learningSettings());
-    } catch (const std::exception &e) {
-        emit error(QString::fromUtf8(e.what()));
+            studyServices->words()->lookup(word, settings.learningSettings());
+    } catch (const std::exception &exception) {
+        emit error(QString::fromUtf8(exception.what()));
     }
 }
 void StudyInteraction::closeWordCard(bool resume) {
-    if (!wordActive)
+    if (!wordCardOpen)
         return;
-    const bool play = resume && resumeWord;
-    wordActive = false;
-    resumeWord = false;
+    const bool play = resume && resumeAfterWordCard;
+    wordCardOpen = false;
+    resumeAfterWordCard = false;
     wordTarget.reset();
-    if (services)
-        services->words()->cancel();
+    if (studyServices)
+        studyServices->words()->cancel();
     if (play)
         playback.setPaused(false);
 }
 void StudyInteraction::retryWordLookup() {
-    if (!services || !wordTarget || services->words()->state() != "failed")
+    if (!studyServices || !wordTarget || studyServices->words()->state() != "failed")
         return;
-    const auto &settings = *services->settings();
-    services->words()->lookupContext(wordTarget->selection, wordTarget->json(), settings.endpoint(),
-                                     settings.model(), settings.learning().noKeyRequired);
+    const auto &settings = *studyServices->settings();
+    studyServices->words()->lookupContext(wordTarget->selection, wordTarget->json(), settings.endpoint(),
+                                          settings.model(), settings.learning().noKeyRequired);
 }
 void StudyInteraction::translateWord() {
-    if (!services || !wordTarget)
+    if (!studyServices || !wordTarget)
         return;
-    services->words()->lookup(wordTarget->selection, services->settings()->learningSettings(), true);
+    studyServices->words()->lookup(wordTarget->selection, studyServices->settings()->learningSettings(),
+                                   true);
 }
 void StudyInteraction::closeDefinition() {
-    if (services)
-        services->explanation()->stop();
-    if (selected.isEmpty())
+    if (studyServices)
+        studyServices->explanation()->stop();
+    if (selectedText.isEmpty())
         return;
-    selected.clear();
+    selectedText.clear();
     lastCommitted.reset();
-    const bool resume = resumeDefinition;
-    resumeDefinition = false;
+    const bool resume = resumeAfterExplanation;
+    resumeAfterExplanation = false;
     if (resume)
         playback.setPaused(false);
     emit selectionChanged();
@@ -155,36 +157,36 @@ void StudyInteraction::dismiss() {
 }
 void StudyInteraction::reset(bool clear) {
     closeWordCard(false);
-    if (services) {
+    if (studyServices) {
         if (clear)
-            services->explanation()->invalidateContext();
+            studyServices->explanation()->invalidateContext();
         else
-            services->explanation()->stop();
+            studyServices->explanation()->stop();
     }
-    selected.clear();
+    selectedText.clear();
     lastCommitted.reset();
-    resumeDefinition = false;
+    resumeAfterExplanation = false;
     selectedRole = SubtitleRole::Primary;
     emit selectionChanged();
 }
 void StudyInteraction::saveCard() {
-    if (!services)
+    if (!studyServices)
         return;
-    const auto &explanation = *services->explanation();
+    const auto &explanation = *studyServices->explanation();
     // A displayed explanation always saves its original target, even after playback seeks elsewhere.
     if (explanation.target()) {
         const auto &target = *explanation.target();
-        services->deck()->saveCard(target.selection, target.sourceCue,
-                                   explanation.state() == "complete" ? explanation.answer()
-                                                                     : target.translation,
-                                   target.positionMs / 1000.0, target.mediaPath);
+        studyServices->deck()->saveCard(target.selection, target.sourceCue,
+                                        explanation.state() == "complete" ? explanation.answer()
+                                                                          : target.translation,
+                                        target.positionMs / 1000.0, target.mediaPath);
     } else {
         try {
-            const auto target = capture(selected, selectedRole);
-            services->deck()->saveCard(target.selection, target.sourceCue, target.translation,
-                                       target.positionMs / 1000.0, target.mediaPath);
-        } catch (const std::exception &e) {
-            emit error(QString::fromUtf8(e.what()));
+            const auto target = capture(selectedText, selectedRole);
+            studyServices->deck()->saveCard(target.selection, target.sourceCue, target.translation,
+                                            target.positionMs / 1000.0, target.mediaPath);
+        } catch (const std::exception &exception) {
+            emit error(QString::fromUtf8(exception.what()));
         }
     }
 }

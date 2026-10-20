@@ -12,10 +12,24 @@ public:
     double lastSeek = -1;
     bool completeImmediately = true;
     bool applySeekImmediately = true;
-    void advance(double value) { positionSeconds = value; emit positionChanged(); }
-    void open(const QString &path, bool) override { advance(0); if (completeImmediately) emit loaded(path); }
-    void seek(double value) override { lastSeek = value; if (applySeekImmediately) advance(value); }
-    void setPaused(bool value) override { isPaused = value; emit pausedChanged(); }
+    void advance(double value) {
+        positionSeconds = value;
+        emit positionChanged();
+    }
+    void open(const QString &path, bool) override {
+        advance(0);
+        if (completeImmediately)
+            emit loaded(path);
+    }
+    void seek(double value) override {
+        lastSeek = value;
+        if (applySeekImmediately)
+            advance(value);
+    }
+    void setPaused(bool value) override {
+        isPaused = value;
+        emit pausedChanged();
+    }
     void rate(double) override {}
     double audioLevel = -1;
     void volume(double value) override { audioLevel = value; }
@@ -37,21 +51,26 @@ private slots:
 
     void contextualSelectionUsesTheSelectedTrackAndKeepsMediaIdentityPrivate() {
         SubtitleTimeline timeline;
-        timeline.publish({{0,5000,"Bir ışık gördüm.",{}}},"source.srt",SubtitleRole::Primary);
-        timeline.publish({{0,1000,"Hello.",{}},{1000,3000,"I saw a light.",{}},{3000,5000,"Look outside.",{}}},"translation.srt",SubtitleRole::Secondary);
+        timeline.publish({{0, 5000, "Bir ışık gördüm.", {}}}, "source.srt", SubtitleRole::Primary);
+        timeline.publish(
+            {{0, 1000, "Hello.", {}}, {1000, 3000, "I saw a light.", {}}, {3000, 5000, "Look outside.", {}}},
+            "translation.srt", SubtitleRole::Secondary);
         StudyTarget selection;
-        selection.selection="light"; selection.positionMs=2000; selection.role=SubtitleRole::Secondary;
-        selection.mediaPath="/private/local/episode.webm"; selection.sourceLanguage="Turkish";
-        selection.explanationLanguage="English";
-        const auto target=timeline.capture(selection,true);
-        QCOMPARE(target.sourceCue,QString("I saw a light."));
-        QCOMPARE(target.sourceLanguage,QString("auto"));
-        QCOMPARE(target.before,QStringList{"Hello."});
-        QCOMPARE(target.after,QStringList{"Look outside."});
-        QCOMPARE(target.secondary,QStringList{"Bir ışık gördüm."});
-        QCOMPARE(target.positionMs,qint64(2000));
+        selection.selection = "light";
+        selection.positionMs = 2000;
+        selection.role = SubtitleRole::Secondary;
+        selection.mediaPath = "/private/local/episode.webm";
+        selection.sourceLanguage = "Turkish";
+        selection.explanationLanguage = "English";
+        const auto target = timeline.capture(selection, true);
+        QCOMPARE(target.sourceCue, QString("I saw a light."));
+        QCOMPARE(target.sourceLanguage, QString("auto"));
+        QCOMPARE(target.before, QStringList{"Hello."});
+        QCOMPARE(target.after, QStringList{"Look outside."});
+        QCOMPARE(target.secondary, QStringList{"Bir ışık gördüm."});
+        QCOMPARE(target.positionMs, qint64(2000));
         QVERIFY(!QJsonDocument(target.json()).toJson().contains("/private/local"));
-        const auto withoutClues=timeline.capture(selection,false);
+        const auto withoutClues = timeline.capture(selection, false);
         QVERIFY(withoutClues.secondary.isEmpty());
     }
 
@@ -60,41 +79,47 @@ private slots:
         QTcpServer server;
         QVERIFY(server.listen(QHostAddress::LocalHost));
         connect(&server, &QTcpServer::newConnection, this, [&] {
-            auto *socket=server.nextPendingConnection();
+            auto *socket = server.nextPendingConnection();
             connect(socket, &QTcpSocket::readyRead, socket, [socket] {
                 socket->readAll();
-                if (socket->property("sent").toBool()) return;
-                socket->setProperty("sent",true);
-                const QByteArray body="data: {\"choices\":[{\"delta\":{\"content\":\"Meaning of the first cue\"}}]}\n\ndata: [DONE]\n\n";
-                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " + QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                if (socket->property("sent").toBool())
+                    return;
+                socket->setProperty("sent", true);
+                const QByteArray body = "data: {\"choices\":[{\"delta\":{\"content\":\"Meaning of the first "
+                                        "cue\"}}]}\n\ndata: [DONE]\n\n";
+                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " +
+                              QByteArray::number(body.size()) + "\r\n\r\n" + body);
                 socket->disconnectFromHost();
             });
         });
-        StudyServices study(directory.path(),[](const QString &) { return QByteArray("synthetic-test-key"); });
-        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()),"mock","https://example.org/%s",false));
+        StudyServices study(directory.path(),
+                            [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock",
+                                            "https://example.org/%s", false));
         FakePlayback engine;
         LearningSession session(&engine);
         session.setStudyServices(&study);
         QFile video(directory.filePath("episode.webm"));
-        QVERIFY(video.open(QIODevice::WriteOnly)); video.close();
+        QVERIFY(video.open(QIODevice::WriteOnly));
+        video.close();
         session.openVideo(QUrl::fromLocalFile(video.fileName()));
-        session.replaceCues({{0,5000,"Bir ışık gördüm.",{}},{5000,10000,"Başka bir sahne.",{}}});
+        session.replaceCues({{0, 5000, "Bir ışık gördüm.", {}}, {5000, 10000, "Başka bir sahne.", {}}});
         engine.advance(1.25);
         session.explainSelection();
-        QTRY_COMPARE(study.explanation()->state(),QString("complete"));
+        QTRY_COMPARE(study.explanation()->state(), QString("complete"));
         session.seek(6);
         session.saveCard();
-        QCOMPARE(study.deck()->cards().size(),1);
-        const auto card=study.deck()->cards().first().toMap();
-        QCOMPARE(card.value("front").toString(),QString("Bir ışık gördüm."));
-        QCOMPARE(card.value("context").toString(),QString("Bir ışık gördüm."));
-        QCOMPARE(card.value("seconds").toDouble(),1.25);
-        QCOMPARE(card.value("media").toString(),QString("episode.webm"));
+        QCOMPARE(study.deck()->cards().size(), 1);
+        const auto card = study.deck()->cards().first().toMap();
+        QCOMPARE(card.value("front").toString(), QString("Bir ışık gördüm."));
+        QCOMPARE(card.value("context").toString(), QString("Bir ışık gördüm."));
+        QCOMPARE(card.value("seconds").toDouble(), 1.25);
+        QCOMPARE(card.value("media").toString(), QString("episode.webm"));
         session.replayExplainedCue();
-        QCOMPARE(engine.lastSeek,0.0);
+        QCOMPARE(engine.lastSeek, 0.0);
         engine.advance(5.1);
         QVERIFY(engine.paused());
-        QVERIFY(std::abs(engine.lastSeek-4.95)<0.001);
+        QVERIFY(std::abs(engine.lastSeek - 4.95) < 0.001);
     }
 
     void wordCardsOwnOnlyTheirPauseAndChangingCuesCancelsThem() {
@@ -103,7 +128,8 @@ private slots:
         FakePlayback playback;
         LearningSession session(&playback);
         session.setStudyServices(&study);
-        session.replaceCues({{0, 10000, "Ben televizyona dalmışım ya.", {}}, {10000, 20000, "Başka bir sahne.", {}}});
+        session.replaceCues(
+            {{0, 10000, "Ben televizyona dalmışım ya.", {}}, {10000, 20000, "Başka bir sahne.", {}}});
         playback.setPaused(false);
         session.lookupWordAt(session.subtitle(), 18);
         QVERIFY(playback.paused());
@@ -120,8 +146,10 @@ private slots:
         QCOMPARE(study.words()->state(), QString("idle"));
         QVERIFY(playback.paused());
         // An explicit Off remains effective, even though new profiles default to AI.
-        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"},
-            {"wordProvider", "off"}, {"primaryProvider", "configured"}}));
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "Turkish"},
+                                                     {"explanationLanguage", "English"},
+                                                     {"wordProvider", "off"},
+                                                     {"primaryProvider", "configured"}}));
         session.lookupWordAt(session.subtitle(), 2);
         QCOMPARE(study.words()->state(), QString("idle"));
     }
@@ -421,7 +449,8 @@ private slots:
     void subtitleNavigationPlaysOnceAndHandlesGapsAndBoundaries() {
         FakePlayback engine;
         LearningSession session(&engine);
-        session.replaceCues({{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}, {9000, 11000, "yağmur", {}}});
+        session.replaceCues(
+            {{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}, {9000, 11000, "yağmur", {}}});
         QVERIFY(!session.canPreviousSubtitle());
         QVERIFY(session.canNextSubtitle());
         session.nextSubtitle();
@@ -457,7 +486,8 @@ private slots:
     void repeatedSubtitleStepsAdvanceWhileTheDecoderIsStillSeeking() {
         FakePlayback engine;
         LearningSession session(&engine);
-        session.replaceCues({{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}, {9000, 11000, "yağmur", {}}});
+        session.replaceCues(
+            {{1000, 3000, "İstanbul", {}}, {5000, 7000, "ışık", {}}, {9000, 11000, "yağmur", {}}});
         engine.advance(1.5);
         engine.applySeekImmediately = false;
         session.nextSubtitle();

@@ -31,8 +31,8 @@ class LearningSession : public QObject {
     Q_PROPERTY(bool canNextSubtitle READ canNextSubtitle NOTIFY cueChanged)
 public:
     Q_PROPERTY(StudyServices *study READ study CONSTANT)
-    StudyServices *study() const { return services; }
-    void setStudyServices(StudyServices *tools);
+    StudyServices *study() const { return studyServices; }
+    void setStudyServices(StudyServices *providedStudyServices);
     void setRecentVideos(RecentVideos *videos);
     ~LearningSession() override;
     bool hasMedia() const { return !currentMediaPath.isEmpty(); }
@@ -43,21 +43,21 @@ public:
     Q_INVOKABLE void chooseTrack(const QString &path, bool secondary);
     Q_INVOKABLE void clearTrack(bool secondary);
     Q_INVOKABLE void checkpoint();
-    explicit LearningSession(PlaybackEngine *engine, QObject *parent = nullptr);
+    explicit LearningSession(PlaybackEngine *playbackEngine, QObject *parent = nullptr);
     Q_PROPERTY(CueModel *cueModel READ cueModel CONSTANT)
-    CueModel *cueModel() { return timeline.transcript(); }
+    CueModel *cueModel() { return subtitleTimeline.transcript(); }
     void replaceCues(QVector<Cue> next);
     void setPaused(bool value);
-    double position() const { return engine->position(); }
-    double duration() const { return engine->duration(); }
-    bool paused() const { return engine->paused(); }
+    double position() const { return playbackEngine->position(); }
+    double duration() const { return playbackEngine->duration(); }
+    bool paused() const { return playbackEngine->paused(); }
     QString subtitle() const;
     QString translation() const;
-    int translationCueCount() const { return timeline.count(SubtitleRole::Secondary); }
-    QString selection() const { return interaction.selection(); }
+    int translationCueCount() const { return subtitleTimeline.count(SubtitleRole::Secondary); }
+    QString selection() const { return studyInteraction.selection(); }
     QString status() const { return statusText; }
     bool replaying() const { return replayActive; }
-    int activeCue() const { return currentCue; }
+    int activeCue() const { return currentPrimaryCueIndex; }
     Q_INVOKABLE void openVideo(const QUrl &url);
     Q_INVOKABLE void openTranslation(const QUrl &url);
     Q_INVOKABLE void explainSelection();
@@ -75,7 +75,7 @@ public:
     Q_INVOKABLE void toggle();
     Q_INVOKABLE void seek(double seconds);
     Q_INVOKABLE void rate(double speed);
-    double volumeLevel() const { return audioLevel; }
+    double volumeLevel() const { return volumePercent; }
     Q_INVOKABLE void volume(double level);
     Q_INVOKABLE void toggleMute();
     Q_INVOKABLE void select(const QString &text, bool secondary = false);
@@ -111,27 +111,27 @@ private:
     void resetInteraction(bool clearConversation = false);
     void finishOpening(const QString &path);
     QString restoreSubtitleTracks(const RecentVideo &saved);
-    SubtitleTimeline timeline;
-    StudyInteraction interaction;
-    StudyServices *services = nullptr;
+    SubtitleTimeline subtitleTimeline;
+    StudyInteraction studyInteraction;
+    StudyServices *studyServices = nullptr;
     RecentVideos *recentVideos = nullptr;
     QTimer checkpointTimer;
     QString currentMediaPath;
     QString rememberedSourceSubtitlePath;
     QString rememberedTranslationSubtitlePath;
-    double audioLevel = 60;
-    double unmutedLevel = 60;
-    double restorePosition = -1;
-    double subtitleSeekTarget = -1;
-    int subtitleSeekIndex = -1;
+    double volumePercent = 60;
+    double unmutedVolumePercent = 60;
+    double pendingResumeSeconds = -1;
+    double pendingSubtitleSeekSeconds = -1;
+    int pendingSubtitleCueIndex = -1;
     bool mediaReady = false;
     bool rememberCurrent = true;
-    int translationCue = -1;
-    PlaybackEngine *engine;
-    int currentCue = -1;
+    int currentSecondaryCueIndex = -1;
+    PlaybackEngine *playbackEngine;
+    int currentPrimaryCueIndex = -1;
     QString statusText = "Ready to explore";
     bool replayActive = false;
     bool replayArmed = false;
-    double replayStart = 0;
-    double replayEnd = 0;
+    double replayStartSeconds = 0;
+    double replayEndSeconds = 0;
 };

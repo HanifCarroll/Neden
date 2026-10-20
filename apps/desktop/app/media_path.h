@@ -3,7 +3,8 @@
 #include <QString>
 
 inline QString mediaPathIdentity(const QString &path) {
-    if (path.isEmpty()) return {};
+    if (path.isEmpty())
+        return {};
 
     const QFileInfo file(path);
     const QString canonical = file.canonicalFilePath();
