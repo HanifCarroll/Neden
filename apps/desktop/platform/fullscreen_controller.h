@@ -29,6 +29,8 @@ public:
     }
     void setNativeMode(bool enabled);
     Q_INVOKABLE void toggle();
+    Q_INVOKABLE void toggleInstant();
+    Q_INVOKABLE void toggleNative();
     Q_INVOKABLE void setActive(bool enabled);
 signals:
     void settingsRequested();
@@ -37,6 +39,7 @@ signals:
 
 private:
     void bindZoomButton();
+    void setActiveInMode(bool enabled, bool useNativeMode);
     struct NativeState;
     std::unique_ptr<NativeState> native;
     QPointer<QQuickWindow> window;

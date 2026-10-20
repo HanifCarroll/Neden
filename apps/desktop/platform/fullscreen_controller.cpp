@@ -25,7 +25,16 @@ void FullscreenController::setNativeMode(bool) {
 void FullscreenController::toggle() {
     setActive(!fullscreenActive);
 }
+void FullscreenController::toggleInstant() {
+    toggle();
+}
+void FullscreenController::toggleNative() {
+    toggle();
+}
 void FullscreenController::setActive(bool enabled) {
+    setActiveInMode(enabled, false);
+}
+void FullscreenController::setActiveInMode(bool enabled, bool) {
     if (!window || enabled == fullscreenActive)
         return;
 

@@ -416,9 +416,9 @@ ApplicationWindow {
                 onTriggered: root.showRecent = true
             }
             Action {
-                text: "Fullscreen"
+                text: Qt.platform.os === "osx" ? "macOS fullscreen" : "Fullscreen"
                 shortcut: "Ctrl+Meta+F"
-                onTriggered: root.fullscreen()
+                onTriggered: root.fullscreenController.toggleNative()
             }
             MenuSeparator {}
             Action {
@@ -530,6 +530,7 @@ ApplicationWindow {
     }
     PlayerShortcuts {
         session: root.session
+        onInstantFullscreenRequested: root.fullscreenController.toggleInstant()
         available: !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !root.dictionaryOpen
         textEntryActive: root.meaningEditing || transcript.editing
         controlKeysActive: playbackControls.editing

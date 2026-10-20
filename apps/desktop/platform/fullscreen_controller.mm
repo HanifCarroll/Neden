@@ -7,9 +7,15 @@
 @property(nonatomic, assign) FullscreenController *controller;
 - (void)toggleFullScreen:(id)sender;
 - (void)openSettings:(id)sender;
+- (void)toggleNativeFullScreen:(id)sender;
 @end
 
 @implementation NedenFullscreenTarget
+- (void)toggleNativeFullScreen:(id)sender {
+    Q_UNUSED(sender);
+    if (self.controller)
+        self.controller->toggleNative();
+}
 - (void)openSettings:(id)sender {
     Q_UNUSED(sender);
     if (self.controller)
@@ -80,7 +86,7 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
     native->target.controller = this;
     bindZoomButton();
 
-    // 2. Expose the Mac's Fn/Globe-F shortcut through the selected fullscreen mode.
+    // 2. Keep the Mac's Fn/Globe-F shortcut dedicated to native fullscreen.
     native->viewMenuItem = [NSApp.mainMenu itemWithTitle:@"View"];
     if (!native->viewMenuItem) {
         native->viewMenuItem = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
@@ -90,7 +96,7 @@ void FullscreenController::attach(QQuickWindow *targetWindow) {
     }
     NSMenu *viewMenu = native->viewMenuItem.submenu;
     native->fullscreenMenuItem = [[NSMenuItem alloc] initWithTitle:@"Enter Full Screen"
-                                                            action:@selector(toggleFullScreen:)
+                                                            action:@selector(toggleNativeFullScreen:)
                                                      keyEquivalent:@"f"];
     native->fullscreenMenuItem.keyEquivalentModifierMask = NSEventModifierFlagFunction;
     native->fullscreenMenuItem.target = native->target;
@@ -156,7 +162,7 @@ void FullscreenController::bindZoomButton() {
         (nativeWindow.collectionBehavior &
          ~(NSWindowCollectionBehaviorFullScreenPrimary | NSWindowCollectionBehaviorFullScreenAuxiliary) &
          ~NSWindowCollectionBehaviorFullScreenNone) |
-        ((fullscreenActive ? nativeSession : preferredNativeMode)
+        (((fullscreenActive || transitioning) ? nativeSession : preferredNativeMode)
              ? NSWindowCollectionBehaviorFullScreenPrimary
              : NSWindowCollectionBehaviorFullScreenNone);
     native->zoomButton = [view.window standardWindowButton:NSWindowZoomButton];
@@ -173,14 +179,26 @@ void FullscreenController::toggle() {
     setActive(!fullscreenActive);
 }
 
+void FullscreenController::toggleInstant() {
+    setActiveInMode(!fullscreenActive, false);
+}
+
+void FullscreenController::toggleNative() {
+    setActiveInMode(!fullscreenActive, true);
+}
+
 void FullscreenController::setActive(bool enabled) {
+    setActiveInMode(enabled, preferredNativeMode);
+}
+
+void FullscreenController::setActiveInMode(bool enabled, bool useNativeMode) {
     if (!window || transitioning || enabled == fullscreenActive) {
         return;
     }
 
     // 1. Select the mode on entry; changing the preference never changes an active session.
     if (enabled)
-        nativeSession = preferredNativeMode;
+        nativeSession = useNativeMode;
     if (nativeSession) {
         transitioning = true;
         if (enabled) {
