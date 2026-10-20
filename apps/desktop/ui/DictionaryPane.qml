@@ -8,7 +8,6 @@ Rectangle {
     id: pane
     required property LearningSession session
     color: Theme.surface
-    radius: Theme.panelRadius
     property string term: ""
     property string loadState: "idle"
     property string errorMessage: ""

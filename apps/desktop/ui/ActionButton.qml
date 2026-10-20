@@ -15,7 +15,7 @@ Button {
     font.pixelSize: Theme.body
     background: Rectangle {
         radius: Theme.controlRadius
-        color: control.primary ? Theme.accent : (control.hovered ? Theme.hover : (control.flat ? "transparent" : Theme.elevated))
+        color: control.primary ? Theme.accent : (control.hovered || control.down ? Theme.hover : "transparent")
         opacity: control.down ? 0.75 : 1
         border.color: control.activeFocus ? Theme.accent : "transparent"
         border.width: 1

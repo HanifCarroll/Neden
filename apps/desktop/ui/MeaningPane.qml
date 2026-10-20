@@ -24,21 +24,17 @@ Item {
         anchors.fill: parent
         anchors.margins: Theme.space4
         spacing: Theme.space3
-        Rectangle {
+        Item {
             id: sourceCard
             objectName: "explanationSourceCard"
             Layout.fillWidth: true
             Layout.fillHeight: false
-            implicitHeight: sourceContents.implicitHeight + Theme.space3 * 2
-            radius: 10
-            color: Theme.elevated
-            border.color: Theme.border
+            implicitHeight: sourceContents.implicitHeight + Theme.space3
             ColumnLayout {
                 id: sourceContents
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: Theme.space3
                 spacing: Theme.space1
                 RowLayout {
                     Layout.fillWidth: true
@@ -93,6 +89,12 @@ Item {
                     font.pixelSize: Theme.body
                     Layout.fillWidth: true
                 }
+            }
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: Theme.border
             }
         }
         ListView {

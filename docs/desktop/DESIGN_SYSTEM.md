@@ -32,13 +32,13 @@ Double-clicking the picture toggles the selected fullscreen mode; selectable sub
 
 Conversation controls use the same spacing and type tokens as the inspector. Keep the frozen phrase and source-cue disclosure separate from the scrollable conversation. Follow-up editing owns text keys; read-only answers must not consume playback shortcuts. Previewed subtitle appearance stays reversible until explicitly applied.
 
-The explanation subject uses the plugin’s compact source-card treatment: a 15 px semibold white phrase, 1.4 line height, dark inset card, and quiet replay/disclosure actions. Do not use a large accent-colored heading or an eyebrow. Show the full-subtitle disclosure only when the selected phrase differs from its full cue.
+The explanation subject uses the plugin’s compact source-card treatment: a 15 px semibold white phrase, 1.4 line height, and quiet replay/disclosure actions on the sidebar surface, separated from the conversation by a thin rule. Do not use a large accent-colored heading or an eyebrow. Show the full-subtitle disclosure only when the selected phrase differs from its full cue.
 
 The hover action belongs to the video overlay, outside the selectable text items. One passive video-level pointer handler measures the union of the entire subtitle area and button; moving between them must keep the action visible. Its position stays inside the video, and a 180 ms exit grace prevents flicker during small pointer or layout changes. Text selection retains its own pointer handling. Do not restore a narrow hover handler inside the text editor.
 
 ## Playback options and settings
 
-Playback options contains five stable categories: Audio, Picture, Subtitles, Queue, and File info. Use `PlayerOptions.Page` names in menu routes rather than numeric positions. The selected category has a filled background and a persistent label; keyboard navigation uses Qt's TabBar/TabButton behavior. Reset the panel's scroll position when changing category.
+Playback options contains five stable categories: Audio, Picture, Subtitles, Queue, and File info. Use `PlayerOptions.Page` names in menu routes rather than numeric positions. The selected category has an accent underline and a persistent label; keyboard navigation uses Qt's TabBar/TabButton behavior. Reset the panel's scroll position when changing category.
 
 Keep adjustments to the current video here. Put persistent fullscreen, history and speed preferences in Settings → Playback; subtitle appearance and AI/services have their own Settings categories. Remember the most recently visited Settings category during the app session. Opening Settings must not apply unsaved service drafts or subtitle appearance previews.
 
@@ -53,3 +53,7 @@ Design references consulted for this layout (20 October 2026):
 - [Apple: Settings](https://developer.apple.com/design/human-interface-guidelines/settings) separates task-specific adjustments from general, infrequently changed preferences, and recommends stable pane navigation and restoring the last pane.
 - [Apple: Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars) recommends deliberate item selection, logical grouping and menu-bar access to toolbar commands. Applied here by keeping secondary configuration out of the transport bar.
 - [Nielsen Norman Group: Tabs, Used Right](https://www.nngroup.com/articles/tabs-used-right/) recommends concise labels, clear selection, consistent behavior and a single visible row. Applied to the five playback categories and separate Settings categories.
+
+## Flat surfaces
+
+Group content with headings, spacing and occasional single separators rather than nested cards or bordered section boxes. Settings groups, explanation subjects, queue entries and study cards share their parent surface. Tabs use an underline instead of filled segments. Secondary action buttons are transparent at rest, with hover, pressed and keyboard-focus feedback; primary actions may retain an accent fill. Input fields and floating dialogs/word popovers keep their own visible boundaries because they represent editable controls or separate layers. Keep these exceptions shallow; do not place decorative boxes inside them.

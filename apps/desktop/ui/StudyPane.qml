@@ -84,19 +84,21 @@ Rectangle {
                     clip: true
                     spacing: Theme.space3
                     model: pane.studyServices.deck.cards
-                    delegate: Rectangle {
+                    delegate: Item {
                         id: card
                         required property var modelData
                         required property int index
                         width: cardList.width
-                        height: cardContents.implicitHeight + 28
-                        color: Theme.surface
-                        radius: Theme.panelRadius
+                        height: cardContents.implicitHeight + Theme.space5
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: Theme.border
+                        }
                         ColumnLayout {
                             id: cardContents
-                            width: parent.width - 28
-                            x: 14
-                            y: 14
+                            width: parent.width
                             Label {
                                 text: card.modelData.front
                                 color: Theme.accent

@@ -8,14 +8,20 @@ Basic.TabButton {
     font.pixelSize: Theme.body
     contentItem: Text {
         text: control.text
-        color: control.checked ? Theme.ink : Theme.muted
+        color: control.checked ? Theme.accent : Theme.muted
         font: control.font
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
     background: Rectangle {
-        radius: Theme.controlRadius
-        color: control.checked ? Theme.elevated : "transparent"
+        color: control.hovered ? Theme.hover : "transparent"
         border.color: control.activeFocus ? Theme.accent : "transparent"
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 2
+            color: control.checked ? Theme.accent : "transparent"
+        }
     }
 }

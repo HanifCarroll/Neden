@@ -27,8 +27,8 @@ QtObject {
     readonly property int title: 20
     readonly property int heading: 24
     readonly property int controlHeight: 38
-    readonly property int controlRadius: 8
-    readonly property int panelRadius: 12
+    readonly property int controlRadius: 4
+    readonly property int panelRadius: 6
 
     function clock(seconds) {
         const total = Math.max(0, Math.floor(seconds));

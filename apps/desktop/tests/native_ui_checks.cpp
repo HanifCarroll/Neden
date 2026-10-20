@@ -385,6 +385,8 @@ private slots:
         auto *save = visualItem(window->contentItem(), "saveSettingsButton");
         QVERIFY(endpoint && model && provider && save);
         QCOMPARE(provider->property("currentValue").toString(), QString("ai"));
+        QCOMPARE(provider->property("count").toInt(), 2);
+        QCOMPARE(study->settings()->credentialServices().size(), 3);
         const auto original = study->settings()->endpoint();
         QVERIFY(endpoint->setProperty("text", QString("https://example.org/v1")));
         QVERIFY(model->setProperty("text", QString("draft-model")));
@@ -438,14 +440,17 @@ private slots:
                         artifacts + QString("/options-%1-%2.png").arg(window->width()).arg(page)));
             }
             QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
-            window->setProperty("settingsPage", 1);
+            window->setProperty("settingsPage", 0);
             QVERIFY(QMetaObject::invokeMethod(window, "openSettings"));
             auto *settings = window->findChild<QObject *>("settingsDialog");
             QTRY_VERIFY(settings->property("opened").toBool());
-            QTest::qWait(200);
-            if (!artifacts.isEmpty())
-                QVERIFY(window->grabWindow().save(artifacts +
-                                                  QString("/settings-playback-%1.png").arg(window->width())));
+            for (int settingsPage = 0; settingsPage < 3; ++settingsPage) {
+                window->setProperty("settingsPage", settingsPage);
+                QTest::qWait(200);
+                if (!artifacts.isEmpty())
+                    QVERIFY(window->grabWindow().save(
+                        artifacts + QString("/settings-%1-%2.png").arg(window->width()).arg(settingsPage)));
+            }
             QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         }
         window->resize(originalSize);

@@ -22,17 +22,12 @@ Item {
             color: Theme.ink
             Layout.fillWidth: true
         }
-        Rectangle {
+        Item {
             Layout.fillWidth: true
-            implicitHeight: rows.implicitHeight + Theme.space4 * 2
-            color: Theme.surface
-            radius: Theme.controlRadius
-            border.color: Theme.border
+            implicitHeight: rows.implicitHeight
             ColumnLayout {
                 id: rows
-                x: Theme.space4
-                y: Theme.space4
-                width: parent.width - Theme.space4 * 2
+                width: parent.width
                 spacing: Theme.space4
             }
         }

@@ -24,10 +24,6 @@ Item {
             id: categories
             objectName: "playbackCategories"
             Layout.fillWidth: true
-            background: Rectangle {
-                color: Theme.surface
-                radius: Theme.controlRadius
-            }
             SegmentButton {
                 width: categories.availableWidth / Math.max(1, categories.count)
                 text: "Audio"
@@ -314,10 +310,15 @@ Item {
                                 required property var modelData
                                 required property int index
                                 Layout.fillWidth: true
-                                padding: Theme.space3
+                                padding: Theme.space2
                                 background: Rectangle {
-                                    color: queueRow.modelData.current ? Theme.selected : Theme.surface
-                                    radius: Theme.controlRadius
+                                    color: queueRow.modelData.current ? Theme.selected : "transparent"
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        width: parent.width
+                                        height: 1
+                                        color: Theme.border
+                                    }
                                 }
                                 contentItem: RowLayout {
                                     IconButton {
