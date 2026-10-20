@@ -77,10 +77,11 @@ int main(int argc, char **argv) {
     SubtitleAppearance subtitleAppearance(storage);
     MpvPlayback playbackEngine;
     RecentVideos recentVideos(storage);
-    StudyServices study(storage, readSavedCredential);
-    study.settings()->setCredentialAuthorizer(authorizeSavedCredential);
-    study.settings()->setCredentialWriter(saveCredential);
-    study.subtitles()->setSubtitleLoginReader(readSavedSubtitleLogin);
+    CredentialStore credentials;
+    StudyServices study(storage, [&](const QString &endpoint) { return credentials.read(endpoint); });
+    study.settings()->setCredentialAuthorizer([&](const QString &endpoint, CredentialStore::Completion completed) { credentials.authorize(endpoint, std::move(completed)); });
+    study.settings()->setCredentialWriter([&](const QString &endpoint, QByteArray key, CredentialStore::Completion completed) { credentials.save(endpoint, std::move(key), std::move(completed)); });
+    study.subtitles()->setSubtitleLoginReader([&] { return credentials.subtitleLogin(); });
     LearningSession session(&playbackEngine);
     session.setStudyServices(&study);
     session.setRecentVideos(&recentVideos);

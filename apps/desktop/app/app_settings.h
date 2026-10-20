@@ -68,10 +68,11 @@ public:
     bool configureLearning(const QVariantMap &values);
     Q_INVOKABLE QUrl dictionaryUrl(const QString &term);
     static QUrl buildDictionaryUrl(const QString &pattern, const QString &term);
-    void setCredentialAuthorizer(std::function<QString(const QString &)> credentialHandler) {
+    using CredentialCompletion = std::function<void(QString)>;
+    void setCredentialAuthorizer(std::function<void(const QString &, CredentialCompletion)> credentialHandler) {
         authorizer = std::move(credentialHandler);
     }
-    void setCredentialWriter(std::function<QString(const QString &, QByteArray)> credentialHandler) {
+    void setCredentialWriter(std::function<void(const QString &, QByteArray, CredentialCompletion)> credentialHandler) {
         writer = std::move(credentialHandler);
     }
     Q_INVOKABLE void saveServiceKey(const QString &service, const QString &key);
@@ -91,6 +92,7 @@ private:
     ConnectionSettings connectionValues;
     LearningSettings learningValues;
     QString statusText;
-    std::function<QString(const QString &)> authorizer;
-    std::function<QString(const QString &, QByteArray)> writer;
+    bool credentialPending = false;
+    std::function<void(const QString &, CredentialCompletion)> authorizer;
+    std::function<void(const QString &, QByteArray, CredentialCompletion)> writer;
 };

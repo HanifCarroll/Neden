@@ -220,16 +220,37 @@ private slots:
         QVERIFY(restored.settings()->includeSecondary());
 
         QString savedEndpoint;
-        study.settings()->setCredentialWriter([&](const QString &endpoint, QByteArray key) {
+        study.settings()->setCredentialWriter([&](const QString &endpoint, QByteArray key, AppSettings::CredentialCompletion completed) {
             savedEndpoint = endpoint;
             const bool valid = key == "synthetic-test-key";
             key.fill(0);
-            return valid ? QString("Saved") : QString("Invalid");
+            completed(valid ? QString("Saved") : QString("Invalid"));
         });
         study.settings()->saveServiceKey("ai", "synthetic-test-key");
         QCOMPARE(savedEndpoint, study.settings()->endpoint());
         QCOMPARE(study.settings()->message(), QString("Saved"));
         QVERIFY(!study.settings()->learningSettings().contains("apiKey"));
+    }
+
+    void credentialActionsWaitForCompletionAndNeverPersistSecrets() {
+        QTemporaryDir directory;
+        ProfileStore store(directory.path());
+        AppSettings settings(store);
+        AppSettings::CredentialCompletion finish;
+        int attempts = 0;
+        settings.setCredentialWriter([&](const QString &, QByteArray, AppSettings::CredentialCompletion completed) {
+            ++attempts;
+            finish = std::move(completed);
+        });
+        settings.saveServiceKey("ai", "synthetic-key");
+        settings.saveServiceKey("ai", "another-key");
+        QCOMPARE(attempts, 1);
+        QVERIFY(settings.message().contains("Saving"));
+        finish("Saved securely");
+        QCOMPARE(settings.message(), QString("Saved securely"));
+        QVERIFY(!QJsonDocument(store.snapshot()).toJson().contains("synthetic-key"));
+        settings.saveServiceKey("ai", "synthetic-key");
+        QCOMPARE(attempts, 2);
     }
 
     void optedInFallbackWaitsAndUsesOnlyOneAlternateAttempt() {
@@ -317,9 +338,9 @@ private slots:
             QCOMPARE(settings->wordProviders().size(), 2);
             QCOMPARE(settings->credentialServices().size(), 3);
             bool credentialWritten = false;
-            settings->setCredentialWriter([&](const QString &, QByteArray) {
+            settings->setCredentialWriter([&](const QString &, QByteArray, AppSettings::CredentialCompletion completed) {
                 credentialWritten = true;
-                return QString("Saved");
+                completed("Saved");
             });
             settings->saveServiceKey(provider, "unused-key");
             QVERIFY(!credentialWritten);

@@ -29,3 +29,9 @@ The local installation command embeds Qt, QML plugins, and reviewed playback lib
 Primary references: [Qt LGPL obligations](https://www.qt.io/development/open-source-lgpl-obligations), [Qt licensing](https://doc.qt.io/qt-6/licensing.html), [mpv 0.36.0 copyright](https://github.com/mpv-player/mpv/blob/v0.36.0/Copyright), and [FFmpeg legal checklist](https://ffmpeg.org/legal.html).
 
 Focused implementation references included Qt's scene graph/OpenGL documentation, libmpv's render headers, and the OpenGL context requirements in media_kit. Jellyfin Desktop provided a lead for declaring an sRGB surface. No implementation from those projects was copied into the app.
+
+## Secure credentials
+
+QtKeychain 0.17.0 is pinned to commit `875f77d9f61bd97fd84cca47ce3bc71186dfbd09` and archive SHA-256 `f367072fdf43551104cc718e43056d218d0c6d81c1b1758603fb3cd87144f8cc` in `apps/desktop/cmake/QtKeychain.cmake`. It is statically linked under its modified BSD license; the upstream COPYING notice is included in the Mac bundle. Qt remains dynamically linked. CMake downloads the verified source during the first full build; core-only tests remain independent of it.
+
+Explicit Connect and Save actions use asynchronous QtKeychain jobs with insecure fallback disabled. macOS retains the existing IINA endpoint service and `api-key` / `login` account names. A small native, noninteractive read adapter preserves already-approved background access; it never prompts. Windows/Linux use the same QtKeychain interface and require explicit Connect after launch. Missing/locked backends produce a status message, never plaintext preferences. Those platform integrations still need native testing before distribution.

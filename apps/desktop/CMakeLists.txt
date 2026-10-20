@@ -50,6 +50,7 @@ add_test(NAME video_render_lifetime_tests COMMAND video_render_lifetime_tests)
 if(NEDEN_CORE_ONLY)
     return()
 endif()
+include(cmake/QtKeychain.cmake)
 find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 OpenGL WebView Svg)
 qt_add_executable(explanation_tests tests/explanation_tests.cpp study/explanation_format.cpp study/explanation_format.h)
 target_link_libraries(explanation_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Qml)
@@ -78,13 +79,19 @@ endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set(NEDEN_UI_SOURCES playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
-    playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h)
+    playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp)
 set(NEDEN_QML_FILES ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
         ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/MeaningPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
     SOURCES ${NEDEN_UI_SOURCES}
     QML_FILES ${NEDEN_QML_FILES})
+if(APPLE)
+add_custom_command(TARGET NedenQt POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_DIR:NedenQt>/Contents/Resources/licenses"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${NEDEN_QTKEYCHAIN_LICENSE}" "$<TARGET_BUNDLE_DIR:NedenQt>/Contents/Resources/licenses/QtKeychain-BSD.txt"
+    VERBATIM)
+endif()
 qt_add_resources(NedenQt fonts PREFIX "/fonts" BASE "../../shared/fonts"
     FILES ../../shared/fonts/Inter-Regular.otf ../../shared/fonts/Inter-Medium.otf
         ../../shared/fonts/Inter-SemiBold.otf ../../shared/fonts/LICENSE.txt)
@@ -92,7 +99,7 @@ file(GLOB NEDEN_ICON_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../
 qt_add_resources(NedenQt icons PREFIX "/icons" BASE "../../shared/icons/lucide" FILES ${NEDEN_ICON_FILES})
 qt_add_resources(NedenQt branding PREFIX "/branding" BASE "../../shared/branding" FILES ../../shared/branding/neden.png)
 target_include_directories(NedenQt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(NedenQt PRIVATE Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView)
+target_link_libraries(NedenQt PRIVATE qt6keychain Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView)
 if(APPLE)
     set_source_files_properties(platform/fullscreen_controller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_source_files_properties(platform/platform_media_session_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
@@ -170,7 +177,7 @@ if(NEDEN_NATIVE_UI_CHECKS)
     qt_add_resources(NedenNativeChecks check_icons PREFIX "/icons" BASE "../../shared/icons/lucide" FILES ${NEDEN_ICON_FILES})
     qt_add_resources(NedenNativeChecks check_branding PREFIX "/branding" BASE "../../shared/branding" FILES ../../shared/branding/neden.png)
     target_include_directories(NedenNativeChecks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${MPV_INCLUDE_DIR})
-    target_link_libraries(NedenNativeChecks PRIVATE Qt6::Test Qt6::Network Qt6::Quick
+    target_link_libraries(NedenNativeChecks PRIVATE qt6keychain Qt6::Test Qt6::Network Qt6::Quick
         Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView "${REVIEWED_MPV_LIBRARY}")
     set_target_properties(NedenNativeChecks PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
     if(APPLE)

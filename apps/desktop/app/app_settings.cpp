@@ -1,3 +1,4 @@
+#include <QPointer>
 #include "app_settings.h"
 #include "ai_client.h"
 #include <stdexcept>
@@ -156,7 +157,16 @@ void AppSettings::saveServiceKey(const QString &service, const QString &key) {
         return;
     }
 
-    setMessage(writer(endpoint, key.toUtf8()));
+    if (credentialPending)
+        return;
+    credentialPending = true;
+    setMessage("Saving securely…");
+    writer(endpoint, key.toUtf8(), [guard = QPointer<AppSettings>(this)](QString message) {
+        if (guard) {
+            guard->credentialPending = false;
+            guard->setMessage(message);
+        }
+    });
 }
 
 void AppSettings::connectServiceKey(const QString &service) {
@@ -166,5 +176,14 @@ void AppSettings::connectServiceKey(const QString &service) {
         return;
     }
 
-    setMessage(authorizer(endpoint));
+    if (credentialPending)
+        return;
+    credentialPending = true;
+    setMessage("Connecting to the system credential store…");
+    authorizer(endpoint, [guard = QPointer<AppSettings>(this)](QString message) {
+        if (guard) {
+            guard->credentialPending = false;
+            guard->setMessage(message);
+        }
+    });
 }
