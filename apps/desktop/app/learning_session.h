@@ -120,7 +120,6 @@ public:
     Q_INVOKABLE void explainSelection();
     Q_INVOKABLE void commitSelection(bool secondary = false);
     Q_INVOKABLE void explainCue(bool secondary = false);
-    Q_INVOKABLE void explainWord();
     Q_INVOKABLE void invalidateStudy();
     Q_INVOKABLE void lookupWordAt(const QString &text, int offset, bool secondary = false);
     Q_INVOKABLE void retryWordLookup();

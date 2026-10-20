@@ -63,7 +63,6 @@ Rectangle {
             MeaningPane {
                 session: pane.session
                 onDictionaryRequested: term => pane.dictionaryRequested(term)
-                onDismissed: pane.dismissed()
             }
             ColumnLayout {
                 RowLayout {

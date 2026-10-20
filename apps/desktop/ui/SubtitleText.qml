@@ -9,6 +9,7 @@ Item {
     property alias text: textEditor.text
     property int pixelSize: 28
     property bool selectable: true
+    property bool hideCursor: false
     property color textColor: appearance.textColor
     property alias editor: textEditor
     signal selectionChanged(string selection)
@@ -19,16 +20,26 @@ Item {
     readonly property bool selecting: selectionPointer.active
     readonly property bool hovered: wordHover.hovered
     readonly property point pointerPosition: selecting ? selectionPointer.point.position : wordHover.point.position
-    readonly property bool wordsHovered: (hovered || selecting) && wordRectanglesAt(pointerPosition, textEditor.width, textEditor.font).length > 0
+    property int layoutRevision: 0
+    readonly property bool wordsHovered: {
+        // positionToRectangle has no notify signal. Recheck after a cue, font or
+        // width change has finished laying out, even if the mouse hasn't moved.
+        const revision = layoutRevision;
+        return (hovered || selecting) && wordRectanglesAt(pointerPosition, textEditor.width, textEditor.font).length > 0;
+    }
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
     visible: textEditor.length > 0
 
     // Hover is presentation only: it never changes selection, focus, or requests a definition.
     readonly property var hoverRects: {
+        const revision = layoutRevision;
         if (!hovered || !selectable || selecting || textEditor.selectedText.length)
             return [];
         return wordRectanglesAt(wordHover.point.position, textEditor.width, textEditor.font);
+    }
+    function refreshHitGeometry() {
+        ++layoutRevision;
     }
     function containsPoint(rectangle, point) {
         return point.x >= rectangle.x && point.x <= rectangle.x + rectangle.width && point.y >= rectangle.y && point.y <= rectangle.y + rectangle.height;
@@ -121,9 +132,16 @@ Item {
         HoverHandler {
             id: wordHover
             blocking: false
-            cursorShape: line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
+            cursorShape: line.hideCursor ? Qt.BlankCursor : line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
         }
-        onTextChanged: wordDelay.stop()
+        onTextChanged: {
+            wordDelay.stop();
+            Qt.callLater(line.refreshHitGeometry);
+        }
+        onWidthChanged: Qt.callLater(line.refreshHitGeometry)
+        onFontChanged: Qt.callLater(line.refreshHitGeometry)
+        onContentHeightChanged: Qt.callLater(line.refreshHitGeometry)
+        onContentWidthChanged: Qt.callLater(line.refreshHitGeometry)
         onSelectedTextChanged: {
             if (selectedText.length) {
                 wordDelay.stop();

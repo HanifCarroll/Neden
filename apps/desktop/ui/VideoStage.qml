@@ -11,6 +11,7 @@ Rectangle {
     required property SubtitleAppearance appearance
     property bool capturing: false
     property bool hideCursor: false
+    readonly property bool selecting: subtitle.selecting || translation.selecting
     signal screenshotFinished(bool saved)
     function saveScreenshot(path) {
         if (!path.length)
@@ -118,6 +119,7 @@ Rectangle {
                 wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.primarySize
                 selectable: stage.appearance.selectable
+                hideCursor: stage.hideCursor
                 Layout.row: stage.appearance.reversed ? 1 : 0
                 onWordRequested: offset => stage.session.lookupWordAt(text, offset, false)
                 onSelectionChanged: selection => stage.session.select(selection)
@@ -132,6 +134,7 @@ Rectangle {
                 wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.secondarySize
                 selectable: stage.appearance.selectable
+                hideCursor: stage.hideCursor
                 textColor: stage.appearance.secondaryColor
                 Layout.row: stage.appearance.reversed ? 0 : 1
                 onWordRequested: offset => stage.session.lookupWordAt(text, offset, true)
@@ -171,6 +174,21 @@ Rectangle {
             radius: 8
         }
     }
+    // Keep this hit target present while the action is hidden. It observes hover
+    // without taking clicks or text-selection grabs away from the controls below.
+    Item {
+        z: 1
+        x: explainLine.x
+        y: explainLine.y
+        width: explainLine.width
+        height: explainLine.height
+        visible: !stage.capturing && explainLine.hasCaptions
+        HoverHandler {
+            id: explainFootprint
+            blocking: false
+            cursorShape: Qt.PointingHandCursor
+        }
+    }
     ActionButton {
         id: explainLine
         objectName: "primarySubtitleTextExplainButton"
@@ -183,7 +201,7 @@ Rectangle {
         readonly property real preferredY: fitsBesideText ? subtitleOverlay.y + caption.y + (caption.height - height) / 2 : subtitleOverlay.y - height - Theme.space2
         readonly property bool captionHovered: (subtitle.visible && subtitle.wordsHovered) || (translation.visible && translation.wordsHovered)
         readonly property bool actionInUse: hovered || down
-        readonly property bool shouldShow: captionHovered || hoverRetained || actionInUse
+        readonly property bool shouldShow: captionHovered || explainFootprint.hovered || hoverRetained || actionInUse
         property bool hoverRetained: false
         text: "Explain line"
         implicitHeight: 30
@@ -192,6 +210,11 @@ Rectangle {
         x: Math.max(Theme.space2, Math.min(preferredX, stage.width - width - Theme.space2))
         y: Math.max(Theme.space2, Math.min(preferredY, stage.height - height - Theme.space2))
         visible: !stage.capturing && hasCaptions && shouldShow
+        background: Rectangle {
+            color: explainLine.down ? Theme.accent : explainLine.hovered ? Theme.hover : Theme.surface
+            radius: Theme.controlRadius
+            border.color: explainLine.activeFocus ? Theme.accent : Theme.border
+        }
         Accessible.name: subtitle.visible ? "Explain the full primary subtitle" : "Explain the full secondary subtitle"
         onCaptionHoveredChanged: {
             if (captionHovered) {
@@ -223,6 +246,10 @@ Rectangle {
         radius: Theme.panelRadius
         color: Theme.surface
         border.color: Theme.border
+        HoverHandler {
+            blocking: false
+            cursorShape: Qt.ArrowCursor
+        }
         // Keep clicks inside the floating card from reaching the video gestures.
         MouseArea {
             anchors.fill: parent
@@ -256,12 +283,25 @@ Rectangle {
                     }
                 }
                 Label {
-                    visible: text.length > 0 && text !== stage.session.study.words.word
-                    text: stage.session.study.words.lemma
+                    objectName: "wordGrammar"
+                    visible: text.length > 0
+                    text: {
+                        const words = stage.session.study.words;
+                        const base = words.lemma.length && words.lemma !== words.word ? "Base form: " + words.lemma : "";
+                        return [words.partOfSpeech, base].filter(detail => detail.length > 0).join(" · ");
+                    }
                     textFormat: Text.PlainText
                     color: Theme.muted
+                    font.pixelSize: Theme.caption
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
+                }
+                Label {
+                    visible: stage.session.study.words.meanings.length > 0
+                    text: "In this sentence"
+                    color: Theme.muted
+                    font.pixelSize: Theme.caption
+                    Layout.topMargin: Theme.space2
                 }
                 Repeater {
                     model: stage.session.study.words.meanings
@@ -295,7 +335,7 @@ Rectangle {
                     model: stage.session.study.words.otherMeanings
                     delegate: Label {
                         required property string modelData
-                        text: modelData
+                        text: "• " + modelData
                         textFormat: Text.PlainText
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -314,14 +354,6 @@ Rectangle {
                     text: "Try again"
                     visible: stage.session.study.words.state === "failed"
                     onClicked: stage.session.retryWordLookup()
-                }
-                ActionButton {
-                    text: "Full explanation"
-                    objectName: "wordFullExplanationButton"
-                    flat: true
-                    onClicked: {
-                        stage.session.explainWord();
-                    }
                 }
             }
         }

@@ -622,9 +622,6 @@ void LearningSession::commitSelection(bool secondary) {
 void LearningSession::explainCue(bool secondary) {
     studyInteraction.explainCue(secondary);
 }
-void LearningSession::explainWord() {
-    studyInteraction.explainWord();
-}
 void LearningSession::invalidateStudy() {
     studyInteraction.dismiss();
 }

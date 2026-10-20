@@ -12,7 +12,6 @@ Item {
     readonly property bool editing: question.activeFocus
     property bool showFullCue: false
     signal dictionaryRequested(string term)
-    signal dismissed
 
     function sendQuestion() {
         if (!busy && question.text.trim().length && question.text.length <= 2000 && session.followUp(question.text)) {
@@ -51,13 +50,6 @@ Item {
                         font.pixelSize: Theme.quotation
                         font.weight: Font.DemiBold
                         lineHeight: 1.4
-                    }
-                    IconButton {
-                        objectName: "closeMeaningButton"
-                        name: "x"
-                        description: "Close explanation"
-                        Layout.alignment: Qt.AlignTop
-                        onClicked: pane.dismissed()
                     }
                 }
                 RowLayout {

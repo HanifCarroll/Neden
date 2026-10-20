@@ -16,7 +16,6 @@ public:
     void commitSelection(bool secondary = false);
     void explainSelection();
     void explainCue(bool secondary = false);
-    void explainWord();
     bool followUp(const QString &question);
     void lookupWordAt(const QString &text, int offset, bool secondary = false);
     void closeWordCard(bool resume = true);

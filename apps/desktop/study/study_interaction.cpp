@@ -67,13 +67,6 @@ void StudyInteraction::explainCue(bool secondary) {
     select(timeline.text(qRound64(playback.position() * 1000), role), secondary);
     explainSelection();
 }
-void StudyInteraction::explainWord() {
-    if (!studyServices || !wordTarget)
-        return;
-    const auto target = *wordTarget;
-    select(target.selection, target.role == SubtitleRole::Secondary);
-    requestExplanation(target);
-}
 bool StudyInteraction::followUp(const QString &question) {
     if (!studyServices || studyServices->explanation()->subject().isEmpty())
         return false;

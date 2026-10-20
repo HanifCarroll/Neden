@@ -158,6 +158,8 @@ private slots:
         const QStringList headlessChecks{"explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
+                                         "explainButtonFootprintAndStationaryCueChanges",
+                                         "pausedVideoHidesControlsAndCursorUntilPointerMoves",
                                          "explanationPhraseUsesThePluginCardStyle",
                                          "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
                                          "singleClickShowsContextualWordCardWithoutChangingTheSidebar",
@@ -895,7 +897,7 @@ private slots:
                                                               .toUtf8())
                                       .object();
                     const QString card =
-                        R"({"lemma":"dalmak","meaning":"I became absorbed","explanation":"Here he is absorbed in watching television.","otherMeanings":["to dive into water","to fall asleep"]})";
+                        R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Here he is absorbed in watching television.","otherMeanings":["to dive into water","to fall asleep"]})";
                     answer = QJsonDocument(
                                  QJsonObject{{"choices", QJsonArray{QJsonObject{
                                                              {"finish_reason", "stop"},
@@ -949,6 +951,10 @@ private slots:
         QCOMPARE(sentContext.value("sourceCue").toString(), cue);
         auto *card = visualItem(window->contentItem(), "wordMeaningCard");
         QVERIFY(card && card->isVisible());
+        QVERIFY(!visualItem(card, "wordFullExplanationButton"));
+        auto *grammar = visualItem(card, "wordGrammar");
+        QVERIFY(grammar);
+        QCOMPARE(grammar->property("text").toString(), QString("verb · Base form: dalmak"));
         QVERIFY(card->height() < window->height());
         auto *explainButton = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
         QVERIFY(explainButton);
@@ -987,6 +993,63 @@ private slots:
         QVERIFY(!card->isVisible());
     }
 
+    void pausedVideoHidesControlsAndCursorUntilPointerMoves() {
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 0);
+        session->setPaused(true);
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        auto *playButton = visualItem(window->contentItem(), "playPauseButton");
+        QVERIFY(video && playButton);
+        const auto point = video->mapToScene(QPointF(40, 40)).toPoint();
+        QTest::mouseMove(window, point);
+        QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
+        QTRY_VERIFY_WITH_TIMEOUT(window->property("hidePlaybackControls").toBool(), 4000);
+        QVERIFY(video->parentItem()->property("hideCursor").toBool());
+        QTest::mouseMove(window, point + QPoint(10, 10));
+        QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
+        QVERIFY(!video->parentItem()->property("hideCursor").toBool());
+        QTest::mouseMove(window, playButton->mapToScene(QPointF(playButton->width() / 2, playButton->height() / 2)).toPoint());
+        QTest::qWait(2800);
+        QVERIFY(!window->property("hidePlaybackControls").toBool());
+        QVERIFY(session->paused());
+    }
+
+    void explainButtonFootprintAndStationaryCueChanges() {
+        window->setProperty("showRecent", false);
+        session->setPaused(true);
+        session->clearTrack(true);
+        session->replaceCues({{0, 7200000, "Merhaba dünya", {}}});
+        auto *caption = visualItem(window->contentItem(), "primarySubtitleText");
+        auto *button = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(caption && button && video);
+        QTest::qWait(100);
+        QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
+        QTRY_VERIFY(!button->isVisible());
+        // Enter the hidden action directly, without passing over any caption text.
+        QTest::mouseMove(window, button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint());
+        QTRY_VERIFY(button->isVisible());
+        QTest::qWait(250);
+        QVERIFY(button->isVisible());
+        auto *background = button->property("background").value<QQuickItem *>();
+        QVERIFY(background);
+        QVERIFY(background->property("color").value<QColor>().alpha() > 200);
+        QTest::mouseMove(window, video->mapToScene(QPointF(20, 20)).toPoint());
+        QTRY_VERIFY(!button->isVisible());
+        session->replaceCues({{0, 7200000, "MMMMMMMMMMMMMMMM", {}}});
+        QTest::qWait(100);
+        QTest::mouseMove(window, wordPoint(caption, 8));
+        QTRY_VERIFY(button->isVisible());
+        // No synthetic mouse move after the cue changes: geometry must refresh itself.
+        session->replaceCues({{0, 7200000, "WWWWWWWWWWWWWWWW", {}}});
+        QTest::qWait(300);
+        QVERIFY(button->isVisible());
+        session->replaceCues({});
+        QTRY_VERIFY(!button->isVisible());
+        session->replaceCues({{0, 7200000, "MMMMMMMMMMMMMMMM", {}}});
+        QTRY_VERIFY(button->isVisible());
+    }
+
     void explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus() {
         window->setProperty("showRecent", false);
         session->setPaused(true);
@@ -1013,6 +1076,7 @@ private slots:
 
     void explainHoverSurvivesActiveSelections() {
         window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 1);
         session->setPaused(true);
         QVERIFY(study->settings()->configure("http://127.0.0.1:1", "mock", "https://example.org/%s", false));
         QFile secondaryFile(profile.filePath("selection-hover-secondary.srt"));

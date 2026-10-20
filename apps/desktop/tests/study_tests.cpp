@@ -74,11 +74,19 @@ private slots:
                 .toJson();
         };
         QJsonObject card{{"lemma", "dalmak"},
+                         {"partOfSpeech", "verb"},
                          {"meaning", "I became absorbed"},
                          {"explanation", "The speaker was absorbed in watching television."},
                          {"otherMeanings", QJsonArray{"to dive into water", "to fall asleep"}}};
         const auto parsed = WordLookup::parseContextMeaning(envelope(card));
         QCOMPARE(parsed.value("lemma").toString(), QString("dalmak"));
+        QCOMPARE(parsed.value("partOfSpeech").toString(), QString("verb"));
+        card.insert("partOfSpeech", QJsonArray{});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
+        card.insert("partOfSpeech", QString(61, 'x'));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
+        card.remove("partOfSpeech");
+        QVERIFY(WordLookup::parseContextMeaning(envelope(card)).value("partOfSpeech").toString().isEmpty());
         QCOMPARE(parsed.value("meaning").toString(), QString("I became absorbed"));
         QCOMPARE(parsed.value("otherMeanings").toStringList().size(), 2);
         QVERIFY_THROWS_EXCEPTION(std::runtime_error,
@@ -122,7 +130,7 @@ private slots:
                 headers = bytes->left(split);
                 submitted = QJsonDocument::fromJson(bytes->mid(split + 4, length)).object();
                 const QString content =
-                    R"({"lemma":"dalmak","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","otherMeanings":["to dive"]})";
+                    R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","otherMeanings":["to dive"]})";
                 const auto body =
                     QJsonDocument(
                         QJsonObject{{"choices", QJsonArray{QJsonObject{
@@ -169,6 +177,7 @@ private slots:
         QCOMPARE(sentContext.value("after"), context.value("after"));
         QCOMPARE(sentContext.value("secondary"), context.value("secondary"));
         QCOMPARE(study.words()->lemma(), QString("dalmak"));
+        QCOMPARE(study.words()->partOfSpeech(), QString("verb"));
         QCOMPARE(study.words()->otherMeanings(), QStringList{"to dive"});
         study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(),
                                      study.settings()->model());
@@ -177,6 +186,7 @@ private slots:
         QTest::qWait(250);
         QCOMPARE(study.words()->state(), QString("idle"));
         QVERIFY(study.words()->otherMeanings().isEmpty());
+        QVERIFY(study.words()->partOfSpeech().isEmpty());
         QCOMPARE(requests, 2);
         study.words()->lookupContext("ışık", context, "https://key@invalid.example", "mock");
         QCOMPARE(study.words()->state(), QString("failed"));

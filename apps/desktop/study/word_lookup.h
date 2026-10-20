@@ -16,6 +16,7 @@ class WordLookup : public QObject {
     Q_PROPERTY(QString message READ message NOTIFY changed)
     Q_PROPERTY(QStringList meanings READ meanings NOTIFY changed)
     Q_PROPERTY(QString lemma READ lemma NOTIFY changed)
+    Q_PROPERTY(QString partOfSpeech READ partOfSpeech NOTIFY changed)
     Q_PROPERTY(QString contextNote READ contextNote NOTIFY changed)
     Q_PROPERTY(QStringList otherMeanings READ otherMeanings NOTIFY changed)
 public:
@@ -26,6 +27,7 @@ public:
     QString message() const { return statusText; }
     QStringList meanings() const { return definitions; }
     QString lemma() const { return baseWord; }
+    QString partOfSpeech() const { return grammaticalCategory; }
     QString contextNote() const { return usageNote; }
     QStringList otherMeanings() const { return alternatives; }
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
@@ -46,6 +48,7 @@ private:
     QString statusText;
     QStringList definitions;
     QString baseWord;
+    QString grammaticalCategory;
     QString usageNote;
     QStringList alternatives;
 };

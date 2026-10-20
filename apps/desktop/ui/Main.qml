@@ -30,7 +30,9 @@ ApplicationWindow {
     property bool screenshotWithSubtitles: true
     property bool floatingMode: false
     property bool controlsIdle: false
-    readonly property bool hidePlaybackControls: fullscreenController.active && controlsIdle && !session.paused && !transcriptOpen && !dictionaryOpen
+    readonly property bool hidePlaybackControls: session.hasMedia && !showRecent && controlsIdle && commandShortcutsEnabled && !stage.selecting
+    onShowRecentChanged: revealPlaybackControls()
+    onActiveChanged: revealPlaybackControls()
     function revealPlaybackControls() {
         controlsIdle = false;
         controlsIdleTimer.restart();
@@ -127,7 +129,8 @@ ApplicationWindow {
             Action {
                 text: "Open video…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openVideo : ""
-                onTriggered: videoDialog.open()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    videoDialog.open()
             }
             Action {
                 text: "Open folder…"
@@ -136,7 +139,8 @@ ApplicationWindow {
             Action {
                 text: "Open URL…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openUrl : ""
-                onTriggered: urlDialog.open()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    urlDialog.open()
             }
             Action {
                 text: "Add files to queue…"
@@ -177,32 +181,37 @@ ApplicationWindow {
                 text: "Previous subtitle"
                 enabled: root.session.canPreviousSubtitle
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousSubtitle : ""
-                onTriggered: root.session.previousSubtitle()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.previousSubtitle()
             }
             Action {
                 text: "Next subtitle"
                 enabled: root.session.canNextSubtitle
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextSubtitle : ""
-                onTriggered: root.session.nextSubtitle()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.nextSubtitle()
             }
             Action {
                 text: "Replay subtitle"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.replaySubtitle : ""
                 enabled: root.session.activeCue >= 0
-                onTriggered: root.session.replay()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.replay()
             }
             MenuSeparator {}
             Action {
                 text: "Previous video"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousVideo : ""
                 enabled: root.session.queue.hasPrevious
-                onTriggered: root.session.queue.previous()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.queue.previous()
             }
             Action {
                 text: "Next video"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextVideo : ""
                 enabled: root.session.queue.hasNext
-                onTriggered: root.session.queue.next()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.queue.next()
             }
             Action {
                 text: "Queue…"
@@ -217,7 +226,8 @@ ApplicationWindow {
                 text: "Jump to time…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.jumpToTime : ""
                 enabled: root.session.seekable
-                onTriggered: timeDialog.open()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    timeDialog.open()
             }
             Action {
                 text: "Undo last seek"
@@ -295,12 +305,14 @@ ApplicationWindow {
             Action {
                 text: "Volume up"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeUp : ""
-                onTriggered: root.session.volume(root.session.volumeLevel + 5)
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.volume(root.session.volumeLevel + 5)
             }
             Action {
                 text: "Volume down"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeDown : ""
-                onTriggered: root.session.volume(root.session.volumeLevel - 5)
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.session.volume(root.session.volumeLevel - 5)
             }
         }
         Menu {
@@ -366,13 +378,15 @@ ApplicationWindow {
                 text: "Load primary track…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.primarySubtitles : ""
                 enabled: root.session.hasMedia
-                onTriggered: subtitleDialog.open()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    subtitleDialog.open()
             }
             Action {
                 text: "Load secondary track…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.secondarySubtitles : ""
                 enabled: root.session.hasMedia
-                onTriggered: translationDialog.open()
+                onTriggered: if (root.commandShortcutsEnabled)
+                    translationDialog.open()
             }
             MenuSeparator {}
             Action {
@@ -403,7 +417,8 @@ ApplicationWindow {
             Action {
                 text: "Dictionary"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.dictionary : ""
-                onTriggered: root.openDictionary("")
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.openDictionary("")
             }
             MenuSeparator {}
             Action {
@@ -414,16 +429,16 @@ ApplicationWindow {
         Menu {
             title: "View"
             Action {
-                text: "Show sidebar"
+                text: root.transcriptOpen ? "Hide sidebar" : "Show sidebar"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.toggleSidebar : ""
-                checkable: true
-                checked: root.transcriptOpen
-                onTriggered: root.inspectorMode = checked ? Main.Transcript : Main.Hidden
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.inspectorMode = root.transcriptOpen ? Main.Hidden : Main.Transcript
             }
             Action {
                 text: "Recently played"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.recentVideos : ""
-                onTriggered: root.showRecent = true
+                onTriggered: if (root.commandShortcutsEnabled)
+                    root.showRecent = true
             }
             Action {
                 text: "Instant fullscreen"
@@ -453,6 +468,7 @@ ApplicationWindow {
             root.openMeaning();
         }
         function onMediaChanged() {
+            root.revealPlaybackControls();
             root.showRecent = false;
         }
     }
@@ -855,10 +871,6 @@ ApplicationWindow {
                                 sourceComponent: MeaningPane {
                                     session: root.session
                                     onDictionaryRequested: term => root.openDictionary(term)
-                                    onDismissed: {
-                                        root.closeSelection();
-                                        root.inspectorMode = Main.Hidden;
-                                    }
                                 }
                             }
                             Loader {

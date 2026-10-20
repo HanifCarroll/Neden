@@ -53,9 +53,16 @@ QVariantMap WordLookup::parseContextMeaning(const QByteArray &body) {
         const int limit = field == "lemma" ? 100 : 600;
         if (!value.isString() || text.size() > limit || (field == "meaning" && text.isEmpty()))
             throw std::runtime_error(
-                "The provider returned an invalid word card. Try again or open a full explanation.");
+                "The provider returned an invalid word card. Try again or use Explain line.");
         result.insert(field, text);
     }
+    // Older/provider-specific responses can omit this optional display detail.
+    // A malformed supplied value is still rejected rather than rendered.
+    const auto partOfSpeech = answer.value("partOfSpeech");
+    if (!partOfSpeech.isUndefined() &&
+        (!partOfSpeech.isString() || partOfSpeech.toString().trimmed().size() > 60))
+        throw std::runtime_error("The provider returned an invalid part of speech.");
+    result.insert("partOfSpeech", partOfSpeech.toString().trimmed());
     const auto senses = answer.value("otherMeanings");
     if (!senses.isArray() || senses.toArray().size() > 4)
         throw std::runtime_error("The provider returned invalid alternative meanings.");
@@ -91,25 +98,29 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
             "sourceLanguage. "
             "Write learner-facing text in explanationLanguage and keep source-language forms in their "
             "original spelling. "
-            "Return a JSON object with four fields, using plain text strings:\n"
+            "Return a JSON object with these five fields, using plain text strings except for the "
+            "otherMeanings array:\n"
             "lemma: the dictionary form, such as a Turkish verb's -mak/-mek infinitive, within 100 "
             "characters.\n"
-            "Keep this quick word card concise; a separate full explanation is available.\n"
+            "partOfSpeech: the grammatical category in this sentence, such as noun, verb, adjective, "
+            "adverb, pronoun, conjunction, or interjection; within 60 characters. Use explanationLanguage. "
+            "Use an empty string when uncertain.\n"
+            "Keep this quick word card concise; Explain line provides a separate subtitle explanation.\n"
             "meaning: one natural gloss, ideally 2-6 words and within 80 characters. Preserve relevant "
             "person, tense and polarity; leave grammatical commentary for explanation.\n"
             "explanation: one short sentence, or two only when essential; at most 35 words and 220 "
             "characters. Explain only the construction or ending needed to understand this use. "
-            "Do not repeat the gloss, retell the scene, list neighboring dialogue, or add general tone "
-            "analysis unless it changes the meaning. State uncertainty briefly when needed.\n"
+            "Focus on useful grammar or idiomatic usage beyond the gloss. Include tone only when it "
+            "changes the meaning. State uncertainty briefly when needed.\n"
             "otherMeanings: zero to two useful, distinct common senses of this same entry and part of "
             "speech. Keep each within 100 characters: a short gloss, optionally one brief source-language "
-            "example. No near-synonyms or padding. For a noun, do not list senses belonging to a "
-            "same-spelled verb. Return [] when no useful alternative applies.\n"
-            "Example: yemek in 'yemek yap': {\"lemma\":\"yemek\",\"meaning\":\"food; a meal\","
-            "\"explanation\":\"In yemek yap, yemek is a noun; the phrase means 'cook'.\","
+            "example. Select genuinely different senses of the same grammatical category. "
+            "Return [] when no useful alternative applies.\n"
+            "Example: yemek in 'yemek yap': {\"lemma\":\"yemek\",\"partOfSpeech\":\"noun\",\"meaning\":\"food; a meal\","
+            "\"explanation\":\"The phrase yemek yap means 'cook'.\","
             "\"otherMeanings\":[]}.\n"
             "Worked example: word yat in a complaint such as 'Sen de bütün gün yat, yat, yat!': "
-            "{\"lemma\":\"yatmak\",\"meaning\":\"just lying around\","
+            "{\"lemma\":\"yatmak\",\"partOfSpeech\":\"verb\",\"meaning\":\"just lying around\","
             "\"explanation\":\"Yat is a command form of yatmak; repeating it here criticizes someone's "
             "habit of lying around.\","
             "\"otherMeanings\":[\"go to bed — erken yatmak: go to bed early\","
@@ -171,6 +182,7 @@ void WordLookup::observe(QNetworkReply *networkReply) {
                 const auto answer = parseContextMeaning(networkReply->readAll());
                 definitions = {answer.value("meaning").toString()};
                 baseWord = answer.value("lemma").toString();
+                grammaticalCategory = answer.value("partOfSpeech").toString();
                 usageNote = answer.value("explanation").toString();
                 alternatives = answer.value("otherMeanings").toStringList();
                 requestState = definitions.isEmpty() ? "failed" : "complete";
@@ -199,6 +211,7 @@ void WordLookup::cancel() {
     selectedWord.clear();
     definitions.clear();
     baseWord.clear();
+    grammaticalCategory.clear();
     usageNote.clear();
     alternatives.clear();
     requestState = "idle";
