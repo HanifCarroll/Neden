@@ -209,6 +209,7 @@ Item {
                                 SettingsRow {
                                     title: "Track"
                                     ChoiceBox {
+                                        objectName: subtitleGroup.modelData ? "secondaryOptionsTrackChoice" : "primaryOptionsTrackChoice"
                                         Layout.fillWidth: true
                                         textRole: "name"
                                         model: [
@@ -216,7 +217,7 @@ Item {
                                                 name: "Off",
                                                 path: ""
                                             }
-                                        ].concat(pane.session.subtitleTracks)
+                                        ].concat(pane.session.subtitleTracks.filter(track => subtitleGroup.modelData ? !track.primary : !track.secondary))
                                         currentIndex: {
                                             for (let index = 1; index < count; ++index)
                                                 if (subtitleGroup.modelData ? model[index].secondary : model[index].primary)
