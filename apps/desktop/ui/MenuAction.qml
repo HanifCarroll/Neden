@@ -7,5 +7,11 @@ Action {
     // native item, including its key equivalent, after a shortcut is edited.
     // Keep this compatibility workaround here instead of in every command.
     // https://github.com/qt/qtdeclarative/blob/6.10/src/quicktemplates/qquicknativemenuitem.cpp
-    onShortcutChanged: action.textChanged(action.text)
+    // The signal carries QKeySequence, which qmllint cannot expose to QML.
+    // This handler deliberately takes no arguments and never reads that value.
+    // qmllint disable signal-handler-parameters
+    onShortcutChanged: function() {
+        action.textChanged(action.text);
+    }
+    // qmllint enable signal-handler-parameters
 }
