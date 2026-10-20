@@ -1438,6 +1438,59 @@ private slots:
         session->setPaused(true);
     }
 
+    void pausedNativeSubtitleSelectionDisplaysCurrentCue() {
+        // 1. Establish a stable paused frame before selecting the embedded ASS track.
+        const auto videoPath = qEnvironmentVariable("NEDEN_CHECK_ASS_VIDEO");
+        if (videoPath.isEmpty())
+            QSKIP("Set NEDEN_CHECK_ASS_VIDEO to the documented native ASS fixture.");
+        destroyWindow();
+        createWindow();
+        QVERIFY(QFile::exists(videoPath));
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 1);
+        session->openVideo(QUrl::fromLocalFile(videoPath));
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 10, 10000);
+        session->setPaused(true);
+        session->seek(2);
+        QTRY_VERIFY(std::abs(session->position() - 2) < 0.1);
+        QTest::qWait(200);
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(video);
+        const auto beforeFrame = window->grabWindow();
+        const qreal scaleX = qreal(beforeFrame.width()) / window->width();
+        const qreal scaleY = qreal(beforeFrame.height()) / window->height();
+        const auto bounds = video->mapRectToScene(video->boundingRect());
+        const QRect pixelBounds(qRound(bounds.x() * scaleX), qRound(bounds.y() * scaleY),
+                                qRound(bounds.width() * scaleX), qRound(bounds.height() * scaleY));
+        const auto beforePixels = beforeFrame.copy(pixelBounds);
+        const double beforePosition = session->position();
+        QSignalSpy pauseChanges(session.get(), &LearningSession::pausedChanged);
+        auto subtitleText = [this] {
+            char *raw = mpv_get_property_string(playback->handle(), "sub-text");
+            const auto text = QString::fromUtf8(raw ? raw : "");
+            mpv_free(raw);
+            return text;
+        };
+
+        // 2. Select the track, then require the active cue without a test-issued seek.
+        session->selectNativeSubtitle("2", false);
+        QTRY_VERIFY_WITH_TIMEOUT(([&] {
+                                     qint64 selected = -1;
+                                     return mpv_get_property(playback->handle(), "sid", MPV_FORMAT_INT64,
+                                                             &selected) == 0 &&
+                                            selected == 2;
+                                 })(),
+                                 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(subtitleText().contains("STYLED EMBEDDED TEST"), 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(window->grabWindow().copy(pixelBounds) != beforePixels, 2000);
+        QVERIFY(session->paused());
+        QCOMPARE(pauseChanges.count(), 0);
+        QVERIFY(std::abs(session->position() - beforePosition) < 0.1);
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty())
+            QVERIFY(window->grabWindow().save(artifacts + "/ass-direct-paused-selection.png"));
+    }
+
     void cleanupTestCase() { destroyWindow(); }
 };
 
