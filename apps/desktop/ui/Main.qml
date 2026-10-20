@@ -126,7 +126,7 @@ ApplicationWindow {
     menuBar: MenuBar {
         Menu {
             title: "&File"
-            Action {
+            MenuAction {
                 text: "Open video…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openVideo : ""
                 onTriggered: if (root.commandShortcutsEnabled)
@@ -136,7 +136,7 @@ ApplicationWindow {
                 text: "Open folder…"
                 onTriggered: folderDialog.open()
             }
-            Action {
+            MenuAction {
                 text: "Open URL…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openUrl : ""
                 onTriggered: if (root.commandShortcutsEnabled)
@@ -177,21 +177,21 @@ ApplicationWindow {
                 enabled: root.session.hasMedia
                 onTriggered: root.session.toggle()
             }
-            Action {
+            MenuAction {
                 text: "Previous subtitle"
                 enabled: root.session.canPreviousSubtitle
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousSubtitle : ""
                 onTriggered: if (root.commandShortcutsEnabled)
                     root.session.previousSubtitle()
             }
-            Action {
+            MenuAction {
                 text: "Next subtitle"
                 enabled: root.session.canNextSubtitle
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextSubtitle : ""
                 onTriggered: if (root.commandShortcutsEnabled)
                     root.session.nextSubtitle()
             }
-            Action {
+            MenuAction {
                 text: "Replay subtitle"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.replaySubtitle : ""
                 enabled: root.session.activeCue >= 0
@@ -199,14 +199,14 @@ ApplicationWindow {
                     root.session.replay()
             }
             MenuSeparator {}
-            Action {
+            MenuAction {
                 text: "Previous video"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousVideo : ""
                 enabled: root.session.queue.hasPrevious
                 onTriggered: if (root.commandShortcutsEnabled)
                     root.session.queue.previous()
             }
-            Action {
+            MenuAction {
                 text: "Next video"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextVideo : ""
                 enabled: root.session.queue.hasNext
@@ -222,7 +222,7 @@ ApplicationWindow {
                 enabled: root.session.hasMedia
                 onTriggered: root.session.startOver()
             }
-            Action {
+            MenuAction {
                 text: "Jump to time…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.jumpToTime : ""
                 enabled: root.session.seekable
@@ -302,13 +302,13 @@ ApplicationWindow {
                 text: root.session.volumeLevel === 0 ? "Unmute" : "Mute"
                 onTriggered: root.session.toggleMute()
             }
-            Action {
+            MenuAction {
                 text: "Volume up"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeUp : ""
                 onTriggered: if (root.commandShortcutsEnabled)
                     root.session.volume(root.session.volumeLevel + 5)
             }
-            Action {
+            MenuAction {
                 text: "Volume down"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeDown : ""
                 onTriggered: if (root.commandShortcutsEnabled)
@@ -374,14 +374,14 @@ ApplicationWindow {
                 text: "Tracks, timing and encoding…"
                 onTriggered: root.openPlayerOptions(PlayerOptions.Subtitles)
             }
-            Action {
+            MenuAction {
                 text: "Load primary track…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.primarySubtitles : ""
                 enabled: root.session.hasMedia
                 onTriggered: if (root.commandShortcutsEnabled)
                     subtitleDialog.open()
             }
-            Action {
+            MenuAction {
                 text: "Load secondary track…"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.secondarySubtitles : ""
                 enabled: root.session.hasMedia
@@ -414,7 +414,7 @@ ApplicationWindow {
                     root.session.explainSelection();
                 }
             }
-            Action {
+            MenuAction {
                 text: "Dictionary"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.dictionary : ""
                 onTriggered: if (root.commandShortcutsEnabled)
@@ -428,13 +428,13 @@ ApplicationWindow {
         }
         Menu {
             title: "View"
-            Action {
+            MenuAction {
                 text: root.transcriptOpen ? "Hide sidebar" : "Show sidebar"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.toggleSidebar : ""
                 onTriggered: if (root.commandShortcutsEnabled)
                     root.inspectorMode = root.transcriptOpen ? Main.Hidden : Main.Transcript
             }
-            Action {
+            MenuAction {
                 text: "Recently played"
                 shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.recentVideos : ""
                 onTriggered: if (root.commandShortcutsEnabled)
