@@ -1,4 +1,9 @@
 #include "mpv_playback.h"
+#include "screenshot_image.h"
+#include <QFutureWatcher>
+#include <QPromise>
+#include <QSaveFile>
+#include <QThreadPool>
 #include "media_path.h"
 #include "video_geometry.h"
 #include <array>
@@ -224,8 +229,11 @@ void MpvPlayback::drainEvents() {
         if (event->event_id == MPV_EVENT_COMMAND_REPLY) {
             if (screenshotRequests.contains(event->reply_userdata)) {
                 const auto path = screenshotRequests.take(event->reply_userdata);
-                if (event->error >= 0)
-                    emit screenshotSaved(path);
+                const auto *reply = static_cast<const mpv_event_command *>(event->data);
+                if (event->error >= 0 && reply)
+                    saveScreenshotResult(reply->result, path);
+                else
+                    screenshotBusy = false;
             }
             if (subtitleRequests.contains(event->reply_userdata)) {
                 const auto request = subtitleRequests.take(event->reply_userdata);
@@ -499,13 +507,47 @@ void MpvPlayback::addSubtitle(const QString &path, bool secondary) {
     }
 }
 void MpvPlayback::screenshot(const QString &path, bool subtitles) {
-    const auto encoded = path.toUtf8();
-    const char *arguments[] = {"screenshot-to-file", encoded.constData(), subtitles ? "subtitles" : "video",
-                               nullptr};
+    if (screenshotBusy) {
+        emit operationFailed("A screenshot is already being saved.");
+        return;
+    }
+    screenshotBusy = true;
+    const char *arguments[] = {"screenshot-raw", subtitles ? "subtitles" : "video", nullptr};
     const auto request = ++nextRequest;
     screenshotRequests.insert(request, path);
     if (mpv_command_async(mpv.get(), request, arguments) < 0) {
         screenshotRequests.remove(request);
+        screenshotBusy = false;
         emit operationFailed("The screenshot could not be saved.");
     }
+}
+
+void MpvPlayback::saveScreenshotResult(const mpv_node &result, const QString &path) {
+    const QImage image = screenshotImage(result);
+    if (image.isNull()) {
+        screenshotBusy = false;
+        emit operationFailed("The current video frame could not be captured.");
+        return;
+    }
+
+    // Encoding and disk I/O run away from the playback/UI thread.
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher, path] {
+        screenshotBusy = false;
+        if (watcher->result())
+            emit screenshotSaved(path);
+        else
+            emit operationFailed("The screenshot could not be saved. Check the destination folder.");
+        watcher->deleteLater();
+    });
+    QPromise<bool> completion;
+    watcher->setFuture(completion.future());
+    QThreadPool::globalInstance()->start([image, path, completion = std::move(completion)]() mutable {
+        completion.start();
+        QSaveFile destination(path);
+        const bool saved =
+            destination.open(QIODevice::WriteOnly) && image.save(&destination, "PNG") && destination.commit();
+        completion.addResult(saved);
+        completion.finish();
+    });
 }

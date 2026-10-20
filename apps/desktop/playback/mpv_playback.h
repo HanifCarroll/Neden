@@ -48,6 +48,8 @@ private:
     bool completed = false;
     quint64 nextRequest = 100;
     QHash<quint64, QString> screenshotRequests;
+    bool screenshotBusy = false;
+    void saveScreenshotResult(const mpv_node &result, const QString &path);
     struct SubtitleRequest {
         QString path;
         bool secondary;

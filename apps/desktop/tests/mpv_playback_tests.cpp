@@ -1,9 +1,42 @@
 #include "mpv_playback.h"
+#include "screenshot_image.h"
 #include <QtTest>
 
 class MpvPlaybackTests : public QObject {
     Q_OBJECT
 private slots:
+    void rawScreenshotCopiesPaddedBgrPixelsAndRejectsTruncatedBuffers() {
+        unsigned char pixels[]{0, 0, 255, 0, 9, 9, 9, 9, 255, 0, 0, 0};
+        mpv_byte_array bytes{pixels, sizeof(pixels)};
+        char widthKey[] = "w", heightKey[] = "h", strideKey[] = "stride";
+        char formatKey[] = "format", dataKey[] = "data", format[] = "bgr0";
+        char *keys[]{widthKey, heightKey, strideKey, formatKey, dataKey};
+        mpv_node values[5]{};
+        for (int index = 0; index < 3; ++index)
+            values[index].format = MPV_FORMAT_INT64;
+        values[0].u.int64 = 1;
+        values[1].u.int64 = 2;
+        values[2].u.int64 = 8;
+        values[3].format = MPV_FORMAT_STRING;
+        values[3].u.string = format;
+        values[4].format = MPV_FORMAT_BYTE_ARRAY;
+        values[4].u.ba = &bytes;
+        mpv_node_list fields{5, values, keys};
+        mpv_node result{};
+        result.format = MPV_FORMAT_NODE_MAP;
+        result.u.list = &fields;
+        const auto image = screenshotImage(result);
+        QCOMPARE(image.size(), QSize(1, 2));
+        QCOMPARE(image.pixelColor(0, 0), QColor(Qt::red));
+        QCOMPARE(image.pixelColor(0, 1), QColor(Qt::blue));
+        pixels[2] = 0;
+        QCOMPARE(image.pixelColor(0, 0), QColor(Qt::red));
+        bytes.size = 11;
+        QVERIFY(screenshotImage(result).isNull());
+        bytes.size = sizeof(pixels);
+        values[2].u.int64 = -8;
+        QVERIFY(screenshotImage(result).isNull());
+    }
     void playbackOptionsAreSupportedByTheBundledRuntime() {
         MpvPlayback playback;
         QSignalSpy errors(&playback, &PlaybackEngine::operationFailed);
