@@ -36,7 +36,7 @@ Item {
             }
         }
     }
-    Dialog {
+    OptionsDialog {
         id: confirmation
         parent: Overlay.overlay
         title: "Clear playback history?"
@@ -44,12 +44,29 @@ Item {
         anchors.centerIn: parent
         width: Math.min(440, pane.width)
         contentHeight: confirmationText.implicitHeight
-        standardButtons: Dialog.Ok | Dialog.Cancel
+        implicitHeight: contentHeight + topPadding + bottomPadding + header.implicitHeight + footer.implicitHeight
         contentItem: Label {
             id: confirmationText
             text: "Saved positions, subtitle choices and per-video settings will be removed. Your files are kept."
             wrapMode: Text.WordWrap
             color: Theme.ink
+        }
+        footer: Item {
+            implicitHeight: Theme.controlHeight + Theme.space4 * 2
+            Row {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.space5
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.space2
+                ActionButton {
+                    text: "Cancel"
+                    onClicked: confirmation.reject()
+                }
+                ActionButton {
+                    text: "Clear history"
+                    onClicked: confirmation.accept()
+                }
+            }
         }
         onAccepted: pane.session.clearHistory()
     }
