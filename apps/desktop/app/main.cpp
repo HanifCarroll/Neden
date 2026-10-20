@@ -1,3 +1,4 @@
+#include "shortcut_map.h"
 #include "subtitle_appearance.h"
 #include "credentials.h"
 #include "platform_media_session.h"
@@ -95,9 +96,11 @@ int main(int argc, char **argv) {
     session.cueModel()->setSearchLanguage(CueModel::Turkish);
     FullscreenController fullscreen;
     ThumbnailService thumbnails;
+    ShortcutMap keymap;
+    keymap.load(storage);
     QQmlApplicationEngine qmlEngine;
     qmlEngine.addImageProvider("preview", new PreviewImages(&thumbnails));
-    qmlEngine.setInitialProperties({{"thumbnails", QVariant::fromValue(&thumbnails)},
+    qmlEngine.setInitialProperties({{"keymap", QVariant::fromValue(&keymap)}, {"thumbnails", QVariant::fromValue(&thumbnails)},
                                     {"appearance", QVariant::fromValue(&subtitleAppearance)},
                                     {"session", QVariant::fromValue(&session)},
                                     {"playback", QVariant::fromValue(&playbackEngine)},

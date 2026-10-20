@@ -7,6 +7,7 @@ import Neden
 ColumnLayout {
     id: pane
     required property SubtitleAppearance appearance
+    property ShortcutMap keymap: ShortcutMap {}
     required property LearningSession session
     required property FullscreenController fullscreenController
     readonly property AppSettings settings: session.study.settings
@@ -87,6 +88,10 @@ ColumnLayout {
         SegmentButton {
             width: categories.availableWidth / Math.max(1, categories.count)
             text: "Services"
+        }
+        SegmentButton {
+            width: categories.availableWidth / Math.max(1, categories.count)
+            text: "Shortcuts"
         }
     }
     ScrollView {
@@ -451,7 +456,7 @@ ColumnLayout {
             }
             RowLayout {
                 ActionButton {
-                    text: "Save key in Keychain"
+                    text: "Save key securely"
                     enabled: newKey.text.length > 0
                     onClicked: {
                         if (keyService.currentValue !== "ai" || pane.saveSettings()) {
@@ -469,12 +474,18 @@ ColumnLayout {
                 }
             }
             Label {
-                text: "Connect lets macOS ask for access to the saved Neden key. Approve in the system dialog. Keys are kept private for this app session; automatic lookups never prompt."
+                text: "Connect opens your system credential store when authorization is needed. Keys stay private; automatic lookups never prompt."
                 color: Theme.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
         }
+    }
+    ShortcutEditor {
+        visible: categories.currentIndex === 3
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        keymap: pane.keymap
     }
     Label {
         visible: categories.currentIndex === 2

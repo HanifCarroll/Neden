@@ -8,6 +8,8 @@ import Neden
 ApplicationWindow {
     id: root
     property ThumbnailService thumbnails: null
+    property ShortcutMap keymap: ShortcutMap {}
+    readonly property bool commandShortcutsEnabled: !root.meaningEditing && !transcript.editing && !root.dictionaryOpen && !keymap.recording && !settingsDialog.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !studyDrawer.opened
     required property SubtitleAppearance appearance
     required property LearningSession session
     required property RecentVideos recentVideos
@@ -124,7 +126,7 @@ ApplicationWindow {
             title: "&File"
             Action {
                 text: "Open video…"
-                shortcut: StandardKey.Open
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openVideo : ""
                 onTriggered: videoDialog.open()
             }
             Action {
@@ -133,7 +135,7 @@ ApplicationWindow {
             }
             Action {
                 text: "Open URL…"
-                shortcut: "Ctrl+Shift+O"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openUrl : ""
                 onTriggered: urlDialog.open()
             }
             Action {
@@ -174,31 +176,31 @@ ApplicationWindow {
             Action {
                 text: "Previous subtitle"
                 enabled: root.session.canPreviousSubtitle
-                shortcut: "Ctrl+Left"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousSubtitle : ""
                 onTriggered: root.session.previousSubtitle()
             }
             Action {
                 text: "Next subtitle"
                 enabled: root.session.canNextSubtitle
-                shortcut: "Ctrl+Right"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextSubtitle : ""
                 onTriggered: root.session.nextSubtitle()
             }
             Action {
                 text: "Replay subtitle"
-                shortcut: "Ctrl+R"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.replaySubtitle : ""
                 enabled: root.session.activeCue >= 0
                 onTriggered: root.session.replay()
             }
             MenuSeparator {}
             Action {
                 text: "Previous video"
-                shortcut: "Ctrl+Shift+Left"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousVideo : ""
                 enabled: root.session.queue.hasPrevious
                 onTriggered: root.session.queue.previous()
             }
             Action {
                 text: "Next video"
-                shortcut: "Ctrl+Shift+Right"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextVideo : ""
                 enabled: root.session.queue.hasNext
                 onTriggered: root.session.queue.next()
             }
@@ -213,7 +215,7 @@ ApplicationWindow {
             }
             Action {
                 text: "Jump to time…"
-                shortcut: "Ctrl+J"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.jumpToTime : ""
                 enabled: root.session.seekable
                 onTriggered: timeDialog.open()
             }
@@ -292,12 +294,12 @@ ApplicationWindow {
             }
             Action {
                 text: "Volume up"
-                shortcut: "Ctrl+Up"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeUp : ""
                 onTriggered: root.session.volume(root.session.volumeLevel + 5)
             }
             Action {
                 text: "Volume down"
-                shortcut: "Ctrl+Down"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeDown : ""
                 onTriggered: root.session.volume(root.session.volumeLevel - 5)
             }
         }
@@ -362,11 +364,13 @@ ApplicationWindow {
             }
             Action {
                 text: "Load primary track…"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.primarySubtitles : ""
                 enabled: root.session.hasMedia
                 onTriggered: subtitleDialog.open()
             }
             Action {
                 text: "Load secondary track…"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.secondarySubtitles : ""
                 enabled: root.session.hasMedia
                 onTriggered: translationDialog.open()
             }
@@ -384,6 +388,11 @@ ApplicationWindow {
         Menu {
             title: "Study"
             Action {
+                text: "Explain current subtitle"
+                enabled: root.session.subtitle.length > 0 || root.session.translation.length > 0
+                onTriggered: root.session.explainCue(root.session.subtitle.length === 0)
+            }
+            Action {
                 text: "Explain selection"
                 enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
                 onTriggered: {
@@ -393,7 +402,7 @@ ApplicationWindow {
             }
             Action {
                 text: "Dictionary"
-                shortcut: "Ctrl+D"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.dictionary : ""
                 onTriggered: root.openDictionary("")
             }
             MenuSeparator {}
@@ -405,14 +414,15 @@ ApplicationWindow {
         Menu {
             title: "View"
             Action {
-                text: "Transcript"
+                text: "Show sidebar"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.toggleSidebar : ""
                 checkable: true
                 checked: root.transcriptOpen
                 onTriggered: root.inspectorMode = checked ? Main.Transcript : Main.Hidden
             }
             Action {
                 text: "Recently played"
-                shortcut: "Ctrl+L"
+                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.recentVideos : ""
                 onTriggered: root.showRecent = true
             }
             Action {
@@ -529,8 +539,10 @@ ApplicationWindow {
     }
     PlayerShortcuts {
         session: root.session
+        bindings: root.keymap.bindings
+        onExplainSubtitleRequested: root.session.explainCue(root.session.subtitle.length === 0)
         onInstantFullscreenRequested: root.fullscreenController.toggleInstant()
-        available: !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !root.dictionaryOpen
+        available: !root.keymap.recording && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !root.dictionaryOpen
         textEntryActive: root.meaningEditing || transcript.editing
         controlKeysActive: playbackControls.editing
         subtitleSelectionActive: stage.editing
@@ -693,6 +705,7 @@ ApplicationWindow {
             active: false
             // Retain drafts after first use, without constructing controls at startup.
             sourceComponent: SettingsPane {
+                keymap: root.keymap
                 page: root.settingsPage
                 onPageChanged: root.settingsPage = page
                 session: root.session
