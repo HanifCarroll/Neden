@@ -359,10 +359,16 @@ private slots:
     }
 
     void settingsDraftAndShortcutPolicyUseTheActualUi() {
+        chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        session->setPaused(true);
         window->setProperty("showRecent", false);
         window->setProperty("inspectorMode", 1);
         session->volume(60);
         window->contentItem()->forceActiveFocus();
+        auto *shortcuts = window->findChild<QObject *>("playerShortcuts");
+        QVERIFY(shortcuts);
+        QTRY_VERIFY(shortcuts->property("playbackKeysEnabled").toBool());
         QTest::keyClick(window, Qt::Key_M);
         QCOMPARE(session->volumeLevel(), 0.0);
         QTest::keyClick(window, Qt::Key_M);
@@ -440,6 +446,7 @@ private slots:
                         artifacts + QString("/options-%1-%2.png").arg(window->width()).arg(page)));
             }
             QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+            QTRY_VERIFY(!dialog->property("visible").toBool());
             window->setProperty("settingsPage", 0);
             QVERIFY(QMetaObject::invokeMethod(window, "openSettings"));
             auto *settings = window->findChild<QObject *>("settingsDialog");
@@ -452,6 +459,7 @@ private slots:
                         artifacts + QString("/settings-%1-%2.png").arg(window->width()).arg(settingsPage)));
             }
             QVERIFY(QMetaObject::invokeMethod(settings, "close"));
+            QTRY_VERIFY(!settings->property("visible").toBool());
         }
         window->resize(originalSize);
         QVERIFY(QMetaObject::invokeMethod(window, "openStudy", Q_ARG(QVariant, 1)));
