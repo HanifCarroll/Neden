@@ -106,10 +106,19 @@ Rectangle {
                 }
             }
             ToolTip {
+                objectName: "seekPreview"
                 visible: timeline.hovered || timeline.pressed
+                padding: Theme.space2
+                background: Rectangle {
+                    objectName: "seekPreviewBackground"
+                    color: Theme.surface
+                    border.color: Theme.border
+                    radius: Theme.controlRadius
+                }
                 contentItem: Column {
                     spacing: 6
                     Image {
+                        objectName: "seekPreviewImage"
                         source: controls.thumbnails ? controls.thumbnails.imageUrl : ""
                         visible: source.toString().length > 0
                         width: 240
@@ -118,8 +127,13 @@ Rectangle {
                         cache: false
                     }
                     Label {
+                        objectName: "seekPreviewTime"
+                        width: 240
                         text: Theme.clock(timeline.hoverTime)
                         color: Theme.ink
+                        font.pixelSize: Theme.body
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
                     }
                 }
             }
