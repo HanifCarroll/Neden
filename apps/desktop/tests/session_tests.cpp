@@ -37,6 +37,10 @@ public:
     QStringList nativeSubtitlePaths;
     void configure(Option option, const QVariant &value) override { options[option] = value; }
     void addSubtitle(const QString &path, bool) override { nativeSubtitlePaths << path; }
+    void setTracks(const QVariantList &tracks) {
+        mediaTracks = tracks;
+        emit metadataChanged();
+    }
     void finish() {
         playbackState = "finished";
         emit stateChanged();
@@ -50,6 +54,41 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void importedSubtitlesAreNotDuplicatedByNativeTrackDiscovery() {
+        QTemporaryDir directory;
+        QFile subtitles(directory.filePath("Turkish.srt"));
+        QVERIFY(subtitles.open(QIODevice::WriteOnly));
+        subtitles.write("1\n00:00:00,000 --> 00:00:02,000\nBir ışık.\n");
+        subtitles.close();
+        FakePlayback engine;
+        LearningSession session(&engine);
+        session.openSubtitles(QUrl::fromLocalFile(subtitles.fileName()));
+        engine.setTracks({QVariantMap{{"type", "sub"},
+                                      {"id", "1"},
+                                      {"external", true},
+                                      {"external-filename", subtitles.fileName()}},
+                          QVariantMap{{"type", "sub"}, {"id", "2"}, {"label", "Embedded English"}}});
+        const auto tracks = session.subtitleTracks();
+        QCOMPARE(tracks.size(), 2);
+        QCOMPARE(tracks[0].toMap()["name"].toString(), QString("Turkish.srt"));
+        QVERIFY(tracks[0].toMap()["primary"].toBool());
+        QCOMPARE(tracks[1].toMap()["name"].toString(), QString("Embedded English"));
+    }
+    void nativeTrackTimingFollowsTheRemainingRoleOnOlderRuntimes() {
+        FakePlayback engine;
+        engine.setTracks(
+            {QVariantMap{{"type", "sub"}, {"id", "1"}}, QVariantMap{{"type", "sub"}, {"id", "2"}}});
+        LearningSession session(&engine);
+        session.setSubtitleDelay(0.5, false);
+        session.setSubtitleDelay(1.5, true);
+        session.selectNativeSubtitle("1", false);
+        QCOMPARE(engine.options[PlaybackEngine::Option::PrimarySubtitleDelay].toDouble(), 0.5);
+        session.clearTrack(false);
+        session.selectNativeSubtitle("2", true);
+        QCOMPARE(engine.options[PlaybackEngine::Option::PrimarySubtitleDelay].toDouble(), 1.5);
+        session.selectNativeSubtitle("1", false);
+        QCOMPARE(session.secondaryDelay(), session.primaryDelay());
+    }
     void folderQueueUsesNaturalOrderAndPreservesCurrentDuringReorder() {
         QTemporaryDir directory;
         for (const auto &name : {"Episode 10.mp4", "Episode 2.mp4", "notes.txt"}) {
@@ -70,6 +109,19 @@ private slots:
         queue.clear();
         QCOMPARE(queue.currentIndex(), -1);
         QVERIFY(!queue.hasNext());
+    }
+    void removingThePlayingQueueEntryDoesNotMarkAnotherFileAsPlaying() {
+        MediaQueue queue;
+        queue.replace({QUrl("https://example.org/one.mp4"), QUrl("https://example.org/two.mp4"),
+                       QUrl("https://example.org/three.mp4")});
+        queue.play(1);
+        queue.remove(1);
+        QCOMPARE(queue.currentIndex(), -1);
+        for (const auto &entry : queue.entries())
+            QVERIFY(!entry.toMap()["current"].toBool());
+        QSignalSpy opened(&queue, &MediaQueue::openRequested);
+        queue.next();
+        QCOMPARE(opened.last().first().toUrl(), QUrl("https://example.org/three.mp4"));
     }
     void endOfFileAdvancesOnlyWhenAutoplayIsEnabled() {
         QTemporaryDir directory;

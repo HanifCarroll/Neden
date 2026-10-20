@@ -17,9 +17,9 @@ class MediaQueue : public QObject {
 public:
     using QObject::QObject;
     QVariantList entries() const;
-    int currentIndex() const { return selectedIndex; }
+    int currentIndex() const { return currentEntryRemoved ? -1 : selectedIndex; }
     bool hasNext() const { return selectedIndex + 1 < files.size(); }
-    bool hasPrevious() const { return selectedIndex > 0; }
+    bool hasPrevious() const { return currentEntryRemoved ? selectedIndex >= 0 : selectedIndex > 0; }
     bool autoplay() const { return advanceAutomatically; }
     void setAutoplay(bool value);
     void replace(const QList<QUrl> &urls);
@@ -39,5 +39,6 @@ signals:
 private:
     QList<QUrl> files;
     int selectedIndex = -1;
+    bool currentEntryRemoved = false;
     bool advanceAutomatically = false;
 };

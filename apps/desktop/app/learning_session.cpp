@@ -540,6 +540,14 @@ QVariantList LearningSession::subtitleTracks() const {
     for (const auto &entry : playbackEngine->tracks()) {
         const auto track = entry.toMap();
         if (track.value("type") == "sub") {
+            const QString externalPath = mediaPathIdentity(track.value("external-filename").toString());
+            const bool alreadyImported =
+                track.value("external").toBool() &&
+                std::any_of(tracks.cbegin(), tracks.cend(), [&externalPath](const QVariant &entry) {
+                    return mediaPathIdentity(entry.toMap().value("path").toString()) == externalPath;
+                });
+            if (alreadyImported)
+                continue;
             const QString id = track.value("id").toString();
             tracks.append(QVariantMap{
                 {"path", "embedded:" + id},
@@ -590,6 +598,7 @@ void LearningSession::clearTrack(bool secondary) {
         currentPrimaryCueIndex = -1;
         rememberedSourceSubtitlePath.clear();
     }
+    applyNativeSubtitleTiming();
     emit tracksChanged();
     emit cueChanged();
     checkpoint();
@@ -854,6 +863,8 @@ void LearningSession::applyNativeSubtitleTiming() {
     } else {
         // Older mpv has one delay for both native tracks. QML text timelines remain independent.
         const double delay = usesNativeSubtitles(false) ? primaryDelaySeconds : secondaryDelaySeconds;
+        if (usesNativeSubtitles(false) && usesNativeSubtitles(true))
+            secondaryDelaySeconds = primaryDelaySeconds;
         playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitleDelay, delay);
     }
 }

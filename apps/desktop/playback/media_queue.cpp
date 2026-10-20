@@ -47,13 +47,14 @@ QVariantList MediaQueue::entries() const {
         result << QVariantMap{
             {"title", url.isLocalFile() ? QFileInfo(url.toLocalFile()).fileName() : url.host() + url.path()},
             {"url", url},
-            {"current", index == selectedIndex}};
+            {"current", !currentEntryRemoved && index == selectedIndex}};
     }
     return result;
 }
 void MediaQueue::replace(const QList<QUrl> &urls) {
     files = expand(urls);
     selectedIndex = -1;
+    currentEntryRemoved = false;
     emit changed();
 }
 void MediaQueue::append(const QList<QUrl> &urls) {
@@ -63,6 +64,7 @@ void MediaQueue::append(const QList<QUrl> &urls) {
     emit changed();
 }
 void MediaQueue::setCurrent(const QUrl &url) {
+    currentEntryRemoved = false;
     selectedIndex = files.indexOf(url);
     if (selectedIndex < 0) {
         files = {url};
@@ -73,6 +75,7 @@ void MediaQueue::setCurrent(const QUrl &url) {
 void MediaQueue::play(int index) {
     if (index < 0 || index >= files.size())
         return;
+    currentEntryRemoved = false;
     selectedIndex = index;
     emit changed();
     emit openRequested(files[index]);
@@ -83,7 +86,7 @@ void MediaQueue::next() {
 }
 void MediaQueue::previous() {
     if (hasPrevious())
-        play(selectedIndex - 1);
+        play(currentEntryRemoved ? selectedIndex : selectedIndex - 1);
 }
 void MediaQueue::setAutoplay(bool value) {
     advanceAutomatically = value;
@@ -92,6 +95,8 @@ void MediaQueue::setAutoplay(bool value) {
 void MediaQueue::remove(int index) {
     if (index < 0 || index >= files.size())
         return;
+    if (index == selectedIndex && !currentEntryRemoved)
+        currentEntryRemoved = true;
     files.removeAt(index);
     if (index <= selectedIndex)
         --selectedIndex;
@@ -108,5 +113,6 @@ void MediaQueue::move(int from, int to) {
 void MediaQueue::clear() {
     files.clear();
     selectedIndex = -1;
+    currentEntryRemoved = false;
     emit changed();
 }
