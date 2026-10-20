@@ -12,6 +12,7 @@ QtObject {
     readonly property color muted: "#9aa7b5"
     readonly property color accent: "#429df5"
     readonly property color selection: "#294665"
+    readonly property color wordHover: "#30429df5"
     readonly property color selected: "#1e3041"
     readonly property color error: "#f0b4ab"
     readonly property int space1: 4

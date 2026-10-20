@@ -82,6 +82,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: stage.session.subtitle
                 appearance: stage.appearance
+                wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.primarySize
                 selectable: stage.appearance.selectable
                 Layout.row: stage.appearance.reversed ? 1 : 0
@@ -95,6 +96,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: stage.session.translation
                 appearance: stage.appearance
+                wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.secondarySize
                 selectable: stage.appearance.selectable
                 textColor: stage.appearance.secondaryColor

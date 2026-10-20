@@ -14,7 +14,8 @@ WordLookup::WordLookup(CredentialReader reader, QObject *parent, QUrl origin)
     }
 }
 
-QString WordLookup::wordAt(const QString &text, int offset) {
+namespace {
+QRegularExpressionMatch wordMatchAt(const QString &text, int offset) {
     if (offset < 0 || offset > text.size())
         return {};
 
@@ -24,9 +25,21 @@ QString WordLookup::wordAt(const QString &text, int offset) {
     while (matches.hasNext()) {
         const auto match = matches.next();
         if (offset >= match.capturedStart() && offset <= match.capturedEnd())
-            return match.captured();
+            return match;
     }
     return {};
+}
+} // namespace
+
+QString WordLookup::wordAt(const QString &text, int offset) {
+    return wordMatchAt(text, offset).captured();
+}
+
+QVariantMap WordLookup::wordRangeAt(const QString &text, int offset) const {
+    const auto match = wordMatchAt(text, offset);
+    if (!match.hasMatch())
+        return {};
+    return {{"start", match.capturedStart()}, {"end", match.capturedEnd()}};
 }
 
 QString WordLookup::languageCode(const QString &language) {

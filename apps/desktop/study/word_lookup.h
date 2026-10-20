@@ -36,6 +36,7 @@ public:
                        const QString &model, bool noKeyRequired = false);
     void cancel();
     static QString wordAt(const QString &text, int offset);
+    Q_INVOKABLE QVariantMap wordRangeAt(const QString &text, int offset) const;
     static QString languageCode(const QString &language);
     static QStringList parseMeanings(const QByteArray &body, bool google, bool dictionary);
     static QVariantMap parseContextMeaning(const QByteArray &body);

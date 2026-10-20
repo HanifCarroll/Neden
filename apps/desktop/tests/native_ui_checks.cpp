@@ -723,6 +723,15 @@ private slots:
         const auto point = editor->mapToScene(glyph.center() + QPointF(3, 0)).toPoint();
         const auto originalSubject = study->explanation()->subject();
         QSignalSpy wordRequested(subtitle, SIGNAL(wordRequested(int)));
+        QTest::mouseMove(window, point);
+        QTRY_VERIFY(visualItem(subtitle, "subtitleWordHover"));
+        QCOMPARE(editor->cursor().shape(), Qt::IBeamCursor);
+        QCOMPARE(editor->property("selectedText").toString(), QString());
+        QCOMPARE(requests, 0); // Hover must never spend an API request.
+        QTest::mouseMove(window, subtitle->mapToScene(QPointF(2, subtitle->height() / 2)).toPoint());
+        QTRY_VERIFY(!visualItem(subtitle, "subtitleWordHover"));
+        QTest::mouseMove(window, point);
+        QTRY_VERIFY(visualItem(subtitle, "subtitleWordHover"));
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QCOMPARE(wordRequested.count(), 1);

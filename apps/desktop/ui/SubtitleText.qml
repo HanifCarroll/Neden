@@ -5,6 +5,7 @@ import Neden
 Item {
     id: line
     required property SubtitleAppearance appearance
+    required property WordLookup wordLookup
     property alias text: textEditor.text
     property int pixelSize: 28
     property bool selectable: true
@@ -19,6 +20,51 @@ Item {
     readonly property real paintedWidth: outlineText.paintedWidth
     implicitHeight: textEditor.contentHeight
     visible: textEditor.length > 0
+
+    // Hover is presentation only: it never changes selection, focus, or requests a definition.
+    readonly property var hoverRects: {
+        const layoutWidth = textEditor.width;
+        const layoutFont = textEditor.font;
+        if (!wordHover.hovered || !selectable || selecting || textEditor.selectedText.length)
+            return [];
+        const point = wordHover.point.position;
+        const range = wordLookup.wordRangeAt(textEditor.text, textEditor.positionAt(point.x, point.y));
+        if (range.start === undefined)
+            return [];
+        const rects = [];
+        for (let i = range.start; i < range.end; ++i) {
+            const first = textEditor.positionToRectangle(i);
+            const last = textEditor.positionToRectangle(i + 1);
+            const sameRow = Math.abs(first.y - last.y) < 1;
+            const left = sameRow ? Math.min(first.x, last.x) : first.x;
+            const right = sameRow ? Math.max(first.x, last.x) : first.x + fontMetrics.advanceWidth(textEditor.text.substring(i, i + 1));
+            if (right - left < 0.1)
+                continue;
+            const previous = rects.length ? rects[rects.length - 1] : null;
+            if (previous && Math.abs(previous.y - first.y) < 1 && left <= previous.x + previous.width + 1 && right >= previous.x - 1) {
+                const edge = Math.max(previous.x + previous.width, right);
+                previous.x = Math.min(previous.x, left);
+                previous.width = edge - previous.x;
+            } else
+                rects.push({x: left, y: first.y, width: right - left, height: first.height});
+        }
+        // positionAt clamps to the nearest caret even in the empty margins.
+        return rects.some(rect => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height) ? rects : [];
+    }
+    FontMetrics { id: fontMetrics; font: textEditor.font }
+    Repeater {
+        model: line.hoverRects
+        delegate: Rectangle {
+            required property var modelData
+            objectName: "subtitleWordHover"
+            x: modelData.x - 2
+            y: modelData.y
+            width: modelData.width + 4
+            height: modelData.height
+            radius: 3
+            color: Theme.wordHover
+        }
+    }
 
     // Outline and selection use the same text layout; no full-video effect texture.
     Text {
@@ -50,6 +96,11 @@ Item {
         color: "transparent"
         selectionColor: Theme.selection
         selectedTextColor: "white"
+        HoverHandler {
+            id: wordHover
+            blocking: false
+            cursorShape: line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
+        }
         onTextChanged: wordDelay.stop()
         onSelectedTextChanged: {
             if (selectedText.length) {

@@ -7,6 +7,7 @@ Button {
     implicitHeight: Theme.controlHeight
     implicitWidth: label.implicitWidth + 28
     hoverEnabled: true
+    HoverHandler { cursorShape: control.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor }
     opacity: enabled ? 1 : 0.45
     font.pixelSize: Theme.body
     background: Rectangle {

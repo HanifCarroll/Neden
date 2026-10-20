@@ -35,6 +35,8 @@ apps/desktop/
 
 `ExplanationFormat` keeps model links inert and replaces images with text; model HTML and remote resources are not executed. Word-card fields render as plain text. The shared `ChoiceBox` honors named model roles and keeps full subtitle filenames readable.
 
+Subtitle text keeps the I-beam cursor. A subtle word hover uses the same Unicode word boundaries as lookup and the editor's glyph positions; it never changes selection, steals focus, or requests a definition. Hover disappears during selection and outside the text. Buttons use a pointing-hand cursor.
+
 The rendering and platform adapters retain the established behavior: sRGB video texture, nonblocking mpv rendering, small idle framebuffer, native Mac text/window buttons, borderless fullscreen by default, optional native fullscreen, and protected Keychain access. The video and sidebar reach the top edge without an episode-title toolbar; sidebar controls respect safe areas.
 
 The app/executable remains **Neden**, with bundle/signing identifier `io.github.hanifcarroll.neden.qt-lab`. Existing data stays in `Neden Qt Lab` under application support. `RecentVideos` retains version 2 records, independent subtitle paths, precise positions, malformed-data protection, and removal semantics. Source changes do not update the installed app until the installer runs; use the [installation guide](INSTALLATION.md).
