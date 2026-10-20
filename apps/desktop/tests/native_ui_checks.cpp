@@ -446,6 +446,13 @@ private slots:
             QVERIFY(QMetaObject::invokeMethod(settings, "close"));
         }
         window->resize(originalSize);
+        QVERIFY(QMetaObject::invokeMethod(window, "openStudy", Q_ARG(QVariant, 1)));
+        auto *studyDrawer = window->findChild<QObject *>("studyDrawer");
+        QVERIFY(studyDrawer);
+        QTRY_VERIFY(studyDrawer->property("opened").toBool());
+        if (!artifacts.isEmpty())
+            QVERIFY(window->grabWindow().save(artifacts + "/study-tabs.png"));
+        QVERIFY(QMetaObject::invokeMethod(studyDrawer, "close"));
     }
 
     void trackDropdownsDisplayTheirNamedRolesAndReadableSelection() {
