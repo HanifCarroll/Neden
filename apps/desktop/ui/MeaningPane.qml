@@ -11,7 +11,8 @@ Item {
     readonly property bool busy: explanation.state === "loading" || explanation.state === "streaming"
     readonly property bool editing: question.activeFocus
     property bool showFullCue: false
-    signal dictionaryRequested(string term)
+    property string saveFeedback: ""
+    signal flashcardsRequested
 
     function sendQuestion() {
         if (!busy && question.text.trim().length && question.text.length <= 2000 && session.followUp(question.text)) {
@@ -239,25 +240,44 @@ Item {
             Layout.fillHeight: false
             Layout.fillWidth: true
             ActionButton {
-                text: "Dictionary"
+                objectName: "viewFlashcardsButton"
+                text: "View flashcards"
                 flat: true
-                enabled: pane.explanation.subject.length > 0
-                onClicked: pane.dictionaryRequested(pane.explanation.subject)
+                visible: pane.saveFeedback.length > 0
+                onClicked: pane.flashcardsRequested()
             }
             Item {
                 Layout.fillWidth: true
             }
             ActionButton {
+                objectName: "saveFlashcardButton"
                 text: "Save flashcard"
                 enabled: pane.explanation.state === "complete"
-                onClicked: pane.session.saveCard()
+                onClicked: {
+                    pane.session.saveCard();
+                    pane.saveFeedback = pane.session.study.deck.message;
+                }
             }
+        }
+        Label {
+            objectName: "flashcardSaveFeedback"
+            visible: pane.saveFeedback.length > 0
+            text: pane.saveFeedback
+            textFormat: Text.PlainText
+            color: Theme.muted
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
     }
     Connections {
         target: pane.explanation
         function onReplyStarted() {
+            pane.saveFeedback = "";
             Qt.callLater(conversation.anchorLatestReply);
+        }
+        function onChanged() {
+            if (pane.explanation.state === "idle")
+                pane.saveFeedback = "";
         }
     }
 }

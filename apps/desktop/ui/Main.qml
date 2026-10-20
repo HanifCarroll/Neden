@@ -757,7 +757,6 @@ ApplicationWindow {
             sourceComponent: StudyPane {
                 session: root.session
                 onDismissed: studyDrawer.close()
-                onDictionaryRequested: term => root.openDictionary(term)
             }
         }
     }
@@ -872,7 +871,7 @@ ApplicationWindow {
                                 active: root.inspectorTab === 1
                                 sourceComponent: MeaningPane {
                                     session: root.session
-                                    onDictionaryRequested: term => root.openDictionary(term)
+                                    onFlashcardsRequested: root.openStudy(1)
                                 }
                             }
                             Loader {

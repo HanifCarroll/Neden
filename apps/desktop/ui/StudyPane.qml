@@ -12,7 +12,6 @@ Rectangle {
     property int revealedCard: -1
     property alias currentTab: tabs.currentIndex
     readonly property bool busy: studyServices.explanation.state === "loading" || studyServices.explanation.state === "streaming"
-    signal dictionaryRequested(string term)
     signal dismissed
     color: Theme.background
 
@@ -62,7 +61,7 @@ Rectangle {
             Layout.fillHeight: true
             MeaningPane {
                 session: pane.session
-                onDictionaryRequested: term => pane.dictionaryRequested(term)
+                onFlashcardsRequested: tabs.currentIndex = 1
             }
             ColumnLayout {
                 RowLayout {
