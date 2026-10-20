@@ -23,6 +23,7 @@ Item {
         spacing: Theme.space5
         Basic.TabBar {
             id: categories
+            implicitWidth: 0
             objectName: "playbackCategories"
             Layout.fillWidth: true
             background: Rectangle {
@@ -30,23 +31,23 @@ Item {
                 radius: Theme.controlRadius
             }
             SegmentButton {
-                width: categories.availableWidth / categories.count
+                width: categories.availableWidth / Math.max(1, categories.count)
                 text: "Audio"
             }
             SegmentButton {
-                width: categories.availableWidth / categories.count
+                width: categories.availableWidth / Math.max(1, categories.count)
                 text: "Picture"
             }
             SegmentButton {
-                width: categories.availableWidth / categories.count
+                width: categories.availableWidth / Math.max(1, categories.count)
                 text: "Subtitles"
             }
             SegmentButton {
-                width: categories.availableWidth / categories.count
+                width: categories.availableWidth / Math.max(1, categories.count)
                 text: "Queue"
             }
             SegmentButton {
-                width: categories.availableWidth / categories.count
+                width: categories.availableWidth / Math.max(1, categories.count)
                 text: "File info"
             }
             onCurrentIndexChanged: optionsFlickable.contentY = 0
@@ -160,12 +161,15 @@ Item {
                                     text: pane.session.preferences.rotation + "°"
                                     color: Theme.ink
                                     horizontalAlignment: Text.AlignHCenter
-                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 48
                                 }
                                 ActionButton {
                                     objectName: "rotateRightButton"
                                     text: "Right 90°"
                                     onClicked: pane.session.preferences.rotation += 90
+                                }
+                                Item {
+                                    Layout.fillWidth: true
                                 }
                             }
                             SettingsRow {

@@ -44,8 +44,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(440, pane.width)
         standardButtons: Dialog.Ok | Dialog.Cancel
-        Label {
-            width: parent.width
+        contentItem: Label {
             text: "Saved positions, subtitle choices and per-video settings will be removed. Your files are kept."
             wrapMode: Text.WordWrap
             color: Theme.ink

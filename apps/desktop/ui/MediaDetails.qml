@@ -12,13 +12,29 @@ ColumnLayout {
     function readable(value) {
         return value === undefined || value === null || value === "" ? "Unavailable" : String(value);
     }
+    function codecName(value) {
+        const name = readable(value);
+        const identifier = name.split(" ")[0].toLowerCase();
+        const names = {
+            mpeg4: "MPEG-4",
+            h264: "H.264",
+            hevc: "H.265 / HEVC",
+            vp9: "VP9",
+            av1: "AV1",
+            aac: "AAC",
+            mp3: "MP3",
+            opus: "Opus",
+            flac: "FLAC"
+        };
+        return names[identifier] || name;
+    }
     readonly property var sections: [
         {
             title: "Video",
             rows: [
                 {
                     label: "Codec",
-                    value: readable(information["Video codec"])
+                    value: codecName(information["Video codec"])
                 },
                 {
                     label: "Resolution",
@@ -47,7 +63,7 @@ ColumnLayout {
             rows: [
                 {
                     label: "Codec",
-                    value: readable(information["Audio codec"])
+                    value: codecName(information["Audio codec"])
                 },
                 {
                     label: "Channels",

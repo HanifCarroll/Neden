@@ -71,6 +71,7 @@ ColumnLayout {
     spacing: Theme.space5
     Basic.TabBar {
         id: categories
+        implicitWidth: 0
         onCurrentIndexChanged: {
             if (pane.controlsReady && currentIndex !== 0) {
                 pane.appearance.cancelPreview();
@@ -79,15 +80,15 @@ ColumnLayout {
         }
         Layout.fillWidth: true
         SegmentButton {
-            width: categories.availableWidth / categories.count
+            width: categories.availableWidth / Math.max(1, categories.count)
             text: "Subtitles"
         }
         SegmentButton {
-            width: categories.availableWidth / categories.count
+            width: categories.availableWidth / Math.max(1, categories.count)
             text: "Playback"
         }
         SegmentButton {
-            width: categories.availableWidth / categories.count
+            width: categories.availableWidth / Math.max(1, categories.count)
             text: "Services"
         }
     }

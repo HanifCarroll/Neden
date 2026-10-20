@@ -9,6 +9,7 @@ RowLayout {
     required property real seconds
     required property string description
     signal changed(real seconds)
+    Layout.maximumWidth: 280
     spacing: Theme.space1
     ActionButton {
         text: "−"
