@@ -889,6 +889,7 @@ private slots:
             auto *sidebar = visualItem(window->contentItem(), "learningInspector");
             auto *tabs = visualItem(window->contentItem(), "transcriptTab");
             QVERIFY(video && sidebar && tabs);
+            QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
             QVERIFY(!visualItem(window->contentItem(), "playerToolbar"));
             const auto content = window->property("contentItem").value<QQuickItem *>();
             QVERIFY(content);
