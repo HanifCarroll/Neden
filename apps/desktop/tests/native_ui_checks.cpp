@@ -1056,9 +1056,11 @@ private slots:
         QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(window->property("hidePlaybackControls").toBool(), 4000);
         QVERIFY(video->parentItem()->property("hideCursor").toBool());
+        QTRY_COMPARE(window->cursor().shape(), Qt::BlankCursor);
         QTest::mouseMove(window, point + QPoint(10, 10));
         QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
         QVERIFY(!video->parentItem()->property("hideCursor").toBool());
+        QTRY_COMPARE(window->cursor().shape(), Qt::ArrowCursor);
         QTest::mouseMove(window, playButton->mapToScene(QPointF(playButton->width() / 2, playButton->height() / 2)).toPoint());
         QTest::qWait(2800);
         QVERIFY(!window->property("hidePlaybackControls").toBool());
