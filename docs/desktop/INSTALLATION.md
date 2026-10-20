@@ -8,6 +8,8 @@ bun run install:desktop
 
 Use this after desktop source changes so the version opened from Finder, Spotlight, and the Dock actually includes the work. A successful `build:desktop` alone does not update the installed app. The Codex **Update installed Neden** action runs the same installer.
 
+Install completed updates by default, without asking for confirmation. Defer installation when the user says they are using the app or explicitly asks not to install. Leave the updated app closed unless opening it is requested.
+
 The installer builds Release, runs desktop tests and QML lint, copies the reviewed playback frameworks, deploys Qt/QML/native plugins (including the SecureTransport HTTPS backend and SVG image plugin), removes local development library search paths, and rejects unbundled dependencies. It signs the nested code and main bundle with the existing persistent Apple Development identity, checks signatures and playback licensing configuration, and installs `/Applications/Neden.app`. It gracefully quits an existing installed copy first so the latest position is saved; it retains the old bundle until replacement succeeds and restores it if installation/launch fails. It never installs or changes the IINA plugin.
 
 Use `python3 scripts/install_desktop.py --no-launch` when the installed app should remain closed after an authorized update. This still quits and replaces the running app. If installation is explicitly deferred because the user is watching, build and test the source only; do not run either installer command.
