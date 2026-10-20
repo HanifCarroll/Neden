@@ -128,6 +128,12 @@ target_link_libraries(mpv_playback_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Gui "${
 get_target_property(REVIEWED_MPV_RPATH NedenQt BUILD_RPATH)
 set_target_properties(mpv_playback_tests PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
 add_test(NAME mpv_playback_tests COMMAND mpv_playback_tests)
+qt_add_executable(thumbnail_tests tests/thumbnail_tests.cpp playback/thumbnail_service.cpp playback/thumbnail_service.h)
+target_include_directories(thumbnail_tests PRIVATE ${MPV_INCLUDE_DIR})
+target_link_libraries(thumbnail_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Gui "${REVIEWED_MPV_LIBRARY}")
+set_target_properties(thumbnail_tests PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
+add_test(NAME thumbnail_tests COMMAND thumbnail_tests)
+
 set_target_properties(NedenQt PROPERTIES
     OUTPUT_NAME Neden
     MACOSX_BUNDLE_BUNDLE_NAME Neden

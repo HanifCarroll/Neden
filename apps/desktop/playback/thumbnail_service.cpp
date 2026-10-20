@@ -1,10 +1,13 @@
 #include "thumbnail_service.h"
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QDateTime>
+#include <QCryptographicHash>
 #include <mpv/client.h>
 #include <mpv/render.h>
 #include <memory>
 #include <cmath>
+#include <climits>
 
 namespace {
 struct ClientDeleter {
@@ -37,40 +40,45 @@ ThumbnailWorker::~ThumbnailWorker() {
     }
     wait();
 }
-void ThumbnailWorker::request(const QString &path, double seconds, quint64 requestGeneration) {
+QString ThumbnailRequest::cacheKey() const {
+    return fileIdentity + ":" + QString::number(second) + (precise ? ":exact" : ":keyframe");
+}
+void ThumbnailWorker::request(const ThumbnailRequest &request) {
     QMutexLocker lock(&mutex);
-    mediaPath = path;
-    position = seconds;
-    generation = requestGeneration;
+    pendingRequest = request;
     requested = true;
     if (!isRunning())
         start();
     pending.wakeOne();
 }
+void ThumbnailWorker::cancel() {
+    QMutexLocker lock(&mutex);
+    ++cancellation;
+    requested = false;
+    pending.wakeOne();
+}
 void ThumbnailWorker::run() {
     Client client;
     Renderer renderer;
-    QString loadedPath;
+    QString loadedIdentity;
     for (;;) {
-        QString path;
-        double seconds;
-        quint64 requestGeneration;
+        ThumbnailRequest request;
+        quint64 requestCancellation;
         {
             QMutexLocker lock(&mutex);
             if (!requested && !stopping) {
                 if (!pending.wait(&mutex, 10000)) {
                     renderer.reset();
                     client.reset();
-                    loadedPath.clear();
+                    loadedIdentity.clear();
                 }
             }
             if (stopping)
                 return;
             if (!requested)
                 continue;
-            path = mediaPath;
-            seconds = position;
-            requestGeneration = generation;
+            request = pendingRequest;
+            requestCancellation = cancellation;
             requested = false;
         }
         if (!client) {
@@ -102,10 +110,13 @@ void ThumbnailWorker::run() {
             }
             renderer.reset(context);
         }
-        const bool load = loadedPath != path;
+        const bool load = loadedIdentity != request.fileIdentity;
         if (load) {
-            loadedPath = path;
-            const auto encoded = path.toUtf8();
+            // Start near the requested position instead of first decoding the beginning.
+            const auto start = QByteArray::number(request.second);
+            mpv_set_property_string(client.get(), "start", start.constData());
+            loadedIdentity = request.fileIdentity;
+            const auto encoded = request.path.toUtf8();
             const char *arguments[]{"loadfile", encoded.constData(), nullptr};
             mpv_command_async(client.get(), 0, arguments);
         } else {
@@ -113,6 +124,7 @@ void ThumbnailWorker::run() {
             while (mpv_wait_event(client.get(), 0)->event_id != MPV_EVENT_NONE) {
             }
         }
+        bool delivered = false;
         bool seekSent = false;
         bool seekStarted = false;
         QElapsedTimer timeout;
@@ -122,13 +134,13 @@ void ThumbnailWorker::run() {
                 QMutexLocker lock(&mutex);
                 if (stopping)
                     return;
-                if (requested)
+                if (requested || cancellation != requestCancellation)
                     break;
             }
             const auto *event = mpv_wait_event(client.get(), 0.02);
             if ((!load || event->event_id == MPV_EVENT_FILE_LOADED) && !seekSent) {
-                const auto target = QByteArray::number(seconds, 'f', 3);
-                const char *arguments[]{"seek", target.constData(), "absolute+exact", nullptr};
+                const auto target = QByteArray::number(request.second);
+                const char *arguments[]{"seek", target.constData(), request.precise ? "absolute+exact" : "absolute+keyframes", nullptr};
                 mpv_command_async(client.get(), 0, arguments);
                 seekSent = true;
             }
@@ -138,47 +150,126 @@ void ThumbnailWorker::run() {
             if (mpv_render_context_update(renderer.get()) & MPV_RENDER_UPDATE_FRAME) {
                 auto frame = renderThumbnail(renderer.get());
                 if (seekStarted && event->event_id == MPV_EVENT_PLAYBACK_RESTART && !frame.isNull()) {
-                    emit ready(frame, requestGeneration);
+                    emit ready(frame, request);
+                    delivered = true;
                     break;
                 }
             }
             if (seekStarted && event->event_id == MPV_EVENT_PLAYBACK_RESTART) {
                 const auto frame = renderThumbnail(renderer.get());
-                if (!frame.isNull())
-                    emit ready(frame, requestGeneration);
+                if (!frame.isNull()) {
+                    emit ready(frame, request);
+                    delivered = true;
+                }
                 break;
             }
             if (event->event_id == MPV_EVENT_END_FILE)
                 break;
         }
+        if (!delivered)
+            emit ready({}, request);
     }
 }
-ThumbnailService::ThumbnailService(QObject *parent) : QObject(parent) {
-    connect(&worker, &ThumbnailWorker::ready, this, [this](const QImage &frame, quint64 requestGeneration) {
-        if (requestGeneration != generation)
-            return;
-        image = frame;
-        emit changed();
-    });
+ThumbnailService::ThumbnailService(QObject *parent)
+    : QObject(parent), ownedWorker(std::make_unique<ThumbnailWorker>()), worker(*ownedWorker) {
+    initialize();
+}
+ThumbnailService::ThumbnailService(ThumbnailWorker &worker, QObject *parent)
+    : QObject(parent), worker(worker) {
+    initialize();
+}
+void ThumbnailService::initialize() {
+    qRegisterMetaType<ThumbnailRequest>();
+    throttle.setSingleShot(true);
+    throttle.setInterval(50);
+    refinement.setSingleShot(true);
+    refinement.setInterval(180);
+    connect(&throttle, &QTimer::timeout, this, [this] { dispatch(false); });
+    connect(&refinement, &QTimer::timeout, this, [this] { dispatch(true); });
+    connect(&worker, &ThumbnailWorker::ready, this, &ThumbnailService::acceptImage);
+}
+QString ThumbnailService::imageUrl() const {
+    return image.isNull() ? QString() : "image://preview/" + QString::number(imageRevision);
+}
+void ThumbnailService::displayImage(const QImage &frame, bool approximate) {
+    image = frame;
+    imageApproximate = approximate;
+    ++imageRevision;
+    emit changed();
 }
 void ThumbnailService::request(const QString &path, double seconds) {
-    if (!std::isfinite(seconds) || seconds < 0 || !QFileInfo(path).isFile()) {
+    const QFileInfo file(path);
+    if (!std::isfinite(seconds) || seconds < 0 || seconds > INT_MAX || !file.isFile()) {
         clear();
         return;
     }
+    // Include file identity so replacement/editing cannot reuse stale previews.
+    const auto identityBytes = file.canonicalFilePath().toUtf8() + '\0'
+        + QByteArray::number(file.size()) + ':' + QByteArray::number(file.lastModified().toMSecsSinceEpoch());
+    const QString identity = QString::fromLatin1(QCryptographicHash::hash(identityBytes, QCryptographicHash::Sha256).toHex());
     const int second = static_cast<int>(std::floor(seconds));
-    if (path == lastPath && second == lastSecond)
+    refinement.start();
+    if (active && target.fileIdentity == identity && target.second == second)
         return;
-    lastPath = path;
-    lastSecond = second;
-    image = {};
-    emit changed();
-    worker.request(path, second, ++generation);
+    const bool newFile = target.fileIdentity != identity;
+    target = {file.canonicalFilePath(), identity, second, false, target.generation + 1};
+    active = true;
+    if (newFile) {
+        worker.cancel();
+        lastDispatchedKey.clear();
+        throttle.stop();
+        displayImage({}, false);
+    }
+    auto exactRequest = target;
+    exactRequest.precise = true;
+    if (const auto *cached = cache.object(exactRequest.cacheKey()))
+        displayImage(*cached, false);
+    else if (const auto *cached = cache.object(target.cacheKey()))
+        displayImage(*cached, true);
+    else if (!image.isNull()) {
+        // Keep the previous image while loading, with an explicit approximate indicator.
+        imageApproximate = true;
+        emit changed();
+    }
+    if (!throttle.isActive()) {
+        dispatch(false);
+        throttle.start();
+    }
+}
+void ThumbnailService::dispatch(bool precise) {
+    if (!active)
+        return;
+    auto request = target;
+    request.precise = true;
+    if (cache.object(request.cacheKey()))
+        return;
+    request.precise = precise;
+    if (cache.object(request.cacheKey()) || lastDispatchedKey == request.cacheKey())
+        return;
+    lastDispatchedKey = request.cacheKey();
+    worker.request(request);
+}
+void ThumbnailService::acceptImage(const QImage &frame, const ThumbnailRequest &request) {
+    if (frame.isNull()) {
+        if (request.generation == target.generation && lastDispatchedKey == request.cacheKey())
+            lastDispatchedKey.clear();
+        return;
+    }
+    cache.insert(request.cacheKey(), new QImage(frame), static_cast<int>(frame.sizeInBytes()));
+    if (!active || request.generation != target.generation)
+        return;
+    auto exactRequest = target;
+    exactRequest.precise = true;
+    if (!request.precise && cache.object(exactRequest.cacheKey()))
+        return;
+    displayImage(frame, !request.precise);
 }
 void ThumbnailService::clear() {
-    ++generation;
-    image = {};
-    lastPath.clear();
-    lastSecond = -1;
-    emit changed();
+    active = false;
+    ++target.generation;
+    throttle.stop();
+    refinement.stop();
+    lastDispatchedKey.clear();
+    worker.cancel();
+    displayImage({}, false);
 }

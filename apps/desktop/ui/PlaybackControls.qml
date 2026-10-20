@@ -91,18 +91,17 @@ Rectangle {
             readonly property real hoverTime: Math.max(0, Math.min(to, from + timelineHover.point.position.x / width * (to - from)))
             HoverHandler {
                 id: timelineHover
-                onPointChanged: previewDelay.restart()
-                onHoveredChanged: {
-                    if (!hovered && controls.thumbnails)
-                        controls.thumbnails.clear();
-                }
-            }
-            Timer {
-                id: previewDelay
-                interval: 150
-                onTriggered: {
-                    if (timelineHover.hovered && controls.thumbnails)
+                onPointChanged: {
+                    if (hovered && controls.thumbnails)
                         controls.thumbnails.request(controls.session.mediaFile, timeline.hoverTime);
+                }
+                onHoveredChanged: {
+                    if (!controls.thumbnails)
+                        return;
+                    if (hovered)
+                        controls.thumbnails.request(controls.session.mediaFile, timeline.hoverTime);
+                    else
+                        controls.thumbnails.clear();
                 }
             }
             ToolTip {
@@ -129,7 +128,7 @@ Rectangle {
                     Label {
                         objectName: "seekPreviewTime"
                         width: 240
-                        text: Theme.clock(timeline.hoverTime)
+                        text: Theme.clock(timeline.hoverTime) + (controls.thumbnails && controls.thumbnails.approximate ? " · approximate preview" : "")
                         color: Theme.ink
                         font.pixelSize: Theme.body
                         font.weight: Font.DemiBold
