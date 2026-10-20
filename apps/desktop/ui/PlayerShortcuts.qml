@@ -9,11 +9,12 @@ Item {
     property bool textEntryActive: false
     property bool controlKeysActive: false
     property bool subtitleSelectionActive: false
+    readonly property bool fullscreenKeyEnabled: available && session.hasMedia && !textEntryActive
     readonly property bool playbackKeysEnabled: available && session.hasMedia && !textEntryActive && !controlKeysActive
     objectName: "playerShortcuts"
     Shortcut {
         sequence: "F"
-        enabled: shortcuts.playbackKeysEnabled
+        enabled: shortcuts.fullscreenKeyEnabled
         onActivated: shortcuts.instantFullscreenRequested()
     }
     Shortcut {

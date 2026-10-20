@@ -589,7 +589,7 @@ private slots:
         window->contentItem()->forceActiveFocus();
         auto *shortcuts = window->findChild<QObject *>("playerShortcuts");
         QVERIFY(shortcuts);
-        QTRY_VERIFY(shortcuts->property("playbackKeysEnabled").toBool());
+        QTRY_VERIFY(shortcuts->property("fullscreenKeyEnabled").toBool());
         QTest::keyClick(window, Qt::Key_F);
         QTRY_VERIFY(fullscreen->active());
 #ifdef Q_OS_MACOS
