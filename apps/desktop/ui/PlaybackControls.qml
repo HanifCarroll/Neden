@@ -128,7 +128,7 @@ Rectangle {
                     Label {
                         objectName: "seekPreviewTime"
                         width: 240
-                        text: Theme.clock(timeline.hoverTime) + (controls.thumbnails && controls.thumbnails.approximate ? " · approximate preview" : "")
+                        text: Theme.clock(timeline.hoverTime)
                         color: Theme.ink
                         font.pixelSize: Theme.body
                         font.weight: Font.DemiBold
