@@ -1,9 +1,8 @@
 #include "app_settings.h"
 #include "ai_client.h"
-#include <QRegularExpression>
 #include <stdexcept>
 namespace {
-const QStringList wordIds{"ai", "off", "google", "microsoft"};
+const QStringList wordIds{"ai", "off"};
 const QStringList primaryIds{"configured", "luna"};
 QVariantList choices(const QStringList &ids, const QStringList &names) {
     QVariantList result;
@@ -19,19 +18,16 @@ QJsonObject LearningSettings::json() const {
             {"noKeyRequired", noKeyRequired},
             {"fallbackEnabled", fallbackEnabled},
             {"primaryProvider", primaryIds[static_cast<int>(primaryProvider)]},
-            {"wordProvider", wordIds[static_cast<int>(wordProvider)]},
-            {"wordRegion", wordRegion}};
+            {"wordProvider", wordIds[static_cast<int>(wordProvider)]}};
 }
 LearningSettings LearningSettings::parse(const QVariantMap &values) {
     LearningSettings next;
     next.sourceLanguage = values.value("sourceLanguage", "Turkish").toString().trimmed();
     next.explanationLanguage = values.value("explanationLanguage", "English").toString().trimmed();
-    next.wordRegion = values.value("wordRegion").toString().trimmed();
     const auto word = wordIds.indexOf(values.value("wordProvider", "ai").toString());
     const auto primary = primaryIds.indexOf(values.value("primaryProvider", "configured").toString());
     if (next.sourceLanguage.isEmpty() || next.explanationLanguage.isEmpty() ||
-        next.sourceLanguage.size() > 100 || next.explanationLanguage.size() > 100 || word < 0 ||
-        primary < 0 || !QRegularExpression("^[a-zA-Z0-9-]{0,100}$").match(next.wordRegion).hasMatch())
+        next.sourceLanguage.size() > 100 || next.explanationLanguage.size() > 100 || word < 0 || primary < 0)
         throw std::runtime_error("Use language names or codes and a supported provider.");
     next.wordProvider = static_cast<WordProvider>(word);
     next.primaryProvider = static_cast<PrimaryProvider>(primary);
@@ -48,7 +44,12 @@ AppSettings::AppSettings(ProfileStore &profile, QObject *parent) : QObject(paren
     connectionValues.dictionary = data.value("dictionary").toString(connectionValues.dictionary);
     connectionValues.automaticSubtitles = data.value("automaticSubtitles").toBool();
     try {
-        learningValues = LearningSettings::parse(data.value("learning").toObject().toVariantMap());
+        auto savedLearning = data.value("learning").toObject().toVariantMap();
+        const auto savedWordProvider = savedLearning.value("wordProvider").toString();
+        // Retired translation providers migrate without discarding languages or AI preferences.
+        if (savedWordProvider == "google" || savedWordProvider == "microsoft")
+            savedLearning.insert("wordProvider", "ai");
+        learningValues = LearningSettings::parse(savedLearning);
     } catch (...) {
         statusText =
             "Saved learning settings are invalid. Defaults are active; the original file is preserved.";
@@ -104,16 +105,13 @@ bool AppSettings::applyDraft(const QVariantMap &draft) {
     }
 }
 QVariantList AppSettings::wordProviders() const {
-    return choices(wordIds, {"Contextual AI (configured model)", "Off", "Google Cloud Translation",
-                             "Microsoft Translator"});
+    return choices(wordIds, {"Contextual AI (configured model)", "Off"});
 }
 QVariantList AppSettings::primaryProviders() const {
     return choices(primaryIds, {"Configured AI", "GPT-6 Luna"});
 }
 QVariantList AppSettings::credentialServices() const {
-    return choices(
-        {"ai", "luna", "google", "microsoft", "subtitles"},
-        {"Configured AI", "GPT-6 Luna", "Google Translation", "Microsoft Translator", "OpenSubtitles"});
+    return choices({"ai", "luna", "subtitles"}, {"Configured AI", "GPT-6 Luna", "OpenSubtitles"});
 }
 
 QUrl AppSettings::buildDictionaryUrl(const QString &pattern, const QString &term) {
@@ -146,10 +144,6 @@ QString AppSettings::credentialService(const QString &service) const {
         return connectionValues.endpoint;
     if (service == "luna")
         return "https://api.openai.com/v1";
-    if (service == "google")
-        return "https://translation.googleapis.com";
-    if (service == "microsoft")
-        return "https://api.cognitive.microsofttranslator.com";
     if (service == "subtitles")
         return QString("https://api.opensubtitles.com/api/v1");
     return {};

@@ -21,7 +21,6 @@ public:
     void lookupWordAt(const QString &text, int offset, bool secondary = false);
     void closeWordCard(bool resume = true);
     void retryWordLookup();
-    void translateWord();
     void closeDefinition();
     void reset(bool clearConversation = false);
     void dismiss();

@@ -123,7 +123,6 @@ public:
     Q_INVOKABLE void explainWord();
     Q_INVOKABLE void invalidateStudy();
     Q_INVOKABLE void lookupWordAt(const QString &text, int offset, bool secondary = false);
-    Q_INVOKABLE void translateWord();
     Q_INVOKABLE void retryWordLookup();
     Q_INVOKABLE void closeWordCard(bool resume = true);
     Q_INVOKABLE bool followUp(const QString &question);

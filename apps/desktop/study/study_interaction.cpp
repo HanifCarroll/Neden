@@ -103,11 +103,8 @@ void StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
         wordTarget = target;
         playback.setPaused(true);
         const auto &settings = *studyServices->settings();
-        if (settings.learning().wordProvider == LearningSettings::WordProvider::ContextualAi)
-            studyServices->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
-                                                  settings.learning().noKeyRequired);
-        else
-            studyServices->words()->lookup(word, settings.learningSettings());
+        studyServices->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
+                                              settings.learning().noKeyRequired);
     } catch (const std::exception &exception) {
         emit error(QString::fromUtf8(exception.what()));
     }
@@ -130,12 +127,6 @@ void StudyInteraction::retryWordLookup() {
     const auto &settings = *studyServices->settings();
     studyServices->words()->lookupContext(wordTarget->selection, wordTarget->json(), settings.endpoint(),
                                           settings.model(), settings.learning().noKeyRequired);
-}
-void StudyInteraction::translateWord() {
-    if (!studyServices || !wordTarget)
-        return;
-    studyServices->words()->lookup(wordTarget->selection, studyServices->settings()->learningSettings(),
-                                   true);
 }
 void StudyInteraction::closeDefinition() {
     if (studyServices)

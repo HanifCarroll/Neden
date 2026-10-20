@@ -616,10 +616,6 @@ void LearningSession::retryWordLookup() {
     studyInteraction.retryWordLookup();
 }
 
-void LearningSession::translateWord() {
-    studyInteraction.translateWord();
-}
-
 void LearningSession::commitSelection(bool secondary) {
     studyInteraction.commitSelection(secondary);
 }

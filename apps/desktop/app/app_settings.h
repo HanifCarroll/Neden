@@ -12,8 +12,8 @@ struct ConnectionSettings {
     bool automaticSubtitles = false;
 };
 struct LearningSettings {
-    QString sourceLanguage = "Turkish", explanationLanguage = "English", wordRegion;
-    enum class WordProvider { ContextualAi, Off, Google, Microsoft };
+    QString sourceLanguage = "Turkish", explanationLanguage = "English";
+    enum class WordProvider { ContextualAi, Off };
     enum class PrimaryProvider { Configured, Luna };
     WordProvider wordProvider = WordProvider::ContextualAi;
     PrimaryProvider primaryProvider = PrimaryProvider::Configured;
@@ -40,7 +40,6 @@ class AppSettings : public QObject {
     Q_PROPERTY(QString primaryProvider READ primaryProvider NOTIFY changed)
     Q_PROPERTY(bool noKeyRequired READ noKeyRequired NOTIFY changed)
     Q_PROPERTY(bool fallbackEnabled READ fallbackEnabled NOTIFY changed)
-    Q_PROPERTY(QString wordRegion READ wordRegion NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY messageChanged)
 public:
     explicit AppSettings(ProfileStore &store, QObject *parent = nullptr);
@@ -59,7 +58,6 @@ public:
     QString primaryProvider() const { return learningValues.json().value("primaryProvider").toString(); }
     bool noKeyRequired() const { return learningValues.noKeyRequired; }
     bool fallbackEnabled() const { return learningValues.fallbackEnabled; }
-    QString wordRegion() const { return learningValues.wordRegion; }
     QString message() const { return statusText; }
     QVariantList wordProviders() const;
     QVariantList primaryProviders() const;

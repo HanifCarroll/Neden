@@ -29,8 +29,7 @@ ColumnLayout {
             noKeyRequired: noKeyRequired.checked,
             primaryProvider: primaryProvider.currentValue,
             fallbackEnabled: fallbackEnabled.checked,
-            wordProvider: wordProvider.currentValue,
-            wordRegion: wordRegion.text
+            wordProvider: wordProvider.currentValue
         });
     }
     property string appearanceMessage: ""
@@ -415,14 +414,7 @@ ColumnLayout {
                 valueRole: "id"
                 currentIndex: pane.providerIndex(model, pane.settings.wordProvider)
                 Layout.fillWidth: true
-                Accessible.name: "Word translation provider"
-            }
-            SearchField {
-                id: wordRegion
-                text: pane.settings.wordRegion
-                placeholderText: "Microsoft region (if required)"
-                Layout.fillWidth: true
-                Accessible.name: "Microsoft Translator region"
+                Accessible.name: "Single-click word meanings"
             }
             Label {
                 text: "Contextual AI uses your configured AI model and saved key. A single click sends the word, its subtitle and nearby lines to show the meaning used in the scene, followed by other common meanings. Requests may incur charges. Double-click or drag a phrase for a full explanation."

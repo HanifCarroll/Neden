@@ -304,7 +304,7 @@ Rectangle {
                 }
                 Label {
                     visible: stage.session.study.words.state !== "complete"
-                    text: stage.session.study.words.state === "loading" ? (stage.session.study.words.contextual ? "Finding the meaning in this scene…" : "Looking up…") : stage.session.study.words.message
+                    text: stage.session.study.words.state === "loading" ? "Finding the meaning in this scene…" : stage.session.study.words.message
                     textFormat: Text.PlainText
                     wrapMode: Text.WordWrap
                     color: Theme.muted
@@ -312,13 +312,8 @@ Rectangle {
                 }
                 ActionButton {
                     text: "Try again"
-                    visible: stage.session.study.words.contextual && stage.session.study.words.state === "failed"
+                    visible: stage.session.study.words.state === "failed"
                     onClicked: stage.session.retryWordLookup()
-                }
-                ActionButton {
-                    text: "Try word translation"
-                    visible: stage.session.study.settings.wordProvider === "microsoft" && stage.session.study.words.state === "failed"
-                    onClicked: stage.session.translateWord()
                 }
                 ActionButton {
                     text: "Full explanation"

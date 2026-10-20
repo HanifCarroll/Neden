@@ -201,21 +201,9 @@ private slots:
         QCOMPARE(restored.gap(), 24);
         QVERIFY(restored.reversed());
     }
-    void wordExtractionAndResponsesStayPlainAndBounded() {
+    void wordExtractionSupportsUnicode() {
         QCOMPARE(WordLookup::wordAt("Bir ışık gördüm.", 5), QString("ışık"));
         QCOMPARE(WordLookup::wordAt("日本語 العربية", 1), QString("日本語"));
-        QCOMPARE(WordLookup::languageCode("Turkish"), QString("tr"));
-        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::languageCode("bad/host"));
-        QCOMPARE(WordLookup::parseMeanings(
-                     R"({"data":{"translations":[{"translatedText":"light &amp; bright"}]}})", true, false),
-                 QStringList{"light & bright"});
-        QCOMPARE(
-            WordLookup::parseMeanings(
-                R"([{"translations":[{"displayTarget":"light"},{"displayTarget":"light"},{"displayTarget":"brightness"}]}])",
-                false, true),
-            (QStringList{"light", "brightness"}));
-        QVERIFY_THROWS_EXCEPTION(std::runtime_error,
-                                 WordLookup::parseMeanings(QByteArray(64001, 'x'), false, false));
     }
     void learningSettingsWhitelistFieldsAndNeverPersistKeys() {
         QTemporaryDir directory;
@@ -238,8 +226,8 @@ private slots:
             key.fill(0);
             return valid ? QString("Saved") : QString("Invalid");
         });
-        study.settings()->saveServiceKey("google", "synthetic-test-key");
-        QCOMPARE(savedEndpoint, QString("https://translation.googleapis.com"));
+        study.settings()->saveServiceKey("ai", "synthetic-test-key");
+        QCOMPARE(savedEndpoint, study.settings()->endpoint());
         QCOMPARE(study.settings()->message(), QString("Saved"));
         QVERIFY(!study.settings()->learningSettings().contains("apiKey"));
     }
@@ -302,42 +290,45 @@ private slots:
         QCOMPARE(study.explanation()->turns().first().toMap().value("provider").toString(),
                  QString("gpt-6-luna"));
     }
-    void wordLookupStreamsOneBoundedResponseAndCancellationRejectsLateCallbacks() {
-        QTcpServer server;
-        QVERIFY(server.listen(QHostAddress::LocalHost));
-        int requests = 0;
-        connect(&server, &QTcpServer::newConnection, this, [&] {
-            auto *socket = server.nextPendingConnection();
-            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
-                socket->readAll();
-                if (socket->property("sent").toBool())
-                    return;
-
-                socket->setProperty("sent", true);
-                ++requests;
-                const QByteArray body = R"({"data":{"translations":[{"translatedText":"light"}]}})";
-                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) +
-                              "\r\nConnection: close\r\n\r\n" + body.left(10));
-                QTimer::singleShot(150, socket, [socket, body] {
-                    socket->write(body.mid(10));
-                    socket->disconnectFromHost();
-                });
+    void retiredWordProvidersMigrateWithoutLosingOtherSettings() {
+        for (const auto &provider : {QString("google"), QString("microsoft")}) {
+            QTemporaryDir directory;
+            QFile file(directory.filePath("study.json"));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(QJsonDocument(QJsonObject{{"version", 1},
+                                                 {"cards", QJsonArray{}},
+                                                 {"learning", QJsonObject{{"wordProvider", provider},
+                                                                          {"wordRegion", "westus"},
+                                                                          {"sourceLanguage", "Spanish"},
+                                                                          {"explanationLanguage", "French"},
+                                                                          {"includeSecondary", false},
+                                                                          {"fallbackEnabled", true},
+                                                                          {"primaryProvider", "luna"}}}})
+                           .toJson());
+            file.close();
+            StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+            auto *settings = study.settings();
+            QCOMPARE(settings->wordProvider(), QString("ai"));
+            QCOMPARE(settings->sourceLanguage(), QString("Spanish"));
+            QCOMPARE(settings->explanationLanguage(), QString("French"));
+            QCOMPARE(settings->primaryProvider(), QString("luna"));
+            QVERIFY(settings->fallbackEnabled());
+            QVERIFY(!settings->includeSecondary());
+            QCOMPARE(settings->wordProviders().size(), 2);
+            QCOMPARE(settings->credentialServices().size(), 3);
+            bool credentialWritten = false;
+            settings->setCredentialWriter([&](const QString &, QByteArray) {
+                credentialWritten = true;
+                return QString("Saved");
             });
-        });
-        WordLookup words([](const QString &) { return QByteArray("synthetic-test-key"); }, nullptr,
-                         QUrl(QString("http://127.0.0.1:%1").arg(server.serverPort())));
-        const QVariantMap settings{
-            {"wordProvider", "google"}, {"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}};
-        words.lookup("ışık", settings);
-        QTRY_COMPARE(words.state(), QString("complete"));
-        QCOMPARE(words.meanings(), QStringList{"light"});
-        QCOMPARE(requests, 1);
-        words.lookup("ışık", settings);
-        QTRY_COMPARE(requests, 2);
-        words.cancel();
-        QTest::qWait(200);
-        QCOMPARE(words.state(), QString("idle"));
-        QVERIFY(words.meanings().isEmpty());
+            settings->saveServiceKey(provider, "unused-key");
+            QVERIFY(!credentialWritten);
+            QVERIFY(settings->configureLearning(settings->learningSettings()));
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const auto saved = file.readAll();
+            QVERIFY(!saved.contains(provider.toUtf8()));
+            QVERIFY(!saved.contains("wordRegion"));
+        }
     }
     void appearanceIsBoundedAndPersistsSeparately() {
         QTemporaryDir directory;
