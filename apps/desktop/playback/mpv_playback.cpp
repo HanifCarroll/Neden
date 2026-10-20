@@ -420,6 +420,19 @@ void MpvPlayback::previewSeek(double seconds) {
     if (!seekTimer.isActive())
         seekTimer.start();
 }
+void MpvPlayback::selectNativeSubtitle(const char *propertyName, const QVariant &trackId) {
+    const auto previousTrack = property(propertyName);
+    setPropertyValue(propertyName, trackId);
+    if (trackId.toInt() <= 0 || previousTrack.toString() == trackId.toString() ||
+        property(propertyName).toString() != trackId.toString())
+        return;
+
+    // Older mpv versions do not retrieve an already-started embedded cue when
+    // switching tracks while paused. Re-read the current frame without changing
+    // pause state. A relative seek also preserves any seek already queued.
+    if (isPaused && canSeek && playbackState == "ready")
+        command({"seek", "0", "relative+exact"});
+}
 void MpvPlayback::configure(Option option, const QVariant &value) {
     switch (option) {
     case Option::AudioTrack:
@@ -427,11 +440,11 @@ void MpvPlayback::configure(Option option, const QVariant &value) {
         break;
     case Option::PrimarySubtitle:
         ++primarySubtitleGeneration;
-        setPropertyValue("sid", value);
+        selectNativeSubtitle("sid", value);
         break;
     case Option::SecondarySubtitle:
         ++secondarySubtitleGeneration;
-        setPropertyValue("secondary-sid", value);
+        selectNativeSubtitle("secondary-sid", value);
         break;
     case Option::AudioDevice:
         setPropertyValue("audio-device", value);

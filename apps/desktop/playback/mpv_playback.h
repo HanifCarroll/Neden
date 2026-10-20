@@ -43,6 +43,7 @@ private:
     void updateState(const QString &state);
     QVariant property(const char *name) const;
     void setPropertyValue(const char *name, const QVariant &value);
+    void selectNativeSubtitle(const char *propertyName, const QVariant &trackId);
     QTimer seekTimer;
     double previewTarget = 0;
     bool completed = false;
