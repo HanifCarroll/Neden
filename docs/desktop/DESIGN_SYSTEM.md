@@ -64,7 +64,7 @@ Group content with headings, spacing and occasional single separators rather tha
 
 The shortcut editor uses searchable command rows, direct key recording, explicit conflict messages and per-command/all-command reset. Only overrides are persisted. This follows the discoverability and conflict-resolution patterns in [VS Code's keyboard editor](https://code.visualstudio.com/docs/configure/keybindings) and [IntelliJ's keymap editor](https://www.jetbrains.com/help/idea/configuring-keyboard-and-mouse-shortcuts.html). Native editing shortcuts remain available in text fields.
 
-Floating word cards show the clicked form, a compact part-of-speech/base-form row, the meaning in this sentence, one usage note and useful alternative senses. Explain line is a separate, filled video-overlay action: either caption words or the button's footprint reveals it. The Explanation sidebar has a single close action in its top navigation.
+Floating word cards show the clicked form, the meaning here, a brief contextual note, word form (part of speech, base form and morphology), and optional Other senses and Other uses sections. Senses are distinct meanings of the lemma; uses are related expressions sharing the current sense. Each example has a translation and identifies any change of word form. Empty sections are hidden. Explain line is a separate, filled video-overlay action: either caption words or the button's footprint reveals it. The Explanation sidebar has a single close action in its top navigation.
 
 
 ## Sidebar motion

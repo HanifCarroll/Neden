@@ -77,7 +77,11 @@ private slots:
                          {"partOfSpeech", "verb"},
                          {"meaning", "I became absorbed"},
                          {"explanation", "The speaker was absorbed in watching television."},
-                         {"otherMeanings", QJsonArray{"to dive into water", "to fall asleep"}}};
+                         {"formNote", "Dalmışım is an inflected form of dalmak."},
+                         {"otherSenses", QJsonArray{QJsonObject{{"meaning", "to dive into water"},
+                             {"example", "suya dalmak"}, {"translation", "to dive into the water"},
+                             {"formNote", "Uses the infinitive dalmak."}}}},
+                         {"otherUses", QJsonArray{}}};
         const auto parsed = WordLookup::parseContextMeaning(envelope(card));
         QCOMPARE(parsed.value("lemma").toString(), QString("dalmak"));
         QCOMPARE(parsed.value("partOfSpeech").toString(), QString("verb"));
@@ -88,13 +92,35 @@ private slots:
         card.remove("partOfSpeech");
         QVERIFY(WordLookup::parseContextMeaning(envelope(card)).value("partOfSpeech").toString().isEmpty());
         QCOMPARE(parsed.value("meaning").toString(), QString("I became absorbed"));
-        QCOMPARE(parsed.value("otherMeanings").toStringList().size(), 2);
+        QCOMPARE(parsed.value("otherSenses").toList().size(), 1);
+        QCOMPARE(parsed.value("otherSenses").toList().first().toMap().value("translation").toString(),
+                 QString("to dive into the water"));
+        QVERIFY(parsed.value("otherUses").toList().isEmpty());
+        QVERIFY(!parsed.value("formNote").toString().isEmpty());
+        const auto originalSenses = card.value("otherSenses");
+        card.insert("otherSenses", QJsonArray{"unstructured gloss"});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
+        card.insert("otherSenses", QJsonArray{QJsonObject{{"meaning", "different sense"}, {"example", "example"}}});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
+        card.insert("otherSenses", originalSenses);
+        auto duplicate = originalSenses.toArray().first().toObject();
+        duplicate.insert("meaning", " I BECAME ABSORBED ");
+        card.insert("otherSenses", QJsonArray{duplicate, originalSenses.toArray().first()});
+        QCOMPARE(WordLookup::parseContextMeaning(envelope(card)).value("otherSenses").toList().size(), 1);
+        card.insert("otherUses", QJsonArray{duplicate});
+        QCOMPARE(WordLookup::parseContextMeaning(envelope(card)).value("otherUses").toList().size(), 1);
+        card.insert("otherUses", QJsonArray{duplicate, duplicate});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
+        card.insert("otherUses", QJsonArray{});
+        card.insert("formNote", QJsonArray{});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
+        card.insert("formNote", "");
         QVERIFY_THROWS_EXCEPTION(std::runtime_error,
                                  WordLookup::parseContextMeaning(envelope(card, "length")));
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning("{}"));
-        card.insert("otherMeanings", QJsonArray{});
+        card.insert("otherSenses", QJsonArray{});
         QVERIFY(
-            WordLookup::parseContextMeaning(envelope(card)).value("otherMeanings").toStringList().isEmpty());
+            WordLookup::parseContextMeaning(envelope(card)).value("otherSenses").toList().isEmpty());
         card.insert("meaning", QString(601, 'x'));
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(envelope(card)));
         card.insert("meaning", "<img src='https://invalid.example/tracker'>");
@@ -130,7 +156,7 @@ private slots:
                 headers = bytes->left(split);
                 submitted = QJsonDocument::fromJson(bytes->mid(split + 4, length)).object();
                 const QString content =
-                    R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","otherMeanings":["to dive"]})";
+                    R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","formNote":"Dalmışım is an inflected form of dalmak.","otherSenses":[{"meaning":"to dive into water","example":"suya dalmak","translation":"to dive into the water","formNote":"Uses the infinitive dalmak."}],"otherUses":[]})";
                 const auto body =
                     QJsonDocument(
                         QJsonObject{{"choices", QJsonArray{QJsonObject{
@@ -178,15 +204,17 @@ private slots:
         QCOMPARE(sentContext.value("secondary"), context.value("secondary"));
         QCOMPARE(study.words()->lemma(), QString("dalmak"));
         QCOMPARE(study.words()->partOfSpeech(), QString("verb"));
-        QCOMPARE(study.words()->otherMeanings(), QStringList{"to dive"});
+        QCOMPARE(study.words()->otherSenses().first().toMap().value("meaning").toString(), QString("to dive into water"));
         study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(),
                                      study.settings()->model());
         QTRY_COMPARE(requests, 2);
         study.words()->cancel();
         QTest::qWait(250);
         QCOMPARE(study.words()->state(), QString("idle"));
-        QVERIFY(study.words()->otherMeanings().isEmpty());
+        QVERIFY(study.words()->otherSenses().isEmpty());
         QVERIFY(study.words()->partOfSpeech().isEmpty());
+        QVERIFY(study.words()->formNote().isEmpty());
+        QVERIFY(study.words()->otherUses().isEmpty());
         QCOMPARE(requests, 2);
         study.words()->lookupContext("ışık", context, "https://key@invalid.example", "mock");
         QCOMPARE(study.words()->state(), QString("failed"));

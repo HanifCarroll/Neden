@@ -63,18 +63,45 @@ QVariantMap WordLookup::parseContextMeaning(const QByteArray &body) {
         (!partOfSpeech.isString() || partOfSpeech.toString().trimmed().size() > 60))
         throw std::runtime_error("The provider returned an invalid part of speech.");
     result.insert("partOfSpeech", partOfSpeech.toString().trimmed());
-    const auto senses = answer.value("otherMeanings");
-    if (!senses.isArray() || senses.toArray().size() > 4)
-        throw std::runtime_error("The provider returned invalid alternative meanings.");
-    QStringList other;
-    for (const auto &sense : senses.toArray()) {
-        const auto text = sense.toString().trimmed();
-        if (!sense.isString() || text.isEmpty() || text.size() > 250)
-            throw std::runtime_error("The provider returned invalid alternative meanings.");
-        if (text != result.value("meaning").toString() && !other.contains(text))
-            other.append(text);
+    const auto formNote = answer.value("formNote");
+    if (!formNote.isUndefined() && (!formNote.isString() || formNote.toString().trimmed().size() > 220))
+        throw std::runtime_error("The provider returned an invalid word form.");
+    result.insert("formNote", formNote.toString().trimmed());
+
+    // Both lists share one bounded entry shape; their linguistic purposes remain distinct.
+    // Exact repeated glosses are filtered here. Semantic distinctions belong to the prompt.
+    QStringList seenSenses{result.value("meaning").toString().simplified().toCaseFolded()};
+    for (const auto &field : {QString("otherSenses"), QString("otherUses")}) {
+        const auto entries = answer.value(field);
+        if (!entries.isUndefined() && (!entries.isArray() || entries.toArray().size() > (field == "otherSenses" ? 2 : 1)))
+            throw std::runtime_error("The provider returned invalid word examples.");
+        QVariantList examples;
+        for (const auto &entry : entries.toArray()) {
+            if (!entry.isObject())
+                throw std::runtime_error("The provider returned an invalid word example.");
+            QVariantMap example;
+            for (const auto &key : {QString("meaning"), QString("example"), QString("translation"),
+                                    QString("formNote")}) {
+                const auto value = entry.toObject().value(key);
+                const auto text = value.toString().trimmed();
+                const bool optional = key == "formNote";
+                const int limit = key == "meaning" ? 100 : 180;
+                if ((!value.isString() && !(optional && value.isUndefined())) ||
+                    (!optional && text.isEmpty()) || text.size() > limit)
+                    throw std::runtime_error("The provider returned an invalid word example.");
+                example.insert(key, text);
+            }
+            const auto gloss = example.value("meaning").toString().simplified().toCaseFolded();
+            if (field == "otherSenses") {
+                if (seenSenses.contains(gloss))
+                    continue;
+                seenSenses.append(gloss);
+            }
+            if (!examples.contains(example))
+                examples.append(example);
+        }
+        result.insert(field, examples);
     }
-    result.insert("otherMeanings", other);
     return result;
 }
 
@@ -98,36 +125,50 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
             "sourceLanguage. "
             "Write learner-facing text in explanationLanguage and keep source-language forms in their "
             "original spelling. "
-            "Return a JSON object with these five fields, using plain text strings except for the "
-            "otherMeanings array:\n"
-            "lemma: the dictionary form, such as a Turkish verb's -mak/-mek infinitive, within 100 "
-            "characters.\n"
-            "partOfSpeech: the grammatical category in this sentence, such as noun, verb, adjective, "
-            "adverb, pronoun, conjunction, or interjection; within 60 characters. Use explanationLanguage. "
-            "Use an empty string when uncertain.\n"
-            "Keep this quick word card concise; Explain line provides a separate subtitle explanation.\n"
-            "meaning: one natural gloss, ideally 2-6 words and within 80 characters. Preserve relevant "
-            "person, tense and polarity; leave grammatical commentary for explanation.\n"
-            "explanation: one short sentence, or two only when essential; at most 35 words and 220 "
-            "characters. Explain only the construction or ending needed to understand this use. "
-            "Focus on useful grammar or idiomatic usage beyond the gloss. Include tone only when it "
-            "changes the meaning. State uncertainty briefly when needed.\n"
-            "otherMeanings: zero to two useful, distinct common senses of this same entry and part of "
-            "speech. Keep each within 100 characters: a short gloss, optionally one brief source-language "
-            "example. Select genuinely different senses of the same grammatical category. "
-            "Return [] when no useful alternative applies.\n"
-            "Example: yemek in 'yemek yap': {\"lemma\":\"yemek\",\"partOfSpeech\":\"noun\",\"meaning\":\"food; a meal\","
-            "\"explanation\":\"The phrase yemek yap means 'cook'.\","
-            "\"otherMeanings\":[]}.\n"
-            "Worked example: word yat in a complaint such as 'Sen de bütün gün yat, yat, yat!': "
-            "{\"lemma\":\"yatmak\",\"partOfSpeech\":\"verb\",\"meaning\":\"just lying around\","
-            "\"explanation\":\"Yat is a command form of yatmak; repeating it here criticizes someone's "
-            "habit of lying around.\","
-            "\"otherMeanings\":[\"go to bed — erken yatmak: go to bed early\","
-            "\"serve time — hapis yatmak: serve a prison sentence\"]}. "
-            "Contrast: in 'Yat artık, saat çok geç', yat is an actual command to go to bed, supported by the "
-            "late hour. "
-            "Adapt the analysis and alternatives to the supplied word and dialogue.");
+            "Return a JSON object with these plain-text fields and structured arrays. "
+            "Keep this a compact dictionary card, selecting information that adds a useful distinction.\n"
+            "lemma: the clicked word's dictionary form, such as a Turkish verb's -mak/-mek infinitive; "
+            "at most 100 characters. This lemma identifies the entry used for all other senses.\n"
+            "partOfSpeech: the clicked form's grammatical role in this sentence, in explanationLanguage; "
+            "at most 60 characters. Use an empty string when uncertain.\n"
+            "meaning: the sense intended here, as one natural gloss of 2-6 words, at most 80 characters. "
+            "Preserve relevant person, tense and polarity. Resolve the intended speech act from dialogue: "
+            "yat in a complaint like 'Sen de bütün gün yat, yat, yat!' conveys 'just lying around', "
+            "whereas 'Yat artık, saat çok geç' supports a command to go to bed.\n"
+            "explanation: one brief sentence explaining the contextual clue or construction that selects "
+            "this sense, at most 180 characters. Use an empty string when the gloss is sufficient.\n"
+            "formNote: a compact explanation connecting the clicked form to lemma, such as the relevant "
+            "ending and its contribution, at most 220 characters. Put morphology here and contextual "
+            "meaning in explanation, giving each fact one home. Use an empty string for an unchanged "
+            "form with nothing useful to explain.\n"
+            "otherSenses: zero to two genuinely different common dictionary senses of lemma. "
+            "Each must express a distinct concept from meaning and from the other entries. Group "
+            "synonymous English glosses under the same sense. Keep the same lexical entry; a change "
+            "of grammatical role caused by inflection can be explained in the example's formNote. "
+            "Use [] when there is no useful distinct sense.\n"
+            "otherUses: zero or one useful related expression or application of the current sense, "
+            "with an example that teaches something beyond the subtitle. This is the place for a "
+            "related usage that shares the same core meaning. Use [] when it adds little.\n"
+            "Each item in either array is an object with meaning (short gloss, at most 100 characters), "
+            "example (short source-language phrase), translation (its natural translation), and "
+            "formNote (identify a different form used by the example, or an empty string). "
+            "Keep each of those last three fields within 180 characters. Prefer one useful entry "
+            "over several weak distinctions.\n"
+            "Worked example, uzaktan in 'Onları uzaktan izlersin': "
+            "{\"lemma\":\"uzak\",\"partOfSpeech\":\"adverb\",\"meaning\":\"from a distance\","
+            "\"explanation\":\"\","
+            "\"formNote\":\"Uzak means 'far'; -tan adds 'from', giving uzaktan.\","
+            "\"otherSenses\":[],\"otherUses\":[{\"meaning\":\"remotely\","
+            "\"example\":\"uzaktan çalışmak\",\"translation\":\"to work remotely\",\"formNote\":\"\"}]}. "
+            "In this example 'at a distance' belongs to the current sense, while remote work is a "
+            "related use. An empty otherSenses list reflects that distinction, rather than an "
+            "exhaustive claim about the dictionary entry.\n"
+            "Contrast, head in 'She bumped her head': "
+            "{\"lemma\":\"head\",\"partOfSpeech\":\"noun\",\"meaning\":\"the body part above the neck\","
+            "\"explanation\":\"Bumped points to a physical body part.\",\"formNote\":\"\","
+            "\"otherSenses\":[{\"meaning\":\"a person in charge\",\"example\":\"the head of the team\","
+            "\"translation\":\"the team's leader\",\"formNote\":\"\"}],\"otherUses\":[]}. "
+            "Adapt the senses and examples to the supplied word, its language and dialogue.");
         auto data = context;
         data.insert("word", word);
         const QJsonArray messages{
@@ -184,7 +225,9 @@ void WordLookup::observe(QNetworkReply *networkReply) {
                 baseWord = answer.value("lemma").toString();
                 grammaticalCategory = answer.value("partOfSpeech").toString();
                 usageNote = answer.value("explanation").toString();
-                alternatives = answer.value("otherMeanings").toStringList();
+                wordFormNote = answer.value("formNote").toString();
+                alternativeSenses = answer.value("otherSenses").toList();
+                relatedUses = answer.value("otherUses").toList();
                 requestState = definitions.isEmpty() ? "failed" : "complete";
                 statusText = definitions.isEmpty()
                                  ? "No meaning found. Try the dictionary or an AI explanation."
@@ -213,7 +256,9 @@ void WordLookup::cancel() {
     baseWord.clear();
     grammaticalCategory.clear();
     usageNote.clear();
-    alternatives.clear();
+    wordFormNote.clear();
+    alternativeSenses.clear();
+    relatedUses.clear();
     requestState = "idle";
     statusText.clear();
     emit changed();

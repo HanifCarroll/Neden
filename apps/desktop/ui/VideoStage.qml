@@ -285,22 +285,8 @@ Rectangle {
                     }
                 }
                 Label {
-                    objectName: "wordGrammar"
-                    visible: text.length > 0
-                    text: {
-                        const words = stage.session.study.words;
-                        const base = words.lemma.length && words.lemma !== words.word ? "Base form: " + words.lemma : "";
-                        return [words.partOfSpeech, base].filter(detail => detail.length > 0).join(" · ");
-                    }
-                    textFormat: Text.PlainText
-                    color: Theme.muted
-                    font.pixelSize: Theme.caption
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-                Label {
                     visible: stage.session.study.words.meanings.length > 0
-                    text: "In this sentence"
+                    text: "Meaning here"
                     color: Theme.muted
                     font.pixelSize: Theme.caption
                     Layout.topMargin: Theme.space2
@@ -327,22 +313,49 @@ Rectangle {
                     Layout.fillWidth: true
                 }
                 Label {
-                    visible: stage.session.study.words.otherMeanings.length > 0
-                    text: "Other meanings"
-                    color: Theme.ink
-                    font.weight: Font.DemiBold
+                    text: "Word form"
+                    visible: wordGrammar.text.length > 0 || stage.session.study.words.formNote.length > 0
+                    color: Theme.muted
+                    font.pixelSize: Theme.caption
                     Layout.topMargin: Theme.space2
                 }
-                Repeater {
-                    model: stage.session.study.words.otherMeanings
-                    delegate: Label {
-                        required property string modelData
-                        text: "• " + modelData
-                        textFormat: Text.PlainText
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                        color: Theme.muted
+                Label {
+                    id: wordGrammar
+                    objectName: "wordGrammar"
+                    visible: text.length > 0
+                    text: {
+                        const words = stage.session.study.words;
+                        const base = words.lemma.length && words.lemma !== words.word ? "Base form: " + words.lemma : "";
+                        return [words.partOfSpeech, base].filter(detail => detail.length > 0).join(" · ");
                     }
+                    textFormat: Text.PlainText
+                    color: Theme.muted
+                    font.pixelSize: Theme.caption
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Label {
+                    objectName: "wordFormNote"
+                    text: stage.session.study.words.formNote
+                    visible: text.length > 0
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: Theme.muted
+                    Layout.fillWidth: true
+                }
+                WordUsageSection {
+                    objectName: "wordOtherSenses"
+                    title: stage.session.study.words.lemma.length > 0 ? "Other senses of “" + stage.session.study.words.lemma + "”" : "Other senses"
+                    entries: stage.session.study.words.otherSenses
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.space2
+                }
+                WordUsageSection {
+                    objectName: "wordOtherUses"
+                    title: "Other uses"
+                    entries: stage.session.study.words.otherUses
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.space2
                 }
                 Label {
                     visible: stage.session.study.words.state !== "complete"

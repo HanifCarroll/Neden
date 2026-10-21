@@ -38,6 +38,7 @@ public:
     int requests = 0;
     int wordRequests = 0;
     QJsonObject sentContext;
+    QString wordCardResponse = R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","formNote":"Dalmışım is an inflected form of dalmak.","otherSenses":[{"meaning":"to dive into water","example":"suya dalmak","translation":"to dive into the water","formNote":"Uses the infinitive dalmak."}],"otherUses":[]})";
     StudyResponseServer() {
         connect(this, &QTcpServer::newConnection, this, [this] {
             auto *socket = nextPendingConnection();
@@ -67,12 +68,10 @@ public:
                                                               .toString()
                                                               .toUtf8())
                                       .object();
-                    const QString card =
-                        R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Here he is absorbed in watching television.","otherMeanings":["to dive into water","to fall asleep"]})";
                     answer = QJsonDocument(
                                  QJsonObject{{"choices", QJsonArray{QJsonObject{
                                                              {"finish_reason", "stop"},
-                                                             {"message", QJsonObject{{"content", card}}}}}}})
+                                                             {"message", QJsonObject{{"content", wordCardResponse}}}}}}})
                                  .toJson();
                 } else
                     answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI became "
@@ -233,7 +232,7 @@ private:
 
 private slots:
     void init() {
-        const QStringList headlessChecks{"menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -1069,6 +1068,8 @@ private slots:
         QVERIFY(grammar);
         QCOMPARE(grammar->property("text").toString(), QString("verb · Base form: dalmak"));
         QVERIFY(card->height() < window->height());
+        QVERIFY(visualItem(card, "wordOtherSenses")->isVisible());
+        QVERIFY(!visualItem(card, "wordOtherUses")->isVisible());
         auto *explainButton = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
         QVERIFY(explainButton);
         QTest::mouseMove(window, point);
@@ -1103,6 +1104,44 @@ private slots:
         QTest::qWait(450);
         QCOMPARE(study->words()->state(), QString("idle"));
         QVERIFY(!card->isVisible());
+    }
+
+    void wordCardSeparatesSensesFormsAndUses() {
+        StudyResponseServer server;
+        configureStudyResponses(server);
+        window->setProperty("showRecent", false);
+        session->closeDefinition();
+        session->setPaused(true);
+        const QString cue = "Onları uzaktan izlersin.";
+        session->replaceCues({{0, 7200000, cue, {}}});
+        server.wordCardResponse = R"({"lemma":"uzak","partOfSpeech":"adverb","meaning":"from a distance","explanation":"","formNote":"Uzak means far; -tan adds from.","otherSenses":[],"otherUses":[{"meaning":"remotely","example":"uzaktan çalışmak","translation":"to work remotely","formNote":""}]})";
+        session->lookupWordAt(cue, cue.indexOf("uzaktan"));
+        QTRY_COMPARE(study->words()->state(), QString("complete"));
+        auto *card = visualItem(window->contentItem(), "wordMeaningCard");
+        QVERIFY(card && card->isVisible());
+        auto *senses = visualItem(card, "wordOtherSenses");
+        auto *uses = visualItem(card, "wordOtherUses");
+        auto *form = visualItem(card, "wordFormNote");
+        QVERIFY(senses && uses && form);
+        QVERIFY(!senses->isVisible());
+        QVERIFY(uses->isVisible());
+        QVERIFY(form->isVisible());
+        QCOMPARE(study->words()->otherUses().first().toMap().value("translation").toString(),
+                 QString("to work remotely"));
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QTest::qWait(100);
+            QVERIFY(window->grabWindow().save(artifacts + "/word-related-use.png"));
+        }
+        // A later card with no extra distinctions must remove all optional sections.
+        server.wordCardResponse = R"({"lemma":"uzak","partOfSpeech":"adverb","meaning":"from a distance","explanation":"","formNote":"","otherSenses":[],"otherUses":[]})";
+        session->closeWordCard(false);
+        session->lookupWordAt(cue, cue.indexOf("uzaktan"));
+        QTRY_COMPARE(study->words()->state(), QString("complete"));
+        QVERIFY(!senses->isVisible());
+        QVERIFY(!uses->isVisible());
+        QVERIFY(!form->isVisible());
+        session->closeWordCard(false);
     }
 
     void followUpComposerGrowsWithoutMovingSendButton() {

@@ -3,6 +3,7 @@
 #include <QNetworkReply>
 #include <QPointer>
 #include <QVariantMap>
+#include <QVariantList>
 #include <QJsonObject>
 #include <QtQml/qqmlregistration.h>
 #include <functional>
@@ -18,7 +19,9 @@ class WordLookup : public QObject {
     Q_PROPERTY(QString lemma READ lemma NOTIFY changed)
     Q_PROPERTY(QString partOfSpeech READ partOfSpeech NOTIFY changed)
     Q_PROPERTY(QString contextNote READ contextNote NOTIFY changed)
-    Q_PROPERTY(QStringList otherMeanings READ otherMeanings NOTIFY changed)
+    Q_PROPERTY(QString formNote READ formNote NOTIFY changed)
+    Q_PROPERTY(QVariantList otherSenses READ otherSenses NOTIFY changed)
+    Q_PROPERTY(QVariantList otherUses READ otherUses NOTIFY changed)
 public:
     using CredentialReader = std::function<QByteArray(const QString &)>;
     WordLookup(CredentialReader credentialReader, QObject *parent = nullptr);
@@ -29,7 +32,9 @@ public:
     QString lemma() const { return baseWord; }
     QString partOfSpeech() const { return grammaticalCategory; }
     QString contextNote() const { return usageNote; }
-    QStringList otherMeanings() const { return alternatives; }
+    QString formNote() const { return wordFormNote; }
+    QVariantList otherSenses() const { return alternativeSenses; }
+    QVariantList otherUses() const { return relatedUses; }
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
                        const QString &model, bool noKeyRequired = false);
     void cancel();
@@ -50,5 +55,7 @@ private:
     QString baseWord;
     QString grammaticalCategory;
     QString usageNote;
-    QStringList alternatives;
+    QString wordFormNote;
+    QVariantList alternativeSenses;
+    QVariantList relatedUses;
 };
