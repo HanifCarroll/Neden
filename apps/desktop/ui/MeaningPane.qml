@@ -13,6 +13,11 @@ Item {
     property bool showFullCue: false
     property string saveFeedback: ""
     signal flashcardsRequested
+    readonly property real followUpLineHeight: Math.max(Theme.controlHeight, Math.ceil(questionMetrics.height) + 16)
+    FontMetrics {
+        id: questionMetrics
+        font: question.font
+    }
 
     function sendQuestion() {
         if (!busy && question.text.trim().length && question.text.length <= 2000 && session.followUp(question.text)) {
@@ -53,8 +58,9 @@ Item {
                         lineHeight: 1.4
                     }
                 }
-                RowLayout {
-                    Layout.fillHeight: false
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Theme.space1
                     visible: pane.explanation.subject.length > 0
                     ActionButton {
                         text: pane.session.replaying ? "Stop replay" : "Replay line"
@@ -72,6 +78,36 @@ Item {
                         font.pixelSize: Theme.caption
                         onClicked: pane.showFullCue = !pane.showFullCue
                     }
+                    ActionButton {
+                        objectName: "saveFlashcardButton"
+                        text: "Save flashcard"
+                        flat: true
+                        implicitHeight: 30
+                        font.pixelSize: Theme.caption
+                        enabled: pane.explanation.state === "complete"
+                        onClicked: {
+                            pane.session.saveCard();
+                            pane.saveFeedback = pane.session.study.deck.message;
+                        }
+                    }
+                    ActionButton {
+                        objectName: "viewFlashcardsButton"
+                        text: "View flashcards"
+                        flat: true
+                        implicitHeight: 30
+                        font.pixelSize: Theme.caption
+                        visible: pane.saveFeedback.length > 0
+                        onClicked: pane.flashcardsRequested()
+                    }
+                }
+                Label {
+                    objectName: "flashcardSaveFeedback"
+                    visible: pane.saveFeedback.length > 0
+                    text: pane.saveFeedback
+                    textFormat: Text.PlainText
+                    color: Theme.muted
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                 }
                 Label {
                     visible: pane.showFullCue && pane.explanation.sourceCue.trim() !== pane.explanation.subject.trim()
@@ -185,17 +221,28 @@ Item {
                 onClicked: pane.explanation.stop()
             }
         }
+        Label {
+            visible: question.text.length > 2000
+            text: "Keep the question within 2,000 characters."
+            color: Theme.error
+            Layout.fillWidth: true
+        }
         RowLayout {
+            objectName: "followUpComposer"
             Layout.fillHeight: false
             visible: pane.explanation.turns.length > 0
             Layout.fillWidth: true
             ScrollView {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(100, Math.max(54, question.implicitHeight))
+                objectName: "followUpScrollView"
+                Layout.preferredHeight: Math.max(pane.followUpLineHeight, Math.min(question.contentHeight + question.topPadding + question.bottomPadding, Math.ceil(questionMetrics.height) * 2 + 16))
+                contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 TextArea {
                     id: question
                     objectName: "followUpInput"
                     placeholderText: "Ask a follow-up…"
+                    padding: 8
                     textFormat: TextEdit.PlainText
                     wrapMode: TextEdit.Wrap
                     font.pixelSize: Theme.body
@@ -226,47 +273,13 @@ Item {
             ActionButton {
                 objectName: "sendFollowUpButton"
                 text: "Send"
+                Layout.minimumHeight: pane.followUpLineHeight
+                Layout.maximumHeight: pane.followUpLineHeight
+                Layout.preferredHeight: pane.followUpLineHeight
+                Layout.alignment: Qt.AlignBottom
                 enabled: !pane.busy && question.text.trim().length > 0 && question.text.length <= 2000
                 onClicked: pane.sendQuestion()
             }
-        }
-        Label {
-            visible: question.text.length > 2000
-            text: "Keep the question within 2,000 characters."
-            color: Theme.error
-            Layout.fillWidth: true
-        }
-        RowLayout {
-            Layout.fillHeight: false
-            Layout.fillWidth: true
-            ActionButton {
-                objectName: "viewFlashcardsButton"
-                text: "View flashcards"
-                flat: true
-                visible: pane.saveFeedback.length > 0
-                onClicked: pane.flashcardsRequested()
-            }
-            Item {
-                Layout.fillWidth: true
-            }
-            ActionButton {
-                objectName: "saveFlashcardButton"
-                text: "Save flashcard"
-                enabled: pane.explanation.state === "complete"
-                onClicked: {
-                    pane.session.saveCard();
-                    pane.saveFeedback = pane.session.study.deck.message;
-                }
-            }
-        }
-        Label {
-            objectName: "flashcardSaveFeedback"
-            visible: pane.saveFeedback.length > 0
-            text: pane.saveFeedback
-            textFormat: Text.PlainText
-            color: Theme.muted
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
         }
     }
     Connections {
