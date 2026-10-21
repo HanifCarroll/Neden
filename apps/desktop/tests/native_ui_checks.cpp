@@ -32,6 +32,59 @@ bool nativeMenusAreAvailable();
 bool nativeVideoExtendsUnderTitlebar(QQuickWindow *window);
 #endif
 
+// Local deterministic responses shared by independent word, composer, and save checks.
+class StudyResponseServer : public QTcpServer {
+public:
+    int requests = 0;
+    int wordRequests = 0;
+    QJsonObject sentContext;
+    StudyResponseServer() {
+        connect(this, &QTcpServer::newConnection, this, [this] {
+            auto *socket = nextPendingConnection();
+            auto bytes = std::make_shared<QByteArray>();
+            connect(socket, &QTcpSocket::readyRead, socket, [this, socket, bytes] {
+                *bytes += socket->readAll();
+                const int boundary = bytes->indexOf("\r\n\r\n");
+                if (boundary < 0 || socket->property("sent").toBool())
+                    return;
+                int length = 0;
+                for (const auto &line : bytes->left(boundary).split('\n'))
+                    if (line.toLower().startsWith("content-length:"))
+                        length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
+                if (bytes->size() < boundary + 4 + length)
+                    return;
+                socket->setProperty("sent", true);
+                ++requests;
+                const auto request = QJsonDocument::fromJson(bytes->mid(boundary + 4, length)).object();
+                QByteArray answer;
+                if (!request.value("stream").toBool()) {
+                    ++wordRequests;
+                    sentContext = QJsonDocument::fromJson(request.value("messages")
+                                                              .toArray()
+                                                              .last()
+                                                              .toObject()
+                                                              .value("content")
+                                                              .toString()
+                                                              .toUtf8())
+                                      .object();
+                    const QString card =
+                        R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Here he is absorbed in watching television.","otherMeanings":["to dive into water","to fall asleep"]})";
+                    answer = QJsonDocument(
+                                 QJsonObject{{"choices", QJsonArray{QJsonObject{
+                                                             {"finish_reason", "stop"},
+                                                             {"message", QJsonObject{{"content", card}}}}}}})
+                                 .toJson();
+                } else
+                    answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI became "
+                             "absorbed.\"}}]}\n\ndata: [DONE]\n\n";
+                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " +
+                              QByteArray::number(answer.size()) + "\r\n\r\n" + answer);
+                socket->disconnectFromHost();
+            });
+        });
+    }
+};
+
 class NativeUiChecks : public QObject {
     Q_OBJECT
 private:
@@ -154,9 +207,33 @@ private:
                    loadOption.toUtf8().constData());
     }
 
+    void configureStudyResponses(StudyResponseServer &server) {
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        QVERIFY(study->settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock",
+                                             "https://example.org/%s", false));
+        QVERIFY(study->settings()->configureLearning({{"wordProvider", "ai"},
+                                                      {"sourceLanguage", "Turkish"},
+                                                      {"explanationLanguage", "English"},
+                                                      {"includeSecondary", true},
+                                                      {"primaryProvider", "configured"}}));
+    }
+
+    void prepareCompletedExplanation(StudyResponseServer &server) {
+        configureStudyResponses(server);
+        window->setProperty("showRecent", false);
+        session->closeDefinition();
+        session->setPaused(true);
+        session->replaceCues({{0, 7200000, "Ben televizyona dalmışım ya.", {}}});
+        session->explainCue();
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        QVERIFY(sidebar);
+        QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
+    }
+
 private slots:
     void init() {
-        const QStringList headlessChecks{"recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -252,7 +329,7 @@ private slots:
 #ifdef Q_OS_MACOS
         QVERIFY(nativeMenusAreAvailable());
         QVERIFY(nativeVideoExtendsUnderTitlebar(window));
-        click("meaningTab");
+        click("explanationTab");
         QTRY_COMPARE(window->property("inspectorTab").toInt(), 1);
         click("transcriptTab");
         QTRY_COMPARE(window->property("inspectorTab").toInt(), 0);
@@ -367,9 +444,42 @@ private slots:
         session->checkpoint();
     }
 
+    void menusOpenOwnedDialogsAndBlockShortcuts() {
+        session->closeDefinition();
+        window->contentItem()->forceActiveFocus();
+        auto *menu = window->findChild<QObject *>("playerMenuBar");
+        QVERIFY(menu);
+        QTRY_VERIFY(window->property("commandShortcutsEnabled").toBool());
+        const auto checkDialog = [&](const char *request, const char *name) {
+            QVERIFY(QMetaObject::invokeMethod(menu, request));
+            auto *dialog = window->findChild<QObject *>(name);
+            QVERIFY(dialog);
+            QTRY_VERIFY(dialog->property("opened").toBool());
+            QVERIFY(!window->property("commandShortcutsEnabled").toBool());
+            QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+            QTRY_VERIFY(!dialog->property("visible").toBool());
+            QTRY_VERIFY(window->property("commandShortcutsEnabled").toBool());
+        };
+        checkDialog("openUrlRequested", "openUrlDialog");
+        checkDialog("jumpToTimeRequested", "jumpToTimeDialog");
+        QVERIFY(QMetaObject::invokeMethod(menu, "playerOptionsRequested", Q_ARG(int, 1)));
+        auto *optionsDialog = window->findChild<QObject *>("playerOptionsDialog");
+        QVERIFY(optionsDialog);
+        QTRY_VERIFY(optionsDialog->property("opened").toBool());
+        QVERIFY(!window->property("commandShortcutsEnabled").toBool());
+        auto *options = window->findChild<QObject *>("playerOptions");
+        QVERIFY(options);
+        QCOMPARE(options->property("page").toInt(), 1);
+        QVERIFY(QMetaObject::invokeMethod(optionsDialog, "close"));
+        QTRY_VERIFY(!optionsDialog->property("visible").toBool());
+        QTRY_VERIFY(window->property("commandShortcutsEnabled").toBool());
+    }
+
     void settingsDraftAndShortcutPolicyUseTheActualUi() {
-        chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
-        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
+            QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        }
         session->setPaused(true);
         window->setProperty("showRecent", false);
         window->setProperty("inspectorMode", 1);
@@ -390,7 +500,7 @@ private slots:
         QVERIFY(!search->property("text").toString().isEmpty());
         QCOMPARE(session->volumeLevel(), 60.0);
         QVERIFY(search->setProperty("text", QString()));
-        QVERIFY(QMetaObject::invokeMethod(window, "openSettings"));
+        QVERIFY(QMetaObject::invokeMethod(window, "openSettings", Q_ARG(QVariant, QVariant())));
         auto *dialog = window->findChild<QObject *>("settingsDialog");
         QVERIFY(dialog);
         QTRY_VERIFY(dialog->property("opened").toBool());
@@ -424,7 +534,7 @@ private slots:
         chooseFile("primaryPicker", qEnvironmentVariable("NEDEN_CHECK_PRIMARY"));
         chooseFile("secondaryPicker", qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
         window->setProperty("showRecent", false);
-        QVERIFY(QMetaObject::invokeMethod(window, "openPlayerOptions", Q_ARG(QVariant, 1)));
+        QVERIFY(QMetaObject::invokeMethod(window->findChild<QObject *>("playerDialogs"), "openPlayerOptions", Q_ARG(QVariant, 1)));
         auto *dialog = window->findChild<QObject *>("playerOptionsDialog");
         auto *options = window->findChild<QObject *>("playerOptions");
         QVERIFY(dialog && options);
@@ -456,12 +566,12 @@ private slots:
             }
             QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
             QTRY_VERIFY(!dialog->property("visible").toBool());
-            window->setProperty("settingsPage", 0);
-            QVERIFY(QMetaObject::invokeMethod(window, "openSettings"));
+            window->findChild<QObject *>("playerDialogs")->setProperty("settingsPage", 0);
+            QVERIFY(QMetaObject::invokeMethod(window, "openSettings", Q_ARG(QVariant, QVariant())));
             auto *settings = window->findChild<QObject *>("settingsDialog");
             QTRY_VERIFY(settings->property("opened").toBool());
             for (int settingsPage = 0; settingsPage < 3; ++settingsPage) {
-                window->setProperty("settingsPage", settingsPage);
+                window->findChild<QObject *>("playerDialogs")->setProperty("settingsPage", settingsPage);
                 QTest::qWait(200);
                 if (!artifacts.isEmpty())
                     QVERIFY(window->grabWindow().save(
@@ -581,7 +691,7 @@ private slots:
         QVERIFY(!containsTrack(secondary, "exclusive-primary.srt"));
         QCOMPARE(primary->property("displayText").toString(), QString("exclusive-primary.srt"));
         QCOMPARE(secondary->property("displayText").toString(), QString("exclusive-secondary.srt"));
-        QVERIFY(QMetaObject::invokeMethod(window, "openPlayerOptions", Q_ARG(QVariant, QVariant(2))));
+        QVERIFY(QMetaObject::invokeMethod(window->findChild<QObject *>("playerDialogs"), "openPlayerOptions", Q_ARG(QVariant, QVariant(2))));
         auto *optionsPrimary = visualItem(window->contentItem(), "primaryOptionsTrackChoice");
         auto *optionsSecondary = visualItem(window->contentItem(), "secondaryOptionsTrackChoice");
         QVERIFY(optionsPrimary && optionsSecondary);
@@ -831,7 +941,7 @@ private slots:
         QCOMPARE(requests, 2);
         QCOMPARE(study->explanation()->answer(), QString("### Natural meaning\nLight"));
         QCOMPARE(window->property("inspectorTab").toInt(), 1);
-        auto *meaning = window->findChild<QObject *>("meaningLoader");
+        auto *meaning = window->findChild<QObject *>("explanationLoader");
         QVERIFY(meaning && meaning->property("active").toBool());
         if (!artifacts.isEmpty())
             QVERIFY(window->grabWindow().save(artifacts + "/explanation.png"));
@@ -916,61 +1026,11 @@ private slots:
         window->setProperty("showRecent", false);
         session->closeDefinition();
         session->setPaused(true);
-        QTcpServer server;
-        QVERIFY(server.listen(QHostAddress::LocalHost));
-        int requests = 0;
-        int wordRequests = 0;
-        QJsonObject sentContext;
-        connect(&server, &QTcpServer::newConnection, this, [&] {
-            auto *socket = server.nextPendingConnection();
-            auto bytes = std::make_shared<QByteArray>();
-            connect(socket, &QTcpSocket::readyRead, socket, [&, socket, bytes] {
-                *bytes += socket->readAll();
-                const int boundary = bytes->indexOf("\r\n\r\n");
-                if (boundary < 0 || socket->property("sent").toBool())
-                    return;
-                int length = 0;
-                for (const auto &line : bytes->left(boundary).split('\n'))
-                    if (line.toLower().startsWith("content-length:"))
-                        length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
-                if (bytes->size() < boundary + 4 + length)
-                    return;
-                socket->setProperty("sent", true);
-                ++requests;
-                const auto request = QJsonDocument::fromJson(bytes->mid(boundary + 4, length)).object();
-                QByteArray answer;
-                if (!request.value("stream").toBool()) {
-                    ++wordRequests;
-                    sentContext = QJsonDocument::fromJson(request.value("messages")
-                                                              .toArray()
-                                                              .last()
-                                                              .toObject()
-                                                              .value("content")
-                                                              .toString()
-                                                              .toUtf8())
-                                      .object();
-                    const QString card =
-                        R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Here he is absorbed in watching television.","otherMeanings":["to dive into water","to fall asleep"]})";
-                    answer = QJsonDocument(
-                                 QJsonObject{{"choices", QJsonArray{QJsonObject{
-                                                             {"finish_reason", "stop"},
-                                                             {"message", QJsonObject{{"content", card}}}}}}})
-                                 .toJson();
-                } else
-                    answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI became "
-                             "absorbed.\"}}]}\n\ndata: [DONE]\n\n";
-                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " +
-                              QByteArray::number(answer.size()) + "\r\n\r\n" + answer);
-                socket->disconnectFromHost();
-            });
-        });
-        QVERIFY(study->settings()->configure(QString("http://127.0.0.1:%1").arg(server.serverPort()), "mock",
-                                             "https://example.org/%s", false));
-        QVERIFY(study->settings()->configureLearning({{"wordProvider", "ai"},
-                                                      {"sourceLanguage", "Turkish"},
-                                                      {"explanationLanguage", "English"},
-                                                      {"includeSecondary", true},
-                                                      {"primaryProvider", "configured"}}));
+        StudyResponseServer server;
+        configureStudyResponses(server);
+        auto &requests = server.requests;
+        auto &wordRequests = server.wordRequests;
+        auto &sentContext = server.sentContext;
         const QString cue = "Ben televizyona dalmışım ya.";
         session->replaceCues({{0, 7200000, cue, {}}});
         auto *subtitle = visualItem(window->contentItem(), "primarySubtitleText");
@@ -1037,6 +1097,17 @@ private slots:
         QCOMPARE(requests, 4);
         QCOMPARE(wordRequests, 2);
         QCOMPARE(study->explanation()->subject(), QString("dalmışım"));
+        // A changed cue cancels a card, so it cannot explain a previous scene.
+        session->lookupWordAt(cue, cue.indexOf("dalmışım"));
+        session->replaceCues({{0, 7200000, "Başka bir sahne.", {}}});
+        QTest::qWait(450);
+        QCOMPARE(study->words()->state(), QString("idle"));
+        QVERIFY(!card->isVisible());
+    }
+
+    void followUpComposerGrowsWithoutMovingSendButton() {
+        StudyResponseServer server;
+        prepareCompletedExplanation(server);
         auto *question = visualItem(window->contentItem(), "followUpInput");
         auto *composer = visualItem(window->contentItem(), "followUpComposer");
         auto *inputViewport = visualItem(window->contentItem(), "followUpScrollView");
@@ -1057,13 +1128,18 @@ private slots:
             QVERIFY(window->grabWindow().save(composerArtifacts + "/follow-up-composer.png"));
         question->setProperty("text", "");
         QTRY_COMPARE(inputViewport->height(), singleLineHeight);
+    }
+
+    void savingFlashcardShowsResultAndOpensCollection() {
+        StudyResponseServer server;
+        prepareCompletedExplanation(server);
         const auto cardsBeforeSave = study->deck()->cards().size();
         auto *sidebar = visualItem(window->contentItem(), "learningInspector");
         QVERIFY(sidebar);
         QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
         click("saveFlashcardButton");
         QCOMPARE(study->deck()->cards().size(), cardsBeforeSave + 1);
-        QCOMPARE(study->deck()->cards().last().toMap().value("front").toString(), QString("dalmışım"));
+        QCOMPARE(study->deck()->cards().last().toMap().value("front").toString(), QString("Ben televizyona dalmışım ya."));
         auto *saveFeedback = visualItem(window->contentItem(), "flashcardSaveFeedback");
         QVERIFY(saveFeedback);
         QTRY_VERIFY(saveFeedback->isVisible());
@@ -1082,12 +1158,6 @@ private slots:
         session->closeDefinition();
         study->explanation()->invalidateContext();
         QVERIFY(!saveFeedback->isVisible());
-        // A changed cue cancels a card, so it cannot explain a previous scene.
-        session->lookupWordAt(cue, cue.indexOf("dalmışım"));
-        session->replaceCues({{0, 7200000, "Başka bir sahne.", {}}});
-        QTest::qWait(450);
-        QCOMPARE(study->words()->state(), QString("idle"));
-        QVERIFY(!card->isVisible());
     }
 
     void recentHistoryKeepsFinishedVideosAccessible() {
@@ -1190,7 +1260,7 @@ private slots:
         QTest::qWait(40);
         sidebar->setProperty("reduceMotion", true); // A live preference change settles immediately.
         QCOMPARE(sidebar->x(), 680.0);
-        auto *tab = visualItem(window->contentItem(), "meaningTab");
+        auto *tab = visualItem(window->contentItem(), "explanationTab");
         QVERIFY(tab);
         QCOMPARE(tab->property("text").toString(), QString("Explanation"));
     }

@@ -59,7 +59,7 @@ Rectangle {
             currentIndex: tabs.currentIndex
             Layout.fillWidth: true
             Layout.fillHeight: true
-            MeaningPane {
+            ExplanationPane {
                 session: pane.session
                 onFlashcardsRequested: tabs.currentIndex = 1
             }

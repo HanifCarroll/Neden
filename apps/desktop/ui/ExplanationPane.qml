@@ -12,6 +12,7 @@ Item {
     readonly property bool editing: question.activeFocus
     property bool showFullCue: false
     property string saveFeedback: ""
+    property bool cardSaved: false
     signal flashcardsRequested
     readonly property real followUpLineHeight: Math.max(Theme.controlHeight, Math.ceil(questionMetrics.height) + 16)
     FontMetrics {
@@ -85,10 +86,7 @@ Item {
                         implicitHeight: 30
                         font.pixelSize: Theme.caption
                         enabled: pane.explanation.state === "complete"
-                        onClicked: {
-                            pane.session.saveCard();
-                            pane.saveFeedback = pane.session.study.deck.message;
-                        }
+                        onClicked: pane.session.saveCard()
                     }
                     ActionButton {
                         objectName: "viewFlashcardsButton"
@@ -96,7 +94,7 @@ Item {
                         flat: true
                         implicitHeight: 30
                         font.pixelSize: Theme.caption
-                        visible: pane.saveFeedback.length > 0
+                        visible: pane.cardSaved
                         onClicked: pane.flashcardsRequested()
                     }
                 }
@@ -283,14 +281,24 @@ Item {
         }
     }
     Connections {
+        target: pane.session
+        function onFlashcardSaveFinished(success: bool, message: string) {
+            pane.cardSaved = success;
+            pane.saveFeedback = message;
+        }
+    }
+    Connections {
         target: pane.explanation
         function onReplyStarted() {
             pane.saveFeedback = "";
+            pane.cardSaved = false;
             Qt.callLater(conversation.anchorLatestReply);
         }
         function onChanged() {
-            if (pane.explanation.state === "idle")
+            if (pane.explanation.state === "idle") {
                 pane.saveFeedback = "";
+                pane.cardSaved = false;
+            }
         }
     }
 }

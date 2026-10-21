@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
 import Neden
 
 ApplicationWindow {
@@ -10,7 +9,9 @@ ApplicationWindow {
     readonly property MotionPreferences motionPreferences: MotionPreferences {}
     property ThumbnailService thumbnails: null
     property ShortcutMap keymap: ShortcutMap {}
-    readonly property bool commandShortcutsEnabled: !root.meaningEditing && !transcript.editing && !root.dictionaryOpen && !keymap.recording && !settingsDialog.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !studyDrawer.opened
+    readonly property bool shortcutsBlocked: keymap.recording || dictionaryOpen || dialogs.blocksShortcuts || studyDrawer.opened
+    readonly property bool textEntryActive: explanationEditing || transcript.editing
+    readonly property bool commandShortcutsEnabled: !shortcutsBlocked && !textEntryActive
     required property SubtitleAppearance appearance
     required property LearningSession session
     required property RecentVideos recentVideos
@@ -19,16 +20,14 @@ ApplicationWindow {
     enum InspectorMode {
         Hidden,
         Transcript,
-        Meaning,
+        Explanation,
         Dictionary
     }
     property int inspectorMode: Main.Transcript
     readonly property bool dictionaryOpen: inspectorMode === Main.Dictionary
     readonly property bool transcriptOpen: inspectorMode !== Main.Hidden
-    readonly property int inspectorTab: inspectorMode === Main.Meaning ? 1 : 0
+    readonly property int inspectorTab: inspectorMode === Main.Explanation ? 1 : 0
     property bool showRecent: false
-    property bool appendToQueue: false
-    property bool screenshotWithSubtitles: true
     property bool floatingMode: false
     property bool controlsIdle: false
     readonly property bool hidePlaybackControls: session.hasMedia && !showRecent && controlsIdle && commandShortcutsEnabled && !stage.selecting
@@ -65,10 +64,6 @@ ApplicationWindow {
     }
     property size normalSize: Qt.size(1280, 756)
     property point normalPosition: Qt.point(0, 0)
-    function openPlayerOptions(page) {
-        playerOptions.page = page;
-        playerOptionsDialog.open();
-    }
     function toggleFloating() {
         if (fullscreenController.active)
             fullscreenController.setActive(false);
@@ -89,7 +84,7 @@ ApplicationWindow {
         }
         show();
     }
-    readonly property bool meaningEditing: transcriptOpen && inspectorTab === 1 && meaningLoader.item !== null && (meaningLoader.item as MeaningPane).editing
+    readonly property bool explanationEditing: transcriptOpen && inspectorTab === 1 && explanationLoader.item !== null && (explanationLoader.item as ExplanationPane).editing
     width: 1280
     height: 756
     minimumWidth: floatingMode ? 480 : 900
@@ -124,341 +119,29 @@ ApplicationWindow {
             }
         }
     }
-    menuBar: MenuBar {
-        Menu {
-            title: "&File"
-            MenuAction {
-                text: "Open video…"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openVideo : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    videoDialog.open()
-            }
-            Action {
-                text: "Open folder…"
-                onTriggered: folderDialog.open()
-            }
-            MenuAction {
-                text: "Open URL…"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.openUrl : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    urlDialog.open()
-            }
-            Action {
-                text: "Add files to queue…"
-                onTriggered: {
-                    root.appendToQueue = true;
-                    videoDialog.open();
-                }
-            }
-            Action {
-                text: "Show file in folder"
-                enabled: root.session.hasMedia
-                onTriggered: root.session.revealFile()
-            }
-            Action {
-                text: "Recently played"
-                onTriggered: root.showRecent = true
-            }
-            MenuSeparator {}
-            Action {
-                text: "Close window"
-                shortcut: StandardKey.Close
-                onTriggered: root.close()
-            }
-            Action {
-                text: "Quit Neden"
-                shortcut: StandardKey.Quit
-                onTriggered: Qt.quit()
-            }
-        }
-        Menu {
-            title: "Playback"
-            Action {
-                text: root.session.paused ? "Play" : "Pause"
-                enabled: root.session.hasMedia
-                onTriggered: root.session.toggle()
-            }
-            MenuAction {
-                text: "Previous subtitle"
-                enabled: root.session.canPreviousSubtitle
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousSubtitle : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.previousSubtitle()
-            }
-            MenuAction {
-                text: "Next subtitle"
-                enabled: root.session.canNextSubtitle
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextSubtitle : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.nextSubtitle()
-            }
-            MenuAction {
-                text: "Replay subtitle"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.replaySubtitle : ""
-                enabled: root.session.activeCue >= 0
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.replay()
-            }
-            MenuSeparator {}
-            MenuAction {
-                text: "Previous video"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.previousVideo : ""
-                enabled: root.session.queue.hasPrevious
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.queue.previous()
-            }
-            MenuAction {
-                text: "Next video"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.nextVideo : ""
-                enabled: root.session.queue.hasNext
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.queue.next()
-            }
-            Action {
-                text: "Queue…"
-                onTriggered: root.openPlayerOptions(PlayerOptions.Queue)
-            }
-            Action {
-                text: "Start over"
-                enabled: root.session.hasMedia
-                onTriggered: root.session.startOver()
-            }
-            MenuAction {
-                text: "Jump to time…"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.jumpToTime : ""
-                enabled: root.session.seekable
-                onTriggered: if (root.commandShortcutsEnabled)
-                    timeDialog.open()
-            }
-            Action {
-                text: "Undo last seek"
-                enabled: root.session.seekable
-                onTriggered: root.session.undoSeek()
-            }
-            Menu {
-                id: chapterMenu
-                title: "Chapters"
-                enabled: root.session.chapters.length > 0
-                Action {
-                    text: "Previous chapter"
-                    onTriggered: root.session.chapterStep(-1)
-                }
-                Action {
-                    text: "Next chapter"
-                    onTriggered: root.session.chapterStep(1)
-                }
-                MenuSeparator {}
-                Instantiator {
-                    model: root.session.chapters
-                    delegate: MenuItem {
-                        required property int index
-                        required property var modelData
-                        text: Theme.clock(modelData.time) + "  " + (modelData.title || "Chapter " + (index + 1))
-                        onTriggered: root.session.jumpToChapter(index)
-                    }
-                    onObjectAdded: (index, object) => chapterMenu.insertItem(index + 3, object)
-                    onObjectRemoved: (index, object) => chapterMenu.removeItem(object)
-                }
-            }
-            Action {
-                text: "Previous frame"
-                enabled: root.session.seekable
-                onTriggered: root.session.frameStep(false)
-            }
-            Action {
-                text: "Next frame"
-                enabled: root.session.seekable
-                onTriggered: root.session.frameStep(true)
-            }
-            Action {
-                text: root.session.loopLabel
-                enabled: root.session.seekable
-                onTriggered: root.session.cycleLoop()
-            }
-            Action {
-                text: "Slower by 0.05×"
-                onTriggered: root.session.rate(root.session.playbackSpeed - 0.05)
-            }
-            Action {
-                text: "Faster by 0.05×"
-                onTriggered: root.session.rate(root.session.playbackSpeed + 0.05)
-            }
-            Action {
-                text: "Reset playback speed"
-                onTriggered: root.session.rate(1)
-            }
-            MenuSeparator {}
-            Action {
-                text: "Seek forward 5 seconds"
-                enabled: root.session.hasMedia
-                onTriggered: root.session.seek(root.session.position + 5)
-            }
-            Action {
-                text: "Seek back 5 seconds"
-                enabled: root.session.hasMedia
-                onTriggered: root.session.seek(root.session.position - 5)
-            }
-            MenuSeparator {}
-            Action {
-                text: root.session.volumeLevel === 0 ? "Unmute" : "Mute"
-                onTriggered: root.session.toggleMute()
-            }
-            MenuAction {
-                text: "Volume up"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeUp : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.volume(root.session.volumeLevel + 5)
-            }
-            MenuAction {
-                text: "Volume down"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.volumeDown : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.session.volume(root.session.volumeLevel - 5)
-            }
-        }
-        Menu {
-            title: "Audio"
-            Action {
-                text: "Tracks and output…"
-                onTriggered: root.openPlayerOptions(PlayerOptions.Audio)
-            }
-            Action {
-                text: "Audio earlier by 0.1 s"
-                onTriggered: root.session.preferences.audioDelay -= 0.1
-            }
-            Action {
-                text: "Audio later by 0.1 s"
-                onTriggered: root.session.preferences.audioDelay += 0.1
-            }
-            Action {
-                text: "Reset audio delay"
-                onTriggered: root.session.preferences.audioDelay = 0
-            }
-        }
-        Menu {
-            title: "Video"
-            Action {
-                text: "Picture options…"
-                onTriggered: root.openPlayerOptions(PlayerOptions.Picture)
-            }
-            Action {
-                text: "Save screenshot with subtitles…"
-                enabled: root.session.hasMedia
-                onTriggered: {
-                    root.screenshotWithSubtitles = true;
-                    screenshotDialog.open();
-                }
-            }
-            Action {
-                text: "Save clean screenshot…"
-                enabled: root.session.hasMedia
-                onTriggered: {
-                    root.screenshotWithSubtitles = false;
-                    screenshotDialog.open();
-                }
-            }
-            Action {
-                text: "Media information…"
-                enabled: root.session.hasMedia
-                onTriggered: root.openPlayerOptions(PlayerOptions.Information)
-            }
-            Action {
-                text: "Floating player"
-                checkable: true
-                checked: root.floatingMode
-                onTriggered: root.toggleFloating()
-            }
-        }
-        Menu {
-            title: "Subtitles"
-            Action {
-                text: "Tracks, timing and encoding…"
-                onTriggered: root.openPlayerOptions(PlayerOptions.Subtitles)
-            }
-            MenuAction {
-                text: "Load primary track…"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.primarySubtitles : ""
-                enabled: root.session.hasMedia
-                onTriggered: if (root.commandShortcutsEnabled)
-                    subtitleDialog.open()
-            }
-            MenuAction {
-                text: "Load secondary track…"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.secondarySubtitles : ""
-                enabled: root.session.hasMedia
-                onTriggered: if (root.commandShortcutsEnabled)
-                    translationDialog.open()
-            }
-            MenuSeparator {}
-            Action {
-                text: "Find subtitles…"
-                enabled: root.session.hasMedia
-                onTriggered: root.openStudy(2)
-            }
-            Action {
-                text: "Subtitle appearance…"
-                onTriggered: root.openSettings()
-            }
-        }
-        Menu {
-            title: "Study"
-            Action {
-                text: "Explain current subtitle"
-                enabled: root.session.subtitle.length > 0 || root.session.translation.length > 0
-                onTriggered: root.session.explainCue(root.session.subtitle.length === 0)
-            }
-            Action {
-                text: "Explain selection"
-                enabled: root.session.selection.length > 0 || root.session.subtitle.length > 0
-                onTriggered: {
-                    root.openMeaning();
-                    root.session.explainSelection();
-                }
-            }
-            MenuAction {
-                text: "Dictionary"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.dictionary : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.openDictionary("")
-            }
-            MenuSeparator {}
-            Action {
-                text: "Flashcards"
-                onTriggered: root.openStudy(1)
-            }
-        }
-        Menu {
-            title: "View"
-            MenuAction {
-                text: root.transcriptOpen ? "Hide sidebar" : "Show sidebar"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.toggleSidebar : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.inspectorMode = root.transcriptOpen ? Main.Hidden : Main.Transcript
-            }
-            MenuAction {
-                text: "Recently played"
-                shortcut: root.commandShortcutsEnabled ? root.keymap.bindings.recentVideos : ""
-                onTriggered: if (root.commandShortcutsEnabled)
-                    root.showRecent = true
-            }
-            Action {
-                text: "Instant fullscreen"
-                onTriggered: root.fullscreenController.toggleInstant()
-            }
-            MenuSeparator {}
-            Action {
-                text: "Playback preferences…"
-                onTriggered: {
-                    root.settingsPage = 1;
-                    root.openSettings();
-                }
-            }
-            MenuItem {
-                text: "Settings…"
-                visible: Qt.platform.os !== "osx"
-                onTriggered: root.openSettings()
-            }
-        }
+    menuBar: PlayerMenuBar {
+        session: root.session
+        keymap: root.keymap
+        fullscreenController: root.fullscreenController
+        commandShortcutsEnabled: root.commandShortcutsEnabled
+        floatingMode: root.floatingMode
+        transcriptOpen: root.transcriptOpen
+        onOpenVideoRequested: append => dialogs.openVideo(append)
+        onOpenFolderRequested: dialogs.openFolder()
+        onOpenUrlRequested: dialogs.openUrl()
+        onJumpToTimeRequested: dialogs.jumpToTime()
+        onPrimarySubtitlesRequested: dialogs.openPrimarySubtitles()
+        onSecondarySubtitlesRequested: dialogs.openSecondarySubtitles()
+        onScreenshotRequested: withSubtitles => dialogs.saveScreenshot(withSubtitles)
+        onPlayerOptionsRequested: page => dialogs.openPlayerOptions(page)
+        onStudyRequested: tab => root.openStudy(tab)
+        onSettingsRequested: page => root.openSettings(page)
+        onDictionaryRequested: root.openDictionary("")
+        onExplanationRequested: root.openExplanation()
+        onFloatingRequested: root.toggleFloating()
+        onCloseRequested: root.close()
+        onRecentVideosRequested: root.showRecent = true
+        onSidebarRequested: root.inspectorMode = root.transcriptOpen ? Main.Hidden : Main.Transcript
     }
     Connections {
         target: root.session
@@ -466,15 +149,15 @@ ApplicationWindow {
             root.revealPlaybackControls();
         }
         function onExplanationRequested() {
-            root.openMeaning();
+            root.openExplanation();
         }
         function onMediaChanged() {
             root.revealPlaybackControls();
             root.showRecent = false;
         }
     }
-    function openMeaning() {
-        inspectorMode = Main.Meaning;
+    function openExplanation() {
+        inspectorMode = Main.Explanation;
     }
     function toggleTranscript() {
         if (transcriptOpen && inspectorTab === 0 && !dictionaryOpen) {
@@ -490,12 +173,10 @@ ApplicationWindow {
         pane.currentTab = tab;
         studyDrawer.open();
     }
-    property int settingsPage: 0
-    function openSettings() {
+    function openSettings(page) {
         if (studyDrawer.opened)
             studyDrawer.close();
-        settingsLoader.active = true;
-        settingsDialog.open();
+        dialogs.openSettings(page);
     }
     function fullscreen() {
         fullscreenController.toggle();
@@ -517,8 +198,8 @@ ApplicationWindow {
         closeSelection();
     }
     function escapeLayer() {
-        if (settingsDialog.opened)
-            settingsDialog.close();
+        if (dialogs.settingsOpen)
+            dialogs.closeSettings();
         else if (studyDrawer.opened)
             studyDrawer.close();
         else if (dictionaryOpen)
@@ -559,40 +240,10 @@ ApplicationWindow {
         bindings: root.keymap.bindings
         onExplainSubtitleRequested: root.session.explainCue(root.session.subtitle.length === 0)
         onInstantFullscreenRequested: root.fullscreenController.toggleInstant()
-        available: !root.keymap.recording && !root.showRecent && !settingsDialog.opened && !studyDrawer.opened && !playerOptionsDialog.opened && !timeDialog.opened && !urlDialog.opened && !root.dictionaryOpen
-        textEntryActive: root.meaningEditing || transcript.editing
+        available: !root.shortcutsBlocked && !root.showRecent
+        textEntryActive: root.textEntryActive
         controlKeysActive: playbackControls.editing
         subtitleSelectionActive: stage.editing
-    }
-    FileDialog {
-        id: videoDialog
-        objectName: "videoPicker"
-        title: root.appendToQueue ? "Add videos to queue" : "Open videos"
-        fileMode: FileDialog.OpenFiles
-        nameFilters: ["Video files (*.mp4 *.mkv *.webm *.mov *.m4v *.avi *.mpg *.mpeg *.ts *.wmv)", "All files (*)"]
-        onAccepted: {
-            if (root.appendToQueue)
-                root.session.queue.append(selectedFiles);
-            else
-                root.session.openVideos(selectedFiles);
-            root.appendToQueue = false;
-        }
-        onRejected: root.appendToQueue = false
-    }
-    FileDialog {
-        id: subtitleDialog
-        objectName: "primaryPicker"
-        title: "Choose Primary subtitles"
-        nameFilters: ["Subtitle files (*.srt *.vtt *.ass *.ssa *.sup *.sub *.idx)"]
-        onAccepted: root.session.openSubtitles(selectedFile)
-    }
-
-    FileDialog {
-        id: translationDialog
-        objectName: "secondaryPicker"
-        title: "Choose Secondary subtitles"
-        nameFilters: ["Subtitle files (*.srt *.vtt *.ass *.ssa *.sup *.sub *.idx)"]
-        onAccepted: root.session.openTranslation(selectedFile)
     }
     DropArea {
         anchors.fill: parent
@@ -603,138 +254,16 @@ ApplicationWindow {
             }
         }
     }
-    FileDialog {
-        id: locateDialog
-        property url oldUrl
-        title: "Locate moved video"
-        onAccepted: root.recentVideos.relocate(oldUrl, selectedFile)
-    }
-    FolderDialog {
-        id: folderDialog
-        title: "Open video folder"
-        onAccepted: root.session.openVideos([selectedFolder])
-    }
-    FileDialog {
-        id: screenshotDialog
-        title: "Save screenshot"
-        fileMode: FileDialog.SaveFile
-        nameFilters: ["PNG image (*.png)"]
-        defaultSuffix: "png"
-        onAccepted: {
-            if (root.screenshotWithSubtitles)
-                stage.saveScreenshot(root.session.localFilePath(selectedFile));
-            else
-                root.session.saveScreenshot(selectedFile);
-        }
-    }
-    OptionsDialog {
-        id: playerOptionsDialog
-        objectName: "playerOptionsDialog"
-        title: "Playback options"
-        modal: true
-        anchors.centerIn: parent
-        width: Math.min(root.width - 40, 820)
-        height: Math.min(root.height - 40, 660)
-        contentItem: PlayerOptions {
-            id: playerOptions
-            objectName: "playerOptions"
-            onLoadSubtitles: secondary => secondary ? translationDialog.open() : subtitleDialog.open()
-            session: root.session
-            onAddFiles: {
-                root.appendToQueue = true;
-                videoDialog.open();
-            }
-        }
-        onClosed: root.contentItem.forceActiveFocus()
-    }
-    Dialog {
-        id: timeDialog
-        title: "Jump to time"
-        anchors.centerIn: parent
-        modal: true
-        standardButtons: Dialog.Cancel
-        ColumnLayout {
-            SearchField {
-                id: timeField
-                placeholderText: "HH:MM:SS or seconds"
-                Accessible.name: "Jump to time"
-                onAccepted: jumpButton.clicked()
-            }
-            Label {
-                id: timeError
-                color: Theme.muted
-                text: ""
-            }
-            ActionButton {
-                id: jumpButton
-                text: "Go"
-                onClicked: {
-                    if (root.session.jumpToTime(timeField.text))
-                        timeDialog.close();
-                    else
-                        timeError.text = "Enter a valid playback time.";
-                }
-            }
-        }
-        onOpened: timeField.forceActiveFocus()
-        onClosed: root.contentItem.forceActiveFocus()
-    }
-    Dialog {
-        id: urlDialog
-        title: "Open media URL"
-        modal: true
-        anchors.centerIn: parent
-        width: Math.min(root.width - 40, 560)
-        standardButtons: Dialog.Cancel
-        ColumnLayout {
-            width: parent.width
-            SearchField {
-                id: urlField
-                Layout.fillWidth: true
-                placeholderText: "https://…"
-                Accessible.name: "Media URL"
-            }
-            Label {
-                text: "Use a direct HTTP or HTTPS media URL."
-                color: Theme.muted
-            }
-            ActionButton {
-                text: "Open"
-                onClicked: {
-                    root.session.openVideos([urlField.text]);
-                    urlDialog.close();
-                }
-            }
-        }
-        onClosed: root.contentItem.forceActiveFocus()
-    }
-    OptionsDialog {
-        id: settingsDialog
-        objectName: "settingsDialog"
-        title: "Settings"
-        anchors.centerIn: parent
-        width: Math.min(root.width - 48, 720)
-        height: Math.min(root.height - 48, 700)
-        modal: true
-        contentItem: Loader {
-            id: settingsLoader
-            objectName: "settingsLoader"
-            active: false
-            // Retain drafts after first use, without constructing controls at startup.
-            sourceComponent: SettingsPane {
-                keymap: root.keymap
-                page: root.settingsPage
-                onPageChanged: root.settingsPage = page
-                session: root.session
-                fullscreenController: root.fullscreenController
-                appearance: root.appearance
-            }
-        }
-        onClosed: {
-            root.appearance.cancelPreview();
-            settingsLoader.active = false;
-            root.contentItem.forceActiveFocus();
-        }
+    PlayerDialogs {
+        id: dialogs
+        anchors.fill: parent
+        session: root.session
+        recentVideos: root.recentVideos
+        keymap: root.keymap
+        appearance: root.appearance
+        fullscreenController: root.fullscreenController
+        onFocusRequested: root.contentItem.forceActiveFocus()
+        onSubtitleScreenshotRequested: path => stage.saveScreenshot(path)
     }
     Drawer {
         id: studyDrawer
@@ -771,11 +300,8 @@ ApplicationWindow {
             Layout.margins: Theme.space5
             recentVideos: root.recentVideos
             session: root.session
-            onOpenVideo: videoDialog.open()
-            onLocateVideo: oldUrl => {
-                locateDialog.oldUrl = oldUrl;
-                locateDialog.open();
-            }
+            onOpenVideo: dialogs.openVideo()
+            onLocateVideo: oldUrl => dialogs.locateVideo(oldUrl)
         }
         ColumnLayout {
             spacing: 0
@@ -839,11 +365,11 @@ ApplicationWindow {
                                 }
                             }
                             InspectorTab {
-                                objectName: "meaningTab"
+                                objectName: "explanationTab"
                                 text: "Explanation"
                                 Layout.fillWidth: true
                                 checked: root.inspectorTab === 1 && !root.dictionaryOpen
-                                onClicked: root.openMeaning()
+                                onClicked: root.openExplanation()
                             }
                             IconButton {
                                 name: "x"
@@ -862,14 +388,14 @@ ApplicationWindow {
                             TranscriptPane {
                                 id: transcript
                                 session: root.session
-                                onPrimaryRequested: subtitleDialog.open()
-                                onSecondaryRequested: translationDialog.open()
+                                onPrimaryRequested: dialogs.openPrimarySubtitles()
+                                onSecondaryRequested: dialogs.openSecondarySubtitles()
                             }
                             Loader {
-                                id: meaningLoader
-                                objectName: "meaningLoader"
+                                id: explanationLoader
+                                objectName: "explanationLoader"
                                 active: root.inspectorTab === 1
-                                sourceComponent: MeaningPane {
+                                sourceComponent: ExplanationPane {
                                     session: root.session
                                     onFlashcardsRequested: root.openStudy(1)
                                 }
