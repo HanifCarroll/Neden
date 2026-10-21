@@ -10,7 +10,8 @@
 #include <QRegularExpression>
 
 LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
-    : QObject(parent), playerPreferences(playback, this), studyInteraction(*playback, subtitleTimeline, this),
+    : QObject(parent), playerPreferences(playback, this), mediaHistory(playerPreferences, this),
+      studyInteraction(*playback, subtitleTimeline, this),
       playbackEngine(playback) {
     connect(playbackEngine, &PlaybackEngine::positionChanged, this, &LearningSession::positionChanged);
     connect(playbackEngine, &PlaybackEngine::durationChanged, this, &LearningSession::durationChanged);
@@ -31,8 +32,7 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
     connect(playbackEngine, &PlaybackEngine::stateChanged, this, &LearningSession::playbackStateChanged);
     connect(playbackEngine, &PlaybackEngine::finished, this, [this] {
         checkpoint();
-        if (recentVideos && mediaReady && rememberCurrent && playerPreferences.rememberHistory())
-            recentVideos->setFinished(QUrl::fromLocalFile(currentMediaPath), true);
+        mediaHistory.setFinished(true);
         setPaused(true);
         if (mediaQueue.autoplay() && mediaQueue.hasNext())
             mediaQueue.next();
@@ -58,9 +58,7 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
         statusText = "Screenshot saved";
         emit statusChanged();
     });
-    checkpointTimer.setInterval(5000);
-    connect(&checkpointTimer, &QTimer::timeout, this, &LearningSession::checkpoint);
-    checkpointTimer.start();
+    connect(&mediaHistory, &MediaHistory::checkpointRequested, this, &LearningSession::checkpoint);
     connect(playbackEngine, &PlaybackEngine::failed, this, [this] {
         statusText = playbackEngine->error().isEmpty() ? "Cannot play this file." : playbackEngine->error();
         emit statusChanged();
@@ -87,11 +85,7 @@ LearningSession::~LearningSession() {
 }
 
 void LearningSession::setRecentVideos(RecentVideos *videos) {
-    recentVideos = videos;
-    connect(videos, &RecentVideos::removed, this, [this](const QString &path) {
-        if (currentMediaPath == path)
-            rememberCurrent = false;
-    });
+    mediaHistory.setHistory(videos);
 }
 
 QString LearningSession::mediaTitle() const {
@@ -119,34 +113,20 @@ QString LearningSession::translationSubtitleName() const {
     return subtitleTimeline.name(SubtitleRole::Secondary);
 }
 
-void LearningSession::checkpoint() {
-    if (!recentVideos || !mediaReady || !rememberCurrent || !playerPreferences.rememberHistory())
-        return;
-
-    // 1. Save the current viewing position, preserving a pending resume target.
-    const double seconds = pendingResumeSeconds >= 0         ? pendingResumeSeconds
-                           : pendingSubtitleSeekSeconds >= 0 ? pendingSubtitleSeekSeconds
-                                                             : playbackEngine->snapshotPosition();
-    if (!std::isfinite(seconds) || seconds < 0)
-        return;
-
+RecentVideo LearningSession::historySnapshot() const {
+    const double seconds = pendingSubtitleSeekSeconds >= 0 ? pendingSubtitleSeekSeconds
+                                                          : playbackEngine->snapshotPosition();
     RecentVideo video{currentMediaPath, seconds, qMax(0.0, duration()), rememberedSourceSubtitlePath,
                       rememberedTranslationSubtitlePath};
     video.primaryDelay = primaryDelaySeconds;
     video.secondaryDelay = secondaryDelaySeconds;
     video.primaryNativeTrack = nativePrimary;
     video.secondaryNativeTrack = nativeSecondary;
-    const auto previous = recentVideos->find(currentMediaPath);
-    if (previous && previous->position == video.position && previous->duration == video.duration &&
-        previous->primarySubtitlePath == video.primarySubtitlePath &&
-        previous->secondarySubtitlePath == video.secondarySubtitlePath &&
-        previous->primaryDelay == video.primaryDelay && previous->secondaryDelay == video.secondaryDelay &&
-        previous->primaryNativeTrack == video.primaryNativeTrack &&
-        previous->secondaryNativeTrack == video.secondaryNativeTrack)
-        return;
+    return video;
+}
 
-    // 2. Commit only changed positions or track associations to local history.
-    recentVideos->remember(video);
+void LearningSession::checkpoint() {
+    mediaHistory.checkpoint(historySnapshot());
 }
 
 void LearningSession::finishOpening(const QString &path) {
@@ -155,8 +135,7 @@ void LearningSession::finishOpening(const QString &path) {
 
     // 1. Restore each track independently before checkpoints can replace its saved association.
     playerPreferences.applyMedia();
-    const auto saved =
-        recentVideos && playerPreferences.rememberHistory() ? recentVideos->find(path) : std::nullopt;
+    const auto saved = mediaHistory.savedVideo();
     const QString trackWarning = saved ? restoreSubtitleTracks(*saved) : QString();
 
     // 2. Restore the precise position and start playback even if a subtitle file is unavailable.
@@ -168,26 +147,15 @@ void LearningSession::finishOpening(const QString &path) {
         else
             openTranslation(droppedSubtitles[index]);
     }
-    pendingResumeSeconds = saved ? (saved->finished ? 0 : saved->position) : -1;
-    if (pendingResumeSeconds > 0) {
-        if (duration() > 0)
-            pendingResumeSeconds = qMin(pendingResumeSeconds, duration());
-        playbackEngine->seek(pendingResumeSeconds);
-    } else {
-        pendingResumeSeconds = -1;
-    }
+    const double resumePosition = mediaHistory.prepareResume(duration());
+    if (resumePosition > 0)
+        playbackEngine->seek(resumePosition);
     setPaused(false);
     statusText = trackWarning.isEmpty() ? "Ready to explore" : trackWarning;
     emit statusChanged();
 
     // 3. Promote only successful opens, retaining the target until playback reaches it.
-    if (recentVideos && rememberCurrent && playerPreferences.rememberHistory()) {
-        recentVideos->remember(
-            {currentMediaPath, pendingResumeSeconds >= 0 ? pendingResumeSeconds : position(),
-             qMax(0.0, duration()), rememberedSourceSubtitlePath, rememberedTranslationSubtitlePath},
-            true);
-        checkpoint();
-    }
+    mediaHistory.recordOpened(historySnapshot());
 }
 
 QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
@@ -303,13 +271,12 @@ void LearningSession::openVideo(const QUrl &url) {
     checkpoint();
     mediaReady = false;
     pendingDroppedSubtitles.clear();
-    pendingResumeSeconds = -1;
-    rememberCurrent = !remote;
     previousSeekPosition = scrubStart = -1;
     clearLoop();
     resetInteraction(true);
     setPaused(true);
     currentMediaPath = remote ? url.toString(QUrl::FullyEncoded) : mediaPathIdentity(file.absoluteFilePath());
+    mediaHistory.beginMedia(currentMediaPath, !remote);
     mediaQueue.setCurrent(remote ? url : QUrl::fromLocalFile(currentMediaPath));
     playerPreferences.beginMedia(currentMediaPath);
     if (!playerPreferences.rememberSpeed())
@@ -333,7 +300,7 @@ void LearningSession::openVideo(const QUrl &url) {
     if (studyServices && remote)
         studyServices->subtitles()->cancel();
     if (studyServices && !remote) {
-        const auto saved = recentVideos ? recentVideos->find(currentMediaPath) : std::nullopt;
+        const auto saved = mediaHistory.savedVideo();
         studyServices->subtitles()->setMedia(currentMediaPath,
                                              !saved || saved->primarySubtitlePath.isEmpty());
     }
@@ -383,7 +350,7 @@ void LearningSession::seek(double seconds) {
         return;
     previousSeekPosition = position();
     resetInteraction();
-    pendingResumeSeconds = -1;
+    mediaHistory.cancelResume();
     playbackEngine->seek(qBound(0.0, seconds, duration()));
 }
 void LearningSession::volume(double level) {
@@ -434,7 +401,7 @@ void LearningSession::seekSubtitle(double seconds) {
 
     // Pause before seeking so neither an asynchronous seek nor closing a definition resumes playback.
     resetInteraction();
-    pendingResumeSeconds = -1;
+    mediaHistory.cancelResume();
     setPaused(true);
     pendingSubtitleSeekSeconds = qBound(0.0, seconds, duration());
     pendingSubtitleCueIndex = subtitleTimeline.active(qRound64(pendingSubtitleSeekSeconds * 1000));
@@ -470,7 +437,7 @@ void LearningSession::playSubtitle(int index) {
 
 void LearningSession::playSpan(double start, double end) {
     resetInteraction();
-    pendingResumeSeconds = -1;
+    mediaHistory.cancelResume();
     setPaused(true);
     replayStartSeconds = start;
     replayEndSeconds = end;
@@ -501,11 +468,11 @@ void LearningSession::finishReplay() {
 }
 
 void LearningSession::saveCard() {
-    studyInteraction.saveCard();
+    const auto result = studyInteraction.saveCard();
+    emit flashcardSaveFinished(result.success, result.message);
 }
 void LearningSession::syncPosition() {
-    if (pendingResumeSeconds >= 0 && std::abs(position() - pendingResumeSeconds) < 1)
-        pendingResumeSeconds = -1;
+    mediaHistory.observePosition(position());
     if (pendingSubtitleSeekSeconds >= 0 && std::abs(position() - pendingSubtitleSeekSeconds) < 0.05) {
         pendingSubtitleSeekSeconds = -1;
         pendingSubtitleCueIndex = -1;
@@ -757,8 +724,7 @@ void LearningSession::undoSeek() {
     seek(target);
 }
 void LearningSession::startOver() {
-    if (recentVideos && rememberCurrent && playerPreferences.rememberHistory())
-        recentVideos->setFinished(QUrl::fromLocalFile(currentMediaPath), false);
+    mediaHistory.setFinished(false);
     seek(0);
     setPaused(false);
 }
@@ -837,10 +803,8 @@ void LearningSession::revealFile() {
         QDesktopServices::openUrl(QUrl::fromLocalFile(file.absolutePath()));
 }
 void LearningSession::clearHistory() {
-    if (recentVideos)
-        recentVideos->clear();
+    mediaHistory.clear();
     playerPreferences.clearMedia();
-    rememberCurrent = false;
 }
 void LearningSession::saveScreenshot(const QUrl &url) {
     if (url.isLocalFile())

@@ -4,6 +4,11 @@
 #include <QVariantList>
 #include <QUrl>
 #include <QtQml/qqmlregistration.h>
+struct FlashcardSaveResult {
+    bool success;
+    QString message;
+};
+
 class FlashcardDeck : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -14,7 +19,7 @@ public:
     explicit FlashcardDeck(ProfileStore &store, QObject *parent = nullptr);
     QVariantList cards() const { return savedCards.toVariantList(); }
     QString message() const { return statusText; }
-    void saveCard(const QString &front, const QString &context, const QString &back, double seconds,
+    FlashcardSaveResult saveCard(const QString &front, const QString &context, const QString &back, double seconds,
                   const QString &media = {});
     Q_INVOKABLE void removeCard(int index);
     Q_INVOKABLE void reviewCard(int index, bool remembered);

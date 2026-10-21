@@ -3,10 +3,9 @@
 #include "study_services.h"
 #include "study_interaction.h"
 #include "subtitle_timeline.h"
-#include "recent_videos.h"
+#include "media_history.h"
 #include "media_queue.h"
 #include "player_preferences.h"
-#include <QTimer>
 #include <QUrl>
 #include "playback_engine.h"
 
@@ -151,6 +150,7 @@ public:
     Q_INVOKABLE void stopReplay();
     Q_INVOKABLE void saveCard();
 signals:
+    void flashcardSaveFinished(bool success, QString message);
     void positionChanged();
     void durationChanged();
     void pausedChanged();
@@ -168,6 +168,7 @@ signals:
     void loopChanged();
 
 private:
+    RecentVideo historySnapshot() const;
     void playSpan(double start, double end);
     int previousSubtitleIndex() const;
     int nextSubtitleIndex() const;
@@ -182,6 +183,7 @@ private:
     void applyNativeSubtitleTiming();
     MediaQueue mediaQueue;
     PlayerPreferences playerPreferences;
+    MediaHistory mediaHistory;
     double speedMultiplier = 1;
     double primaryDelaySeconds = 0, secondaryDelaySeconds = 0;
     double previousSeekPosition = -1, scrubStart = -1;
@@ -190,19 +192,15 @@ private:
     SubtitleTimeline subtitleTimeline;
     StudyInteraction studyInteraction;
     StudyServices *studyServices = nullptr;
-    RecentVideos *recentVideos = nullptr;
-    QTimer checkpointTimer;
     QString currentMediaPath;
     QString rememberedSourceSubtitlePath;
     QString rememberedTranslationSubtitlePath;
     double volumePercent = 60;
     double unmutedVolumePercent = 60;
-    double pendingResumeSeconds = -1;
     double pendingSubtitleSeekSeconds = -1;
     int pendingSubtitleCueIndex = -1;
     bool mediaReady = false;
     QList<QUrl> pendingDroppedSubtitles;
-    bool rememberCurrent = true;
     int currentSecondaryCueIndex = -1;
     PlaybackEngine *playbackEngine;
     int currentPrimaryCueIndex = -1;

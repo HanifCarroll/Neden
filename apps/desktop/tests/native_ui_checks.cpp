@@ -1100,7 +1100,7 @@ private slots:
             QFile file(path);
             QVERIFY(file.open(QIODevice::WriteOnly));
             file.close();
-            QVERIFY(recent->remember({path, 20, 100}, true));
+            QVERIFY(recent->recordOpened({path, 20, 100}));
         }
         window->setProperty("showRecent", true);
         auto *list = visualItem(window->contentItem(), "recentVideosList");

@@ -448,7 +448,9 @@ private slots:
     void persistentCardsAndLiteralExport() {
         QTemporaryDir directory;
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.deck()->saveCard("ışık", "<script>context</script>\nline", "light\tbright", 1.5);
+        const auto result = study.deck()->saveCard("ışık", "<script>context</script>\nline", "light\tbright", 1.5);
+        QVERIFY(result.success);
+        QCOMPARE(result.message, QString("Flashcard saved on this device."));
         QCOMPARE(study.deck()->cards().size(), 1);
         study.deck()->exportCards(QUrl::fromLocalFile(directory.filePath("cards.tsv")));
         QFile exportFile(directory.filePath("cards.tsv"));
@@ -470,7 +472,9 @@ private slots:
         file.write("broken data");
         file.close();
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.deck()->saveCard("ışık", "", "light", 0);
+        const auto result = study.deck()->saveCard("ışık", "", "light", 0);
+        QVERIFY(!result.success);
+        QVERIFY(!result.message.isEmpty());
         QCOMPARE(study.deck()->cards().size(), 0);
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), QByteArray("broken data"));
@@ -483,7 +487,9 @@ private slots:
         file.write(data);
         file.close();
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
-        study.deck()->saveCard("ışık", "", "light", 0);
+        const auto result = study.deck()->saveCard("ışık", "", "light", 0);
+        QVERIFY(!result.success);
+        QVERIFY(!result.message.isEmpty());
         QCOMPARE(study.deck()->cards().size(), 0);
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), data);

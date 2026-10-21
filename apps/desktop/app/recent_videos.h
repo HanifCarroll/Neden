@@ -39,7 +39,8 @@ public:
     int count() const { return videos.size(); }
     QString error() const { return errorText; }
     std::optional<RecentVideo> find(const QString &path) const;
-    bool remember(const RecentVideo &video, bool promote = false);
+    bool recordOpened(const RecentVideo &video);
+    bool saveProgress(const RecentVideo &video);
     Q_INVOKABLE void remove(const QUrl &url);
     Q_INVOKABLE void clear();
     Q_INVOKABLE void setFinished(const QUrl &url, bool finished);
@@ -50,6 +51,8 @@ signals:
     void removed(QString path);
 
 private:
+    enum class UpdateKind { Opened, Progress };
+    bool update(const RecentVideo &video, UpdateKind kind);
     void load();
     bool persist(const QList<RecentVideo> &next);
     void setError(const QString &message);

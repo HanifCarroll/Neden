@@ -24,18 +24,18 @@ bool FlashcardDeck::persist() {
     return true;
 }
 
-void FlashcardDeck::saveCard(const QString &front, const QString &context, const QString &back,
+FlashcardSaveResult FlashcardDeck::saveCard(const QString &front, const QString &context, const QString &back,
                              double seconds, const QString &mediaPath) {
     if (front.trimmed().isEmpty() || front.size() > 4000 || context.size() > 12000 ||
         savedCards.size() >= 10000 || !std::isfinite(seconds) || seconds < 0 ||
         back.toUtf8().size() > 64 * 1024) {
         setMessage("Choose a short selection; the deck holds at most 10,000 cards.");
-        return;
+        return {false, statusText};
     }
 
     if (back.trimmed().isEmpty()) {
         setMessage("Complete an explanation or load a translation before saving a card.");
-        return;
+        return {false, statusText};
     }
     const QJsonObject card{{"front", front},
                            {"back", back},
@@ -48,9 +48,10 @@ void FlashcardDeck::saveCard(const QString &front, const QString &context, const
     savedCards.append(card);
     if (!persist()) {
         savedCards = previous;
-        return;
+        return {false, statusText};
     }
     setMessage("Flashcard saved on this device.");
+    return {true, statusText};
 }
 
 void FlashcardDeck::removeCard(int index) {

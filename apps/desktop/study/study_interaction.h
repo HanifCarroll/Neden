@@ -24,7 +24,7 @@ public:
     void reset(bool clearConversation = false);
     void dismiss();
     void cueChanged() { closeWordCard(false); }
-    void saveCard();
+    FlashcardSaveResult saveCard();
 
 private:
     StudyTarget capture(const QString &text, SubtitleRole role) const;

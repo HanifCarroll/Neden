@@ -497,7 +497,7 @@ private slots:
             file.write("1\n00:00:00,000 --> 00:00:24,000\nI saw a light.\n");
         }
         RecentVideos recent(directory.path());
-        QVERIFY(recent.remember({video, 12.25, 24, primary, secondary}, true));
+        QVERIFY(recent.recordOpened({video, 12.25, 24, primary, secondary}));
         {
             FakePlayback playback;
             LearningSession session(&playback);
@@ -542,7 +542,7 @@ private slots:
         file.close();
         QVERIFY(QFile::exists(decomposed));
         RecentVideos recent(directory.path());
-        QVERIFY(recent.remember({composed, 12.345, 24}, true));
+        QVERIFY(recent.recordOpened({composed, 12.345, 24}));
         FakePlayback playback;
         LearningSession session(&playback);
         session.setRecentVideos(&recent);
@@ -582,7 +582,7 @@ private slots:
             QVERIFY(file.open(QIODevice::WriteOnly));
         }
         RecentVideos recent(directory.path());
-        QVERIFY(recent.remember({first, 12.5, 24}, true));
+        QVERIFY(recent.recordOpened({first, 12.5, 24}));
         FakePlayback playback;
         playback.completeImmediately = false;
         LearningSession session(&playback);
@@ -601,7 +601,7 @@ private slots:
         QVERIFY(file.open(QIODevice::WriteOnly));
         file.close();
         RecentVideos recent(directory.path());
-        QVERIFY(recent.remember({file.fileName(), 12.345, 24}, true));
+        QVERIFY(recent.recordOpened({file.fileName(), 12.345, 24}));
         FakePlayback playback;
         playback.applySeekImmediately = false;
         LearningSession session(&playback);

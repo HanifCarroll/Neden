@@ -187,7 +187,18 @@ bool RecentVideos::persist(const QList<RecentVideo> &next) {
     return true;
 }
 
-bool RecentVideos::remember(const RecentVideo &requested, bool promote) {
+bool RecentVideos::recordOpened(const RecentVideo &video) {
+    auto opened = video;
+    opened.finished = false;
+    return update(opened, UpdateKind::Opened);
+}
+
+bool RecentVideos::saveProgress(const RecentVideo &video) {
+    return update(video, UpdateKind::Progress);
+}
+
+bool RecentVideos::update(const RecentVideo &requested, UpdateKind kind) {
+    const bool promote = kind == UpdateKind::Opened;
     if (!validVideo(requested))
         return false;
 
@@ -206,6 +217,14 @@ bool RecentVideos::remember(const RecentVideo &requested, bool promote) {
     if (existing >= 0 && !promote) {
         // Periodic checkpoints must retain an explicit completion decision.
         video.finished = next[existing].finished;
+        const auto &previous = next[existing];
+        if (previous.position == video.position && previous.duration == video.duration &&
+            previous.primarySubtitlePath == video.primarySubtitlePath &&
+            previous.secondarySubtitlePath == video.secondarySubtitlePath &&
+            previous.primaryDelay == video.primaryDelay && previous.secondaryDelay == video.secondaryDelay &&
+            previous.primaryNativeTrack == video.primaryNativeTrack &&
+            previous.secondaryNativeTrack == video.secondaryNativeTrack)
+            return true;
         next[existing] = video;
     } else {
         if (existing >= 0)

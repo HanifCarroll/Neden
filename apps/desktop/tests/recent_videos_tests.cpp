@@ -17,8 +17,8 @@ private slots:
         const auto secondary = directory.filePath("translation.en.srt");
         {
             RecentVideos videos(directory.path());
-            QVERIFY(videos.remember({first, 1234.56789, 4300, primary, secondary}, true));
-            QVERIFY(videos.remember({second, 18.125, 900}, true));
+            QVERIFY(videos.recordOpened({first, 1234.56789, 4300, primary, secondary}));
+            QVERIFY(videos.recordOpened({second, 18.125, 900}));
         }
         RecentVideos restored(directory.path());
         QCOMPARE(restored.count(), 2);
@@ -31,9 +31,33 @@ private slots:
         QVERIFY(savedFile.open(QIODevice::ReadOnly));
         const auto savedBytes = savedFile.readAll();
         QVERIFY(!savedBytes.contains("language"));
-        QVERIFY(restored.remember({first, 1250.5, 4300}, true));
+        QVERIFY(restored.recordOpened({first, 1250.5, 4300}));
         QCOMPARE(restored.count(), 2);
         QCOMPARE(restored.data(restored.index(0), RecentVideos::MediaTitle).toString(), QString("İstanbul"));
+    }
+    void unchangedProgressPreservesCompletionAndListOrder() {
+        QTemporaryDir directory;
+        RecentVideos history(directory.path());
+        RecentVideo first{directory.filePath("first.webm"), 20, 100};
+        RecentVideo second{directory.filePath("second.webm"), 30, 100};
+        QVERIFY(history.recordOpened(first));
+        QVERIFY(history.recordOpened(second));
+        history.setFinished(QUrl::fromLocalFile(first.path), true);
+        QSignalSpy changed(&history, &RecentVideos::dataChanged);
+        QSignalSpy reset(&history, &RecentVideos::modelReset);
+        QVERIFY(history.saveProgress(first));
+        QCOMPARE(changed.count(), 0);
+        QCOMPARE(reset.count(), 0);
+        QVERIFY(history.find(first.path)->finished);
+        QCOMPARE(history.data(history.index(0), RecentVideos::FilePath).toString(), second.path);
+        first.primaryDelay = 0.5;
+        QVERIFY(history.saveProgress(first));
+        QCOMPARE(changed.count(), 1);
+        first.finished = true;
+        QVERIFY(history.recordOpened(first));
+        QVERIFY(!history.find(first.path)->finished);
+        QCOMPARE(reset.count(), 1);
+        QCOMPARE(history.data(history.index(0), RecentVideos::FilePath).toString(), first.path);
     }
     void olderHistoryLoadsWithoutLosingPositions() {
         QTemporaryDir directory;
@@ -47,7 +71,7 @@ private slots:
         QVERIFY(recent.error().isEmpty());
         QCOMPARE(recent.find(video)->position, 12.345678);
         QVERIFY(recent.find(video)->primarySubtitlePath.isEmpty());
-        QVERIFY(recent.remember({video, 20, 100}, true));
+        QVERIFY(recent.recordOpened({video, 20, 100}));
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(QJsonDocument::fromJson(file.readAll()).object().value("version").toInt(), 4);
     }
@@ -60,13 +84,13 @@ private slots:
         RecentVideo video{path, 95, 100, directory.filePath("primary.srt"), directory.filePath("secondary.srt")};
         video.primaryDelay = 0.5;
         video.secondaryNativeTrack = "3";
-        QVERIFY(videos.remember(video, true));
+        QVERIFY(videos.recordOpened(video));
         QCOMPARE(unfinished.rowCount(), 1); // Near the end is not completion.
         videos.setFinished(QUrl::fromLocalFile(path), true);
         QCOMPARE(unfinished.rowCount(), 0);
         QCOMPARE(videos.count(), 1);
         video.position = 98;
-        QVERIFY(videos.remember(video));
+        QVERIFY(videos.saveProgress(video));
         QVERIFY(videos.find(path)->finished);
         QCOMPARE(unfinished.rowCount(), 0);
         RecentVideos restored(directory.path());
@@ -83,7 +107,7 @@ private slots:
         QCOMPARE(unfinished.rowCount(), 1);
         videos.setFinished(QUrl::fromLocalFile(path), true);
         video.position = 0;
-        QVERIFY(videos.remember(video, true));
+        QVERIFY(videos.recordOpened(video));
         QVERIFY(!videos.find(path)->finished);
         QCOMPARE(unfinished.rowCount(), 1);
     }
@@ -93,7 +117,7 @@ private slots:
         QVERIFY(media.open(QIODevice::WriteOnly));
         media.close();
         RecentVideos videos(directory.path());
-        QVERIFY(videos.remember({media.fileName(), 42.125, 100}, true));
+        QVERIFY(videos.recordOpened({media.fileName(), 42.125, 100}));
         videos.remove(QUrl::fromLocalFile(media.fileName()));
         QCOMPARE(videos.count(), 0);
         QVERIFY(media.exists());
@@ -108,16 +132,16 @@ private slots:
         file.close();
         RecentVideos videos(directory.path());
         QVERIFY(!videos.error().isEmpty());
-        QVERIFY(!videos.remember({directory.filePath("new.webm"), 1, 2}, true));
+        QVERIFY(!videos.recordOpened({directory.filePath("new.webm"), 1, 2}));
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), QByteArray("{broken history"));
     }
     void rejectsRemotePathsAndNonfinitePositions() {
         QTemporaryDir directory;
         RecentVideos videos(directory.path());
-        QVERIFY(!videos.remember({"https://example.invalid/video.mp4", 1, 2}));
-        QVERIFY(!videos.remember({directory.filePath("video.mp4"), qQNaN(), 2}));
-        QVERIFY(!videos.remember(
+        QVERIFY(!videos.saveProgress({"https://example.invalid/video.mp4", 1, 2}));
+        QVERIFY(!videos.saveProgress({directory.filePath("video.mp4"), qQNaN(), 2}));
+        QVERIFY(!videos.saveProgress(
             {directory.filePath("video.mp4"), 1, 2, "https://example.org/subtitles.srt", {}}));
         QCOMPARE(videos.count(), 0);
     }

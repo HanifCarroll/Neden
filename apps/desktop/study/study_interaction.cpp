@@ -153,24 +153,24 @@ void StudyInteraction::reset(bool clear) {
     selectedRole = SubtitleRole::Primary;
     emit selectionChanged();
 }
-void StudyInteraction::saveCard() {
+FlashcardSaveResult StudyInteraction::saveCard() {
     if (!studyServices)
-        return;
+        return {false, "Study services are unavailable."};
     const auto &explanation = *studyServices->explanation();
     // A displayed explanation always saves its original target, even after playback seeks elsewhere.
     if (explanation.target()) {
         const auto &target = *explanation.target();
-        studyServices->deck()->saveCard(target.selection, target.sourceCue,
-                                        explanation.state() == "complete" ? explanation.answer()
-                                                                          : target.translation,
-                                        target.positionMs / 1000.0, target.mediaPath);
+        return studyServices->deck()->saveCard(
+            target.selection, target.sourceCue,
+            explanation.state() == "complete" ? explanation.answer() : target.translation,
+            target.positionMs / 1000.0, target.mediaPath);
     } else {
         try {
             const auto target = capture(selectedText, selectedRole);
-            studyServices->deck()->saveCard(target.selection, target.sourceCue, target.translation,
-                                            target.positionMs / 1000.0, target.mediaPath);
+            return studyServices->deck()->saveCard(target.selection, target.sourceCue, target.translation,
+                                                   target.positionMs / 1000.0, target.mediaPath);
         } catch (const std::exception &exception) {
-            emit error(QString::fromUtf8(exception.what()));
+            return {false, QString::fromUtf8(exception.what())};
         }
     }
 }
