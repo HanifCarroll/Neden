@@ -54,6 +54,44 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void finishedMediaRestartsWithSubtitleSettingsAndStaysOutOfContinueWatching() {
+        QTemporaryDir directory;
+        const auto video = directory.filePath("episode.webm");
+        const auto primary = directory.filePath("primary.srt");
+        const auto secondary = directory.filePath("secondary.srt");
+        for (const auto &path : {video, primary, secondary}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("1\n00:00:00,000 --> 00:00:24,000\nTest subtitle\n");
+        }
+        RecentVideos recent(directory.path());
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setRecentVideos(&recent);
+        const auto url = QUrl::fromLocalFile(video);
+        session.openVideo(url);
+        session.openSubtitles(QUrl::fromLocalFile(primary));
+        session.openTranslation(QUrl::fromLocalFile(secondary));
+        playback.advance(23);
+        session.checkpoint();
+        QVERIFY(!recent.find(video)->finished);
+        playback.finish();
+        QVERIFY(recent.find(video)->finished);
+        session.checkpoint();
+        QVERIFY(recent.find(video)->finished);
+        session.openVideo(url);
+        QCOMPARE(session.position(), 0.0);
+        QVERIFY(!recent.find(video)->finished);
+        QCOMPARE(session.sourceSubtitleName(), QString("primary.srt"));
+        QCOMPARE(session.translationSubtitleName(), QString("secondary.srt"));
+        playback.advance(18);
+        recent.setFinished(url, true); // Stopping during credits is an explicit decision.
+        session.checkpoint();
+        QVERIFY(recent.find(video)->finished);
+        session.startOver();
+        QCOMPARE(playback.lastSeek, 0.0);
+        QVERIFY(!recent.find(video)->finished);
+    }
     void importedSubtitlesAreNotDuplicatedByNativeTrackDiscovery() {
         QTemporaryDir directory;
         QFile subtitles(directory.filePath("Turkish.srt"));

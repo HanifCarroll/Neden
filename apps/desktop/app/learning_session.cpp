@@ -31,6 +31,8 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
     connect(playbackEngine, &PlaybackEngine::stateChanged, this, &LearningSession::playbackStateChanged);
     connect(playbackEngine, &PlaybackEngine::finished, this, [this] {
         checkpoint();
+        if (recentVideos && mediaReady && rememberCurrent && playerPreferences.rememberHistory())
+            recentVideos->setFinished(QUrl::fromLocalFile(currentMediaPath), true);
         setPaused(true);
         if (mediaQueue.autoplay() && mediaQueue.hasNext())
             mediaQueue.next();
@@ -166,7 +168,7 @@ void LearningSession::finishOpening(const QString &path) {
         else
             openTranslation(droppedSubtitles[index]);
     }
-    pendingResumeSeconds = saved ? saved->position : -1;
+    pendingResumeSeconds = saved ? (saved->finished ? 0 : saved->position) : -1;
     if (pendingResumeSeconds > 0) {
         if (duration() > 0)
             pendingResumeSeconds = qMin(pendingResumeSeconds, duration());
@@ -755,6 +757,8 @@ void LearningSession::undoSeek() {
     seek(target);
 }
 void LearningSession::startOver() {
+    if (recentVideos && rememberCurrent && playerPreferences.rememberHistory())
+        recentVideos->setFinished(QUrl::fromLocalFile(currentMediaPath), false);
     seek(0);
     setPaused(false);
 }

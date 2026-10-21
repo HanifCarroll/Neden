@@ -23,7 +23,7 @@ The media player work is divided into decoding, durable choices, queue progressi
 | Picture | Rotation, aspect override, fit/fill, deinterlace and reset; hardware decoder and media information |
 | Window | Instant/fullscreen preferences retained, floating always-on-top mode, compact controls for small windows, control/cursor inactivity hiding during playback and pause |
 | Capture | Clean source frame from mpv with asynchronous Qt PNG encoding, or displayed video with both QML subtitle tracks via the video-stage capture; success/failure feedback |
-| History | Resume, remove, locate a missing file, clear all history, disable future history, explicit speed persistence |
+| History | Continue watching hides finished videos; History retains all saved entries. Playback reaching the end marks completion. Mark as finished handles credits, and Mark unfinished reverses it. Play again starts completed videos at the beginning with saved subtitle settings. Resume, remove, locate a missing file, clear history, disable future history, and explicit speed persistence remain available. |
 | System | Screen-awake lifecycle, system transport/Now Playing adapters, pause on audio-device removal |
 
 Standalone arrow/M shortcuts remain suppressed while editing text or operating a focused control. Command/Ctrl subtitle navigation keeps its play-once-and-pause behavior. A single click on a paused video with the sidebar open closes the sidebar and resumes; the delayed single-click handler preserves double-click fullscreen and subtitle text interaction.

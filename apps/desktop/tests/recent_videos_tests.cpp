@@ -49,7 +49,43 @@ private slots:
         QVERIFY(recent.find(video)->primarySubtitlePath.isEmpty());
         QVERIFY(recent.remember({video, 20, 100}, true));
         QVERIFY(file.open(QIODevice::ReadOnly));
-        QCOMPARE(QJsonDocument::fromJson(file.readAll()).object().value("version").toInt(), 3);
+        QCOMPARE(QJsonDocument::fromJson(file.readAll()).object().value("version").toInt(), 4);
+    }
+    void completionFiltersWithoutLosingSettingsAndSurvivesCheckpoints() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("episode.webm");
+        RecentVideos videos(directory.path());
+        RecentVideosFilter unfinished;
+        unfinished.setHistory(&videos);
+        RecentVideo video{path, 95, 100, directory.filePath("primary.srt"), directory.filePath("secondary.srt")};
+        video.primaryDelay = 0.5;
+        video.secondaryNativeTrack = "3";
+        QVERIFY(videos.remember(video, true));
+        QCOMPARE(unfinished.rowCount(), 1); // Near the end is not completion.
+        videos.setFinished(QUrl::fromLocalFile(path), true);
+        QCOMPARE(unfinished.rowCount(), 0);
+        QCOMPARE(videos.count(), 1);
+        video.position = 98;
+        QVERIFY(videos.remember(video));
+        QVERIFY(videos.find(path)->finished);
+        QCOMPARE(unfinished.rowCount(), 0);
+        RecentVideos restored(directory.path());
+        QVERIFY(restored.find(path)->finished);
+        QCOMPARE(restored.find(path)->primarySubtitlePath, video.primarySubtitlePath);
+        QCOMPARE(restored.find(path)->secondarySubtitlePath, video.secondarySubtitlePath);
+        QCOMPARE(restored.find(path)->primaryDelay, 0.5);
+        QCOMPARE(restored.find(path)->secondaryNativeTrack, QString("3"));
+        unfinished.setIncludeFinished(true);
+        QCOMPARE(unfinished.rowCount(), 1);
+        QVERIFY(unfinished.data(unfinished.index(0, 0), RecentVideos::Finished).toBool());
+        unfinished.setIncludeFinished(false);
+        videos.setFinished(QUrl::fromLocalFile(path), false);
+        QCOMPARE(unfinished.rowCount(), 1);
+        videos.setFinished(QUrl::fromLocalFile(path), true);
+        video.position = 0;
+        QVERIFY(videos.remember(video, true));
+        QVERIFY(!videos.find(path)->finished);
+        QCOMPARE(unfinished.rowCount(), 1);
     }
     void removalPersistsWithoutDeletingMedia() {
         QTemporaryDir directory;

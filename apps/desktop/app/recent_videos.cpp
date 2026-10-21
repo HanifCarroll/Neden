@@ -65,6 +65,8 @@ QVariant RecentVideos::data(const QModelIndex &index, int role) const {
         return video.duration;
     case FileAvailable:
         return QFileInfo(video.path).isFile() && QFileInfo(video.path).isReadable();
+    case Finished:
+        return video.finished;
     default:
         return {};
     }
@@ -76,7 +78,8 @@ QHash<int, QByteArray> RecentVideos::roleNames() const {
             {FilePath, "filePath"},
             {ResumePosition, "resumePosition"},
             {DurationSeconds, "durationSeconds"},
-            {FileAvailable, "fileAvailable"}};
+            {FileAvailable, "fileAvailable"},
+            {Finished, "finished"}};
 }
 
 std::optional<RecentVideo> RecentVideos::find(const QString &path) const {
@@ -112,7 +115,7 @@ void RecentVideos::load() {
         const auto entries = root.value("videos").toArray();
         const int version = root.value("version").toInt();
         validStorage = error.error == QJsonParseError::NoError && document.isObject() &&
-                       (version >= 1 && version <= 3) && root.value("videos").isArray() &&
+                       (version >= 1 && version <= 4) && root.value("videos").isArray() &&
                        entries.size() <= maximumRecentVideos;
         QSet<QString> paths;
         for (const auto &entry : entries) {
@@ -125,10 +128,12 @@ void RecentVideos::load() {
             video.secondaryDelay = item.value("secondaryDelay").toDouble();
             video.primaryNativeTrack = item.value("primaryNativeTrack").toString();
             video.secondaryNativeTrack = item.value("secondaryNativeTrack").toString();
+            video.finished = item.value("finished").toBool();
             const bool validTrackFields =
                 (!item.contains("primarySubtitlePath") || item.value("primarySubtitlePath").isString()) &&
                 (!item.contains("secondarySubtitlePath") || item.value("secondarySubtitlePath").isString());
-            if (!entry.isObject() || !validTrackFields || !validVideo(video)) {
+            if (!entry.isObject() || !validTrackFields || !validVideo(video) ||
+                (item.contains("finished") && !item.value("finished").isBool())) {
                 validStorage = false;
                 break;
             }
@@ -165,9 +170,10 @@ bool RecentVideos::persist(const QList<RecentVideo> &next) {
         item.insert("secondaryDelay", video.secondaryDelay);
         item.insert("primaryNativeTrack", video.primaryNativeTrack);
         item.insert("secondaryNativeTrack", video.secondaryNativeTrack);
+        item.insert("finished", video.finished);
         entries.append(item);
     }
-    const auto bytes = QJsonDocument(QJsonObject{{"version", 3}, {"videos", entries}}).toJson();
+    const auto bytes = QJsonDocument(QJsonObject{{"version", 4}, {"videos", entries}}).toJson();
 
     // 2. Commit atomically so an interrupted update cannot truncate existing history.
     QSaveFile file(storageFile);
@@ -198,6 +204,8 @@ bool RecentVideos::remember(const RecentVideo &requested, bool promote) {
         }
     }
     if (existing >= 0 && !promote) {
+        // Periodic checkpoints must retain an explicit completion decision.
+        video.finished = next[existing].finished;
         next[existing] = video;
     } else {
         if (existing >= 0)
@@ -220,6 +228,23 @@ bool RecentVideos::remember(const RecentVideo &requested, bool promote) {
         emit countChanged();
     }
     return true;
+}
+
+void RecentVideos::setFinished(const QUrl &url, bool finished) {
+    if (!url.isLocalFile())
+        return;
+    const auto identity = mediaPathIdentity(url.toLocalFile());
+    auto next = videos;
+    for (int row = 0; row < next.size(); ++row) {
+        if (next[row].path != identity || next[row].finished == finished)
+            continue;
+        next[row].finished = finished;
+        if (!persist(next))
+            return;
+        videos = next;
+        emit dataChanged(index(row), index(row), {Finished});
+        return;
+    }
 }
 
 void RecentVideos::remove(const QUrl &url) {
@@ -279,4 +304,25 @@ bool RecentVideos::relocate(const QUrl &oldUrl, const QUrl &newUrl) {
     emit countChanged();
     emit removed(oldPath);
     return true;
+}
+
+void RecentVideosFilter::setHistory(RecentVideos *history) {
+    if (sourceModel() == history)
+        return;
+    setSourceModel(history);
+    emit historyChanged();
+}
+
+void RecentVideosFilter::setIncludeFinished(bool include) {
+    if (showFinished == include)
+        return;
+    beginFilterChange();
+    showFinished = include;
+    endFilterChange(Direction::Rows);
+    emit includeFinishedChanged();
+}
+
+bool RecentVideosFilter::filterAcceptsRow(int row, const QModelIndex &parent) const {
+    const auto entry = sourceModel()->index(row, 0, parent);
+    return showFinished || !sourceModel()->data(entry, RecentVideos::Finished).toBool();
 }

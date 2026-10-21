@@ -1,6 +1,7 @@
 #pragma once
 #include <QAbstractListModel>
 #include <QUrl>
+#include <QSortFilterProxyModel>
 #include <optional>
 #include <QtQml/qqmlregistration.h>
 
@@ -12,6 +13,7 @@ struct RecentVideo {
     QString secondarySubtitlePath{};
     double primaryDelay = 0, secondaryDelay = 0;
     QString primaryNativeTrack{}, secondaryNativeTrack{};
+    bool finished = false;
 };
 
 class RecentVideos : public QAbstractListModel {
@@ -27,7 +29,8 @@ public:
         FilePath,
         ResumePosition,
         DurationSeconds,
-        FileAvailable
+        FileAvailable,
+        Finished
     };
     explicit RecentVideos(QString directory, QObject *parent = nullptr);
     int rowCount(const QModelIndex &parent = {}) const override;
@@ -39,6 +42,7 @@ public:
     bool remember(const RecentVideo &video, bool promote = false);
     Q_INVOKABLE void remove(const QUrl &url);
     Q_INVOKABLE void clear();
+    Q_INVOKABLE void setFinished(const QUrl &url, bool finished);
     Q_INVOKABLE bool relocate(const QUrl &oldUrl, const QUrl &newUrl);
 signals:
     void countChanged();
@@ -53,4 +57,27 @@ private:
     QList<RecentVideo> videos;
     QString errorText;
     bool validStorage = true;
+};
+
+// A view of history that can hide completed entries without discarding their settings.
+class RecentVideosFilter : public QSortFilterProxyModel {
+    Q_OBJECT
+    QML_ELEMENT
+    Q_PROPERTY(RecentVideos *history READ history WRITE setHistory NOTIFY historyChanged)
+    Q_PROPERTY(bool includeFinished READ includeFinished WRITE setIncludeFinished NOTIFY includeFinishedChanged)
+public:
+    explicit RecentVideosFilter(QObject *parent = nullptr) : QSortFilterProxyModel(parent) {
+        setFilterRole(RecentVideos::Finished);
+    }
+    RecentVideos *history() const { return qobject_cast<RecentVideos *>(sourceModel()); }
+    void setHistory(RecentVideos *history);
+    bool includeFinished() const { return showFinished; }
+    void setIncludeFinished(bool include);
+signals:
+    void historyChanged();
+    void includeFinishedChanged();
+protected:
+    bool filterAcceptsRow(int row, const QModelIndex &parent) const override;
+private:
+    bool showFinished = false;
 };

@@ -11,6 +11,12 @@ Item {
     signal locateVideo(url oldUrl)
     signal openVideo
 
+    RecentVideosFilter {
+        id: historyView
+        history: pane.recentVideos
+        includeFinished: historyTabs.currentIndex === 1
+    }
+
     ColumnLayout {
         anchors.centerIn: parent
         width: Math.min(parent.width - 64, 640)
@@ -46,9 +52,23 @@ Item {
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
         }
+        SegmentBar {
+            id: historyTabs
+            Layout.fillWidth: true
+            SegmentButton {
+                objectName: "continueWatchingTab"
+                text: "Continue watching"
+                width: historyTabs.availableWidth / 2
+            }
+            SegmentButton {
+                objectName: "historyTab"
+                text: "History"
+                width: historyTabs.availableWidth / 2
+            }
+        }
         Label {
-            visible: pane.recentVideos.count === 0
-            text: "Open a video to get started. Your recent videos will appear here."
+            visible: recentList.count === 0
+            text: pane.recentVideos.count === 0 ? "Open a video to get started." : "You're all caught up. Finished videos are in History."
             color: Theme.muted
             font.pixelSize: Theme.body
             wrapMode: Text.WordWrap
@@ -57,13 +77,13 @@ Item {
         ListView {
             id: recentList
             objectName: "recentVideosList"
-            visible: pane.recentVideos.count > 0
+            visible: count > 0
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(contentHeight, 360)
             Layout.minimumHeight: 48
             clip: true
             spacing: Theme.space1
-            model: pane.recentVideos
+            model: historyView
             ScrollBar.vertical: ScrollBar {}
             delegate: ItemDelegate {
                 id: entry
@@ -75,16 +95,17 @@ Item {
                 required property real resumePosition
                 required property real durationSeconds
                 required property bool fileAvailable
+                required property bool finished
                 width: recentList.width
                 height: 48
                 padding: Theme.space3
                 hoverEnabled: true
-                Accessible.name: (entry.fileAvailable ? "Resume " : "Unavailable: ") + entry.mediaTitle
+                Accessible.name: (entry.fileAvailable ? (entry.finished ? "Play again: " : "Resume ") : "Unavailable: ") + entry.mediaTitle
                 onClicked: {
                     if (entry.fileAvailable)
                         pane.session.openVideo(entry.mediaUrl);
                 }
-                ToolTip.visible: hovered && !removeButton.hovered && !locateButton.hovered
+                ToolTip.visible: hovered && !removeButton.hovered && !locateButton.hovered && !finishButton.hovered
                 ToolTip.delay: 800
                 ToolTip.text: entry.fileAvailable ? entry.filePath : "Video unavailable. Reconnect its drive or remove it from this list."
                 background: Rectangle {
@@ -102,7 +123,7 @@ Item {
                         opacity: entry.fileAvailable ? 0.65 : 0.3
                     }
                     Label {
-                        text: (entry.index === 0 && entry.resumePosition > 0 ? "Resume " : "") + entry.mediaTitle
+                        text: (entry.finished ? "Play again · " : (entry.index === 0 && entry.resumePosition > 0 ? "Resume " : "")) + entry.mediaTitle
                         textFormat: Text.PlainText
                         color: entry.fileAvailable ? Theme.ink : Theme.muted
                         font.pixelSize: Theme.body
@@ -110,9 +131,18 @@ Item {
                         Layout.fillWidth: true
                     }
                     Label {
-                        text: entry.fileAvailable ? Theme.clock(entry.resumePosition) : "Unavailable"
+                        text: entry.fileAvailable ? (entry.finished ? "Finished" : Theme.clock(entry.resumePosition)) : "Unavailable"
                         color: Theme.muted
                         font.pixelSize: Theme.caption
+                    }
+                    ActionButton {
+                        id: finishButton
+                        objectName: "markFinishedButton"
+                        text: entry.finished ? "Mark unfinished" : "Mark as finished"
+                        flat: true
+                        implicitHeight: 30
+                        font.pixelSize: Theme.caption
+                        onClicked: pane.recentVideos.setFinished(entry.mediaUrl, !entry.finished)
                     }
                     ActionButton {
                         id: locateButton
