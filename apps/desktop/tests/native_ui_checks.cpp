@@ -156,7 +156,7 @@ private:
 
 private slots:
     void init() {
-        const QStringList headlessChecks{"sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -1037,6 +1037,26 @@ private slots:
         QCOMPARE(requests, 4);
         QCOMPARE(wordRequests, 2);
         QCOMPARE(study->explanation()->subject(), QString("dalmışım"));
+        auto *question = visualItem(window->contentItem(), "followUpInput");
+        auto *composer = visualItem(window->contentItem(), "followUpComposer");
+        auto *inputViewport = visualItem(window->contentItem(), "followUpScrollView");
+        auto *sendButton = visualItem(window->contentItem(), "sendFollowUpButton");
+        auto *saveButton = visualItem(window->contentItem(), "saveFlashcardButton");
+        QVERIFY(question && composer && inputViewport && sendButton && saveButton);
+        question->setProperty("text", "Why?");
+        QTRY_COMPARE(inputViewport->height(), sendButton->height());
+        const auto singleLineHeight = sendButton->height();
+        question->setProperty("text", QString("How does this expression work in a different sentence? ").repeated(10));
+        QTRY_VERIFY(inputViewport->height() > singleLineHeight);
+        QVERIFY(inputViewport->height() <= singleLineHeight * 2);
+        QCOMPARE(sendButton->height(), singleLineHeight);
+        QVERIFY(std::abs(composer->y() + composer->height() - composer->parentItem()->height()) < 1);
+        QVERIFY(saveButton->mapToScene(QPointF()).y() < composer->mapToScene(QPointF()).y());
+        const auto composerArtifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!composerArtifacts.isEmpty())
+            QVERIFY(window->grabWindow().save(composerArtifacts + "/follow-up-composer.png"));
+        question->setProperty("text", "");
+        QTRY_COMPARE(inputViewport->height(), singleLineHeight);
         const auto cardsBeforeSave = study->deck()->cards().size();
         auto *sidebar = visualItem(window->contentItem(), "learningInspector");
         QVERIFY(sidebar);
@@ -1048,6 +1068,7 @@ private slots:
         QVERIFY(saveFeedback);
         QTRY_VERIFY(saveFeedback->isVisible());
         QCOMPARE(saveFeedback->property("text").toString(), QString("Flashcard saved on this device."));
+        QTest::qWait(100); // Let the source actions wrap after the feedback link appears.
         click("viewFlashcardsButton");
         auto *studyDrawer = window->findChild<QObject *>("studyDrawer");
         auto *studyLoader = window->findChild<QObject *>("studyLoader");
@@ -1067,6 +1088,60 @@ private slots:
         QTest::qWait(450);
         QCOMPARE(study->words()->state(), QString("idle"));
         QVERIFY(!card->isVisible());
+    }
+
+    void recentHistoryKeepsFinishedVideosAccessible() {
+        session->setPaused(true);
+        recent->clear();
+        QTemporaryDir media;
+        const auto older = media.filePath("older.webm");
+        const auto latest = media.filePath("latest.webm");
+        for (const auto &path : {older, latest}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.close();
+            QVERIFY(recent->remember({path, 20, 100}, true));
+        }
+        window->setProperty("showRecent", true);
+        auto *list = visualItem(window->contentItem(), "recentVideosList");
+        QVERIFY(list);
+        const auto firstRow = [list]() {
+            QQuickItem *entry = nullptr;
+            QMetaObject::invokeMethod(list, "forceLayout");
+            QMetaObject::invokeMethod(list, "itemAtIndex", Q_RETURN_ARG(QQuickItem *, entry), Q_ARG(int, 0));
+            return entry;
+        };
+        const auto clickRowAction = [this, &firstRow](const QString &name) {
+            QTRY_VERIFY(firstRow());
+            auto *entry = firstRow();
+            QVERIFY(entry);
+            auto *button = visualItem(entry, name);
+            QVERIFY(button);
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                              button->mapToScene(QPointF(button->width() / 2, button->height() / 2)).toPoint());
+            QCoreApplication::processEvents();
+        };
+        QTRY_COMPARE(list->property("count").toInt(), 2);
+        QTRY_VERIFY(firstRow());
+        const auto historyArtifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!historyArtifacts.isEmpty())
+            QVERIFY(window->grabWindow().save(historyArtifacts + "/continue-watching.png"));
+        clickRowAction("markFinishedButton");
+        QTRY_COMPARE(list->property("count").toInt(), 1);
+        QVERIFY(recent->find(latest)->finished);
+        QCOMPARE(recent->count(), 2);
+        click("historyTab");
+        QTRY_COMPARE(list->property("count").toInt(), 2);
+        QTRY_VERIFY(firstRow() && firstRow()->property("finished").toBool());
+        clickRowAction("markFinishedButton");
+        QVERIFY(!recent->find(latest)->finished);
+        click("continueWatchingTab");
+        QTRY_COMPARE(list->property("count").toInt(), 2);
+        clickRowAction("removeRecentButton");
+        QTRY_COMPARE(list->property("count").toInt(), 1);
+        QVERIFY(QFile::exists(latest));
+        recent->clear();
+        window->setProperty("showRecent", false);
     }
 
     void sidebarSlidesWithoutResizingVideoPerFrame() {
