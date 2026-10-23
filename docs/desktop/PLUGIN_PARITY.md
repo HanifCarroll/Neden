@@ -4,7 +4,7 @@ The desktop player preserves the plugin’s language-learning workflow. `apps/ii
 
 | Capability | Desktop behavior |
 | --- | --- |
-| Phrase explanations | Double-click a word, finish a text selection, or use the primary subtitle’s hover **Explain line** action. The desktop first answer uses Translation and Breakdown. Each breakdown entry combines an expression’s contextual meaning with its useful grammar or usage, teaching each point once; follow-ups provide deeper detail. |
+| Phrase explanations | Double-click a word, finish a text selection, or use the primary subtitle’s hover **Explain line** action. The desktop first answer uses Translation and Breakdown. The breakdown covers every spoken word in source order, including short function words. Each entry gives its contextual meaning and useful grammar. Idiom components each receive an entry, with the combined meaning explained once at the final component; follow-ups provide deeper detail. |
 | Conversation context | Freeze the selected phrase, full source cue, three cues before and after, overlapping secondary cues when enabled, and language choices for the conversation. |
 | Follow-ups | Ask in Meaning; Enter sends, Shift–Enter adds a line. Completed history accompanies the question. Partial or failed answers are displayed but excluded from future request context. |
 | Streaming, Stop, Retry | Show incremental text, distinguish failed/incomplete/completed turns, and retry only on an explicit action. Retry replaces the interrupted turn. |
