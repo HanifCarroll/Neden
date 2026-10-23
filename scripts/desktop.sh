@@ -12,15 +12,18 @@ case "$command_name" in
 esac
 
 if [ "$(uname -s)" = Darwin ]; then
-    export DEVELOPER_DIR=${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}
     export QSG_RENDER_LOOP=basic
 fi
 
 if [ "$command_name" = core-test ]; then
     cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release -DNEDEN_CORE_ONLY=ON
 elif [ "$(uname -s)" = Darwin ]; then
-    cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release -DNEDEN_NATIVE_UI_CHECKS=OFF -DQT_QML_GENERATE_QMLLS_INI=ON \
+    set -- -DCMAKE_BUILD_TYPE=Release -DNEDEN_NATIVE_UI_CHECKS=OFF -DQT_QML_GENERATE_QMLLS_INI=ON \
         -DNEDEN_MPV_FRAMEWORKS="${NEDEN_MPV_FRAMEWORKS:-$repo_root/.cache/playback-frameworks}"
+    if [ -n "${NEDEN_SIGNING_IDENTITY:-}" ]; then
+        set -- "$@" "-DNEDEN_SIGNING_IDENTITY=$NEDEN_SIGNING_IDENTITY"
+    fi
+    cmake -S "$repo_root/apps/desktop" -B "$build_directory" "$@"
 else
     cmake -S "$repo_root/apps/desktop" -B "$build_directory" -DCMAKE_BUILD_TYPE=Release -DNEDEN_NATIVE_UI_CHECKS=OFF -DQT_QML_GENERATE_QMLLS_INI=ON \
         -DAUDITED_MPV_PREFIX="${AUDITED_MPV_PREFIX:?Set AUDITED_MPV_PREFIX to the reviewed LGPL runtime}"

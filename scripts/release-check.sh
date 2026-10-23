@@ -36,6 +36,7 @@ with zipfile.ZipFile(archive) as package:
     }
     assert required <= entries, f"Missing package members: {required - entries}"
     assert json.loads(package.read("Info.json")) == info, "Archive metadata differs from source"
+    assert (package.getinfo("native/stream-helper").external_attr >> 16) & 0o111, "Packaged helper lost executable permissions"
     expected_files = {str(path.relative_to(folder)) for path in folder.rglob("*") if path.is_file()}
     archived_files = {name for name in entries if not name.endswith("/")}
     assert archived_files == expected_files, "Archive file list differs from the built plugin"

@@ -3,7 +3,6 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 python3 "$repo_root/scripts/check_layout.py"
 cd "$repo_root/apps/iina-plugin"
-export DEVELOPER_DIR=${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}
 package="$repo_root/dist/io.github.hanifcarroll.iina-language-learning.iinaplugin"
 rm -rf "$package"
 mkdir -p "$package/native" "$package/ui" "$package/licenses"

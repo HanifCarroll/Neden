@@ -38,7 +38,7 @@ def local_signing_identity():
     for line in cache.splitlines():
         if line.startswith("NEDEN_SIGNING_IDENTITY:STRING="):
             return line.split("=", 1)[1]
-    raise SystemExit("No persistent signing identity in the configured desktop build")
+    raise SystemExit("No signing identity in the configured desktop build")
 
 
 def stage_module(source, destination):
@@ -145,7 +145,7 @@ def prepare_bundle(destination):
             if dependency.startswith("@loader_path/") and not (binary.parent / dependency.removeprefix("@loader_path/")).exists():
                 raise SystemExit(f"Missing loader-relative dependency in {binary.name}: {dependency}")
 
-    # 3. Preserve the established Keychain identity after all binary edits are complete.
+    # 3. Sign with the configured identity after all binary edits are complete.
     info_path = destination / "Contents/Info.plist"
     info = plistlib.loads(info_path.read_bytes())
     revision = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
@@ -161,8 +161,8 @@ def prepare_bundle(destination):
     shutil.copy2(ROOT / "docs/desktop/DEPENDENCIES.md", notices / "Dependencies.md")
     shutil.copy2(ROOT / "shared/icons/lucide/LICENSE", notices / "Lucide-ISC.txt")
     identity = local_signing_identity()
-    if not identity or identity == "-":
-        raise SystemExit("A persistent Apple Development identity is required")
+    if not identity:
+        raise SystemExit("Configure NEDEN_SIGNING_IDENTITY before installing")
     for binary in files:
         run("codesign", "--force", "--sign", identity, "--timestamp=none", binary)
     for framework in sorted(frameworks.glob("*.framework")):
@@ -199,9 +199,24 @@ function run(arguments) {
         raise SystemExit("Neden did not quit normally; the installed app was not replaced")
 
 
+def validate_install_destination(destination, identity):
+    if destination.suffix != ".app" or destination.is_symlink():
+        raise SystemExit("Choose an app bundle path ending in .app, not a symbolic link")
+    if destination.exists():
+        installed_info = plistlib.loads((destination / "Contents/Info.plist").read_bytes())
+        if installed_info.get("CFBundleIdentifier") != BUNDLE_ID:
+            raise SystemExit(f"Another application occupies {destination}")
+        signature = subprocess.run(["codesign", "-dvv", str(destination)], capture_output=True, text=True, check=True)
+        if identity == "-" and "Authority=" in signature.stderr:
+            raise SystemExit("This installation uses a signing certificate. Set NEDEN_SIGNING_IDENTITY to that "
+                             "certificate before updating, or choose a separate --destination for an ad hoc build.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--no-launch", action="store_true", help="Install without opening the app")
+    parser.add_argument("--destination", type=Path, default=Path("/Applications/Neden.app"),
+                        help="Destination app bundle, for example ~/Applications/Neden.app")
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("This installer is for macOS")
@@ -209,7 +224,9 @@ def main():
     # 1. Build and run the checks before touching the installed version.
     run("sh", ROOT / "scripts/desktop.sh", "test")
     run("cmake", "--build", ROOT / "build/desktop", "--target", "NedenQt_qmllint")
-    destination = Path("/Applications/Neden.app")
+    destination = args.destination.expanduser().absolute()
+    validate_install_destination(destination, local_signing_identity())
+    destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="neden-install-", dir=ROOT / ".cache") as staging:
         staged = Path(staging) / "Neden.app"
         revision = prepare_bundle(staged)
@@ -224,7 +241,7 @@ def main():
             if destination.exists():
                 installed_info = plistlib.loads((destination / "Contents/Info.plist").read_bytes())
                 if installed_info.get("CFBundleIdentifier") != BUNDLE_ID:
-                    raise SystemExit("Another application's bundle occupies /Applications/Neden.app")
+                    raise SystemExit(f"Another application occupies {destination}")
                 destination.rename(backup)
             try:
                 replacement.rename(destination)

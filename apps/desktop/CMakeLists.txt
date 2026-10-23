@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
 project(NedenQt LANGUAGES CXX)
 if(APPLE)
     enable_language(OBJCXX)
@@ -60,7 +60,7 @@ target_link_libraries(explanation_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Qml)
 add_test(NAME explanation_tests COMMAND explanation_tests)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(AUDITED_MPV_PREFIX "" CACHE PATH "Explicit source-built LGPL runtime on Linux")
-find_path(MPV_INCLUDE_DIR mpv/client.h HINTS "${AUDITED_MPV_PREFIX}/include" /opt/homebrew/include REQUIRED)
+find_path(MPV_INCLUDE_DIR mpv/client.h HINTS "${AUDITED_MPV_PREFIX}/include" REQUIRED)
 if(APPLE)
     set(PLATFORM_SOURCES platform/motion_preferences_mac.mm platform/fullscreen_controller.mm platform/credentials_mac.mm)
     set(MEDIA_PLATFORM_SOURCE platform/platform_media_session_mac.mm)
@@ -151,15 +151,15 @@ set_target_properties(NedenQt PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist.in")
 
 if(APPLE)
-    set(NEDEN_SIGNING_IDENTITY "Apple Development" CACHE STRING "Persistent Keychain identity for local macOS builds")
-    if(NEDEN_SIGNING_IDENTITY STREQUAL "" OR NEDEN_SIGNING_IDENTITY STREQUAL "-")
-        message(FATAL_ERROR "Choose a persistent NEDEN_SIGNING_IDENTITY; ad hoc signing invalidates Keychain approvals after rebuilds.")
+    set(NEDEN_SIGNING_IDENTITY "-" CACHE STRING "macOS signing identity; - uses ad hoc signing for development")
+    if(NEDEN_SIGNING_IDENTITY STREQUAL "")
+        message(FATAL_ERROR "Set NEDEN_SIGNING_IDENTITY to a certificate name or - for ad hoc development signing.")
     endif()
     add_custom_command(TARGET NedenQt POST_BUILD
         COMMAND /usr/bin/codesign --force --sign "${NEDEN_SIGNING_IDENTITY}"
             --identifier io.github.hanifcarroll.neden.qt-lab --timestamp=none "$<TARGET_BUNDLE_DIR:NedenQt>"
         COMMAND /usr/bin/codesign --verify --strict "$<TARGET_BUNDLE_DIR:NedenQt>"
-        COMMENT "Sign Qt with the persistent development identity"
+        COMMENT "Sign Neden with the configured development identity"
         VERBATIM)
 endif()
 
