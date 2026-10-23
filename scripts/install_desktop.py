@@ -263,7 +263,7 @@ def main():
                 if backup.exists():
                     backup.rename(destination)
                 raise
-    print(f"Installed {destination} from source {revision} with the persistent signing identity.")
+    print(f"Installed {destination} from source {revision} with the configured signing identity.")
 
 
 if __name__ == "__main__":

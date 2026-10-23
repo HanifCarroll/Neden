@@ -14,7 +14,7 @@ Use descriptive names, straightforward control flow, and explicit ownership. Kee
 - Full desktop build/tests: `sh scripts/desktop.sh test`, then `sh scripts/desktop.sh lint`.
 - Build and packaging helpers: `python3 -m unittest discover -s scripts -p 'test_*.py'`.
 - IINA plugin: `bun install --frozen-lockfile`, then `bun run release:check` on macOS.
-- Secrets: `gitleaks git --redact --log-opts="--all"` with Gitleaks 8.30.1 or newer. The one documented historical false positive is scoped to its exact commit/file/rule in `.gitleaksignore`.
+- Secrets: `gitleaks git --redact --log-opts="--all"` with Gitleaks 8.30.1 or newer.
 
 Add a regression check when fixing behavior that can recur. Report what you tested and what remains unverified. Headless checks do not prove GPU rendering, native fullscreen, hardware audio changes, or OS credential permissions. Use the [isolated native checks](docs/desktop/INSTALLATION.md#isolated-native-checks) on a dedicated display when a change needs them. Routine checks must not use saved credentials or billable endpoints.
 

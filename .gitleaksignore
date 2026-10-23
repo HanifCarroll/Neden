@@ -1,3 +1,0 @@
-# Historical false positive: Swift reads fields["apiKey"] from stdin and validates
-# its length; this line contains no credential or secret literal.
-db8eaf1d7b906f8f620c667a7c9bf593ce6e8492:prototypes/desktop-comparison/script/import_opensubtitles_keychain.swift:generic-api-key:15
