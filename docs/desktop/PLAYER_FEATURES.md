@@ -1,6 +1,6 @@
 # Media player features and validation
 
-The media player work is divided into decoding, durable choices, queue progression, subtitle timing, operating-system integration, and presentation. No installed application is updated by the build or tests. Interactive validation uses an isolated profile on the MacBook Pro.
+The media player work is divided into decoding, durable choices, queue progression, subtitle timing, operating-system integration, and presentation. No installed application is updated by the build or tests. Interactive validation uses an isolated profile on a dedicated test machine.
 
 ## Module contracts
 
@@ -57,7 +57,7 @@ These are behavior/API/architecture references. No GPL player source was copied 
 
 ## Validation ledger
 
-Testing used a physical M1 Pro display on macOS 27.2 with Qt 6.12, temporary profiles, the reviewed mpv 0.36 runtime, Leyla ile Mecnun episode 039 with Turkish/English sidecars, and short synthetic multi-track/chapter fixtures. Neither the Air's installed app nor the Pro's existing checkout/application was replaced. No saved credentials or paid AI requests were used.
+Testing used a physical M1 Pro display on macOS 27.2 with Qt 6.12, temporary profiles, the reviewed mpv 0.36 runtime, Leyla ile Mecnun episode 039 with Turkish/English sidecars, and short synthetic multi-track/chapter fixtures. The normal installed application was not replaced. No saved credentials or paid AI requests were used.
 
 - Release builds, nine headless CTest suites, and QML lint passed. New cases cover natural queue ordering/removal, opt-in EOF progression, mixed-drop subtitle loading, scrub undo, durable preferences, Turkish decoding, independent text offsets, deduplicated subtitle discovery, bundled runtime capabilities, and screenshot pixel conversion/bounds.
 - At `b930b60`, the native interaction suite passed 20 checks; one remaining assertion used the old speed-menu row number. The corrected active-row assertion passed at `456b1f2`. Hover/selection, word cards, dual subtitle restoration, readable dropdowns, keyboard focus, fullscreen toggling and chat scroll anchoring passed.
@@ -66,4 +66,4 @@ Testing used a physical M1 Pro display on macOS 27.2 with Qt 6.12, temporary pro
 - At `5a4c51f`, the final repository-native runner passed both strengthened regressions: paused ASS selection preserved the underlying video and current position, and paused-canvas resume/fullscreen hide/reveal passed. The runner was rebuilt without the external probe source override. Earlier feature results remain tied to their recorded revisions.
 - The Linux DBus translation unit passed an isolated compile against Qt DBus on macOS. That is a source check, not a Linux runtime test. Windows code remains uncompiled here.
 
-Evidence and the independent feature harness are retained in the shared iCloud folder `Neden Testing/2026-10-20`; each log names its tested revision. These are native Qt harness results on a real display, not a manual end-user acceptance test: the computer-use tool could not attach to Neden's accessibility interface. System metadata and sleep assertions were checked; physical media-key dispatch, audio-device unplugging, HDR/SDR fidelity, multichannel audio, multi-display/refresh-rate behavior, Windows, and Linux still need separate validation.
+These historical results came from a separate development harness; its raw logs are not part of this repository. Reproduce current behavior with the checked-in native tests described in [the installation guide](INSTALLATION.md). These are native Qt harness results on a real display, not a manual end-user acceptance test: the computer-use tool could not attach to Neden's accessibility interface. System metadata and sleep assertions were checked; physical media-key dispatch, audio-device unplugging, HDR/SDR fidelity, multichannel audio, multi-display/refresh-rate behavior, Windows, and Linux still need separate validation.

@@ -18,3 +18,12 @@ build/
 **/.qmlls.ini
 __pycache__/
 .pytest_cache/
+
+# Local toolchains, profiles, and audit output
+mise.local.toml
+.mise.local.toml
+CMakeUserPresets.json
+*.mobileprovision
+*.pfx
+profiles/
+audit-output/

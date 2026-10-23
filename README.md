@@ -1,50 +1,88 @@
 # Neden
 
-Language learning while watching local video, with selectable subtitles, contextual explanations, and dictionary lookup.
+A desktop video player for language learning. Watch your own videos with two subtitle tracks, look up words in context, and ask follow-up questions about the dialogue.
 
-- `apps/desktop/` — Qt Quick desktop player: two independent text subtitle tracks, native tracks, a media queue, audio/picture controls, recent videos with precise resume, Turkish-aware transcript search, sentence replay, dictionary WebView, streamed AI explanations/translations, study cards, subtitle downloads, and settings.
-- `apps/iina-plugin/` — existing macOS IINA integration, with its own [usage guide](apps/iina-plugin/README.md).
-- `shared/` — shared assets and their required notices.
-- `docs/` — current architecture, platform limits, dependency notes, and plugin specification.
-- `scripts/` — build, packaging, and validation tools.
+Neden includes a standalone **Qt Quick desktop player** and a separate **IINA plugin**. The GitHub repository keeps its original plugin name so existing IINA update links continue to work.
 
-The [development guide](docs/development.md) covers runtime boundaries, credentials, lifecycle ownership, and verification across the desktop app and IINA plugin.
+## What it does
 
-## Desktop development
+- Play local videos with audio, picture, subtitle timing, queue, chapter, and seek-preview controls.
+- Display primary and secondary subtitles together, search the transcript, and replay individual lines.
+- Click a word for its meaning in context, word form, and other senses; explain a line with a translation and word-by-word breakdown.
+- Ask follow-up questions and save flashcards locally.
+- Resume unfinished videos, browse playback history, and customize keyboard shortcuts.
 
-Use Qt 6.9 or newer with Quick, Quick Controls 2, Qml, Network, OpenGL, WebView, and Test; CMake 3.21 or newer; Python 3.12 or newer; a C++17 compiler; and libmpv development headers. The current Mac build uses Qt 6.12. macOS builds also require command-line developer tools and the existing Apple Development signing identity.
+Bring your own media and subtitles. AI explanations require a configured provider or compatible local endpoint; provider charges may apply. Ordinary local playback does not require an AI account.
 
-To update the installed Mac app after source changes:
+## Project status
+
+The desktop player is under active development. **macOS is the primary tested platform.** Linux has an experimental source-build recipe; Windows has platform adapters but no supported full-player build. Portable logic tests do not establish native playback support. See [platform support](docs/desktop/PLATFORMS.md).
+
+This repository provides source and local development packaging. A signed/notarized desktop release and complete dependency redistribution materials are not yet provided. See [dependency and distribution requirements](docs/desktop/DEPENDENCIES.md) before distributing a built app.
+
+## Build the desktop player on macOS
+
+Requirements: a C++17 compiler, Apple command-line developer tools, **Qt 6.9+**, **CMake 3.24+**, **Python 3.12+**, and libmpv development headers. Qt must include Quick, Quick Controls 2, Qml, Network, OpenGL, WebView, Svg, and Test. Bun is optional for desktop development.
+
+One setup using Homebrew:
 
 ```sh
-bun run install:desktop
+xcode-select --install  # Only if developer tools are not installed
+brew install cmake qt mpv python
+
+git clone https://github.com/HanifCarroll/iina-language-learning-plugin.git neden
+cd neden
+export CMAKE_PREFIX_PATH="$(brew --prefix qt)"
+export PATH="$(brew --prefix qt)/bin:$PATH"
+python3 scripts/fetch_macos_runtime.py
+sh scripts/desktop.sh test
+sh scripts/desktop.sh lint
+sh scripts/desktop.sh run
 ```
 
-This builds, checks, packages, and replaces `/Applications/Neden.app`, then opens the installed copy. It preserves existing Keychain access and study data. See [installation and agent update instructions](docs/desktop/INSTALLATION.md).
+The Homebrew mpv package supplies **headers only**. Playback links the pinned, checksum-verified frameworks downloaded into `.cache/playback-frameworks`, rather than the Homebrew library. The build checks the reviewed runtime's configuration. Set `NEDEN_MPV_FRAMEWORKS` to use another copy of that same reviewed runtime. On a custom Qt installation, set `CMAKE_PREFIX_PATH` and `PATH` to its prefix and `bin` directory.
 
-Prepare the reviewed macOS playback frameworks with `python3 scripts/fetch_macos_runtime.py`, then:
+Fresh builds use ad hoc development signing; an Apple developer account is not required. A persistent certificate is optional for stable Keychain approvals. To install locally without opening the app:
 
 ```sh
-bun run build:desktop
-bun run test:desktop
-bun run run:desktop
+python3 scripts/install_desktop.py --no-launch
+# Or install in your own Applications folder:
+python3 scripts/install_desktop.py --no-launch --destination ~/Applications/Neden.app
 ```
 
-The launcher defaults to `.cache/playback-frameworks`; set `NEDEN_MPV_FRAMEWORKS` to use another reviewed copy. It deliberately refuses an unreviewed system mpv. Use `CMAKE_PREFIX_PATH` for a Qt installation outside the compiler's normal search path. `bun run test:desktop:core` checks portable logic without a playback runtime. Desktop commands can also be run directly through `scripts/desktop.sh` without Bun.
+Installation gracefully quits and replaces a running copy, so finish playback first. The [installation guide](docs/desktop/INSTALLATION.md) covers signing, shortcuts, profiles, native testing, and recovery. For logic tests without libmpv or Qt WebView, use `sh scripts/desktop.sh core-test` with Qt Core/Gui/Network/Qml/Test installed.
 
-Open your own video and primary/secondary SRT files through the player. Both subtitle tracks display together and are chosen separately for each viewing session. Recent videos save playback positions; removing an entry never deletes its file. No media or commercial subtitle tracks are bundled. Settings opens with Command–comma on macOS or Ctrl–comma elsewhere. Instant fullscreen is the Mac default; native fullscreen is optional. Existing bundle identifiers and saved-data locations are retained so prior Keychain approvals and study data remain usable.
+Build scripts use the selected developer toolchain. If needed, select your own tools with `DEVELOPER_DIR`; local overrides belong in your shell or ignored `mise.local.toml`, never in tracked configuration.
 
-See [desktop architecture](docs/desktop/ARCHITECTURE.md), [platform limits](docs/desktop/PLATFORMS.md), and [dependency and distribution requirements](docs/desktop/DEPENDENCIES.md). The installation workflow is for local development; public distribution has additional licensing and signing requirements.
+## IINA plugin
 
-## IINA plugin development
-
-From the repository root:
+Read the [plugin usage guide](apps/iina-plugin/README.md) for IINA requirements and installation. To build and validate it on macOS, install Bun 1.3.14+, Python 3.12+, and Apple's Swift command-line compiler, then run from the repository root:
 
 ```sh
 bun install --frozen-lockfile
 bun run release:check
 ```
 
-The check builds an installable package in ignored `dist/`, verifies its contents, and exercises streaming against controlled local endpoints. It does not install or enable the plugin in IINA. The root `Info.json` is required by IINA's GitHub update discovery; it mirrors `apps/iina-plugin/Info.json` and is checked during packaging.
+This checks the plugin and builds an installable `.iinaplgz` in ignored `dist/`. Packaging does not require IINA at a particular filesystem path, and does not install or enable the plugin. Actual integration checks still require IINA. Root `Info.json` mirrors the plugin metadata for IINA's GitHub update discovery.
 
-The project source is MIT licensed; dependency licenses still apply. Generated builds, caches, and test output are ignored. Previous implementations are available through Git history.
+## Data and services
+
+Playback history, subtitle associations, settings, and study cards are stored locally. Desktop credentials use QtKeychain with plaintext fallback disabled. AI requests send the selected dialogue and configured context to the chosen provider; subtitle downloads and dictionary navigation contact their respective services. Use synthetic media and mock endpoints for tests. See [security and privacy](SECURITY.md) before sharing logs or profiles.
+
+The legacy desktop bundle identifier and macOS application-support directory (`Neden Qt Lab`) remain stable for existing installations. They do not depend on the maintainer's account, home directory, signing certificate, or credentials.
+
+## Repository map
+
+| Directory | Purpose |
+| --- | --- |
+| `apps/desktop/` | C++ application modules, QML interface, native platform adapters, and tests |
+| `apps/iina-plugin/` | TypeScript IINA integration, web UI, Swift transport helper, and tests |
+| `shared/` | Fonts, icons, branding, and their license notices |
+| `scripts/` | Builds, packaging, runtime checks, and validation |
+| `docs/` | Architecture, behavior contracts, setup, and platform limitations |
+
+Start with [development conventions](docs/development.md), [desktop architecture](docs/desktop/ARCHITECTURE.md), or the [plugin specification](docs/iina-plugin/SPEC.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible bugs through [GitHub Issues](https://github.com/HanifCarroll/iina-language-learning-plugin/issues).
+
+## License
+
+Neden's source is [MIT licensed](LICENSE). Fonts, icons, Qt, QtKeychain, libmpv, and other dependencies retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). No video library or commercial subtitle collection is included in the current source tree. Neden is an independent project and is not affiliated with IINA or the configured service providers.
