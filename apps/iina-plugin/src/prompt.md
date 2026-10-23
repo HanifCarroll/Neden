@@ -12,7 +12,7 @@ Begin directly with one concise, fluent translation of the spoken dialogue in co
 
 ### Breakdown
 
-Explain the spoken vocabulary once, choosing entries for their reusable meaning, morphology or idiomatic value. Group adjacent words when they form a useful phrase. Keep each bullet brief: give its meaning and one relevant suffix or idiom insight when needed.
+Explain every selected word exactly once per occurrence, in source order, with its own bullet. Include short function words and spoken proper names. Give its meaning here and the useful stem, suffix or usage that produces that meaning. For an idiom, explain each component and give the combined meaning once in the final component’s entry. Keep repeated-word entries brief. Check coverage against all spoken words before finishing.
 
 Use speaker labels, bracketed names and dialogue dashes only to interpret who is speaking; make the explanation itself about the spoken language. Keep familiar proper names in the translation.
 

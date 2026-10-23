@@ -37,7 +37,7 @@ for (const item of evalCases) {
     expect(messages[0].role).toBe('system');
     expect(messages[0].content).not.toContain(item.cue);
     expect(messages[0].content).toContain('explain the selected source text');
-    expect(messages[0].content).toContain('selection ends mid-sentence');
+    expect(messages[0].content).toContain('Render an incomplete selection as a natural fragment');
     expect(messages[0].content).toContain('### Natural meaning');
     expect(messages[0].content).toContain('### Breakdown');
     expect(messages[0].content).toContain('every selected word exactly once');
