@@ -1178,17 +1178,24 @@ private slots:
         auto *form = visualItem(card, "wordFormNote");
         QVERIFY(senses && uses && form);
         QVERIFY(!senses->isVisible());
-        QVERIFY(uses->isVisible());
-        QVERIFY(form->isVisible());
+        QVERIFY(!uses->isVisible());
+        QVERIFY(!form->isVisible());
+        auto *details = visualItem(card, "wordDetailsButton");
+        QVERIFY(details && details->isVisible());
+        const auto compactHeight = card->height();
         auto *headword = visualItem(card, "wordHeadword");
         auto *grammar = visualItem(card, "wordGrammar");
         auto *meaning = visualItem(card, "wordContextMeaning");
         QVERIFY(headword && grammar && meaning);
-        QCOMPARE(grammar->property("text").toString(), QString("adverb · Base form: uzak"));
+        QCOMPARE(grammar->property("text").toString(), QString("adverb"));
         QTRY_VERIFY(grammar->mapToItem(card, QPointF()).y() >=
                     headword->mapToItem(card, QPointF()).y() + headword->height());
         QTRY_VERIFY(meaning->mapToItem(card, QPointF()).y() >=
-                    form->mapToItem(card, QPointF()).y() + form->height());
+                    grammar->mapToItem(card, QPointF()).y() + grammar->height());
+        QVERIFY(QMetaObject::invokeMethod(details, "clicked"));
+        QTRY_VERIFY(uses->isVisible());
+        QVERIFY(form->isVisible());
+        QTRY_VERIFY(card->height() > compactHeight);
         QCOMPARE(study->words()->otherUses().first().toMap().value("translation").toString(),
                  QString("to work remotely"));
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
@@ -1204,6 +1211,8 @@ private slots:
         QVERIFY(!senses->isVisible());
         QVERIFY(!uses->isVisible());
         QVERIFY(!form->isVisible());
+        QVERIFY(!details->isVisible());
+        QVERIFY(!card->property("detailsExpanded").toBool());
         session->closeWordCard(false);
     }
 

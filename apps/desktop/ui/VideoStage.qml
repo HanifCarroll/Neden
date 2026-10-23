@@ -241,12 +241,24 @@ Rectangle {
     }
     Rectangle {
         id: wordCard
+        property bool detailsExpanded: false
+        readonly property bool hasDetails: stage.session.study.words.formNote.length > 0
+            || stage.session.study.words.contextNote.length > 0
+            || stage.session.study.words.otherSenses.length > 0
+            || stage.session.study.words.otherUses.length > 0
+        Connections {
+            target: stage.session.study.words
+            function onChanged() {
+                if (stage.session.study.words.state !== "complete")
+                    wordCard.detailsExpanded = false;
+            }
+        }
         objectName: "wordMeaningCard"
         visible: !stage.capturing && stage.session.study.words.state !== "idle"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Math.max(16, Math.min(parent.height - height - 16, subtitleOverlay.height + subtitleOverlay.anchors.bottomMargin + 12))
-        width: Math.min(400, parent.width - 32)
+        width: Math.min(340, parent.width - 32)
         height: Math.min(wordContents.implicitHeight + 32, parent.height - 32)
         radius: Theme.panelRadius
         color: Theme.surface
@@ -291,33 +303,12 @@ Rectangle {
                 Label {
                     objectName: "wordGrammar"
                     visible: text.length > 0
-                    text: {
-                        const words = stage.session.study.words;
-                        const base = words.lemma.length && words.lemma !== words.word ? "Base form: " + words.lemma : "";
-                        return [words.partOfSpeech, base].filter(detail => detail.length > 0).join(" · ");
-                    }
+                    text: stage.session.study.words.partOfSpeech
                     textFormat: Text.PlainText
                     color: Theme.muted
                     font.pixelSize: Theme.caption
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
-                }
-                Label {
-                    objectName: "wordFormNote"
-                    font.pixelSize: Theme.caption
-                    text: stage.session.study.words.formNote
-                    visible: text.length > 0
-                    textFormat: Text.PlainText
-                    wrapMode: Text.WordWrap
-                    color: Theme.muted
-                    Layout.fillWidth: true
-                }
-                Label {
-                    visible: stage.session.study.words.meanings.length > 0
-                    text: "Meaning here"
-                    color: Theme.muted
-                    font.pixelSize: Theme.caption
-                    Layout.topMargin: Theme.space2
                 }
                 Repeater {
                     model: stage.session.study.words.meanings
@@ -332,31 +323,55 @@ Rectangle {
                         font.weight: Font.DemiBold
                     }
                 }
-                Label {
-                    text: stage.session.study.words.contextNote
-                    visible: text.length > 0
-                    textFormat: Text.PlainText
-                    wrapMode: Text.WordWrap
-                    color: Theme.muted
-                    Layout.fillWidth: true
+                ActionButton {
+                    objectName: "wordDetailsButton"
+                    text: wordCard.detailsExpanded ? "Less" : "Details"
+                    visible: wordCard.hasDetails
+                    checkable: true
+                    checked: wordCard.detailsExpanded
+                    Accessible.name: wordCard.detailsExpanded ? "Hide word details" : "Show word details"
+                    onClicked: wordCard.detailsExpanded = !wordCard.detailsExpanded
                 }
-                WordUsageSection {
-                    objectName: "wordOtherSenses"
-                    title: stage.session.study.words.lemma.length > 0 ? "Other senses of “" + stage.session.study.words.lemma + "”" : "Other senses"
-                    entries: stage.session.study.words.otherSenses
+                ColumnLayout {
+                    visible: wordCard.detailsExpanded
                     Layout.fillWidth: true
-                    Layout.topMargin: Theme.space2
-                }
-                WordUsageSection {
-                    objectName: "wordOtherUses"
-                    title: "Other uses"
-                    entries: stage.session.study.words.otherUses
-                    Layout.fillWidth: true
-                    Layout.topMargin: Theme.space2
+                    spacing: Theme.space2
+                    Label {
+                        objectName: "wordFormNote"
+                        font.pixelSize: Theme.caption
+                        text: stage.session.study.words.formNote
+                        visible: text.length > 0
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: Theme.muted
+                        Layout.fillWidth: true
+                    }
+                    Label {
+                        text: stage.session.study.words.contextNote
+                        visible: text.length > 0
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: Theme.muted
+                        Layout.fillWidth: true
+                    }
+                    WordUsageSection {
+                        objectName: "wordOtherSenses"
+                        title: stage.session.study.words.lemma.length > 0 ? "Other senses of “" + stage.session.study.words.lemma + "”" : "Other senses"
+                        entries: stage.session.study.words.otherSenses
+                        Layout.fillWidth: true
+                        Layout.topMargin: Theme.space2
+                    }
+                    WordUsageSection {
+                        objectName: "wordOtherUses"
+                        title: "Other uses"
+                        entries: stage.session.study.words.otherUses
+                        Layout.fillWidth: true
+                        Layout.topMargin: Theme.space2
+                    }
                 }
                 Label {
                     visible: stage.session.study.words.state !== "complete"
-                    text: stage.session.study.words.state === "loading" ? "Finding the meaning in this scene…" : stage.session.study.words.message
+                    text: stage.session.study.words.state === "loading" ? "Looking up…" : stage.session.study.words.message
                     textFormat: Text.PlainText
                     wrapMode: Text.WordWrap
                     color: Theme.muted
