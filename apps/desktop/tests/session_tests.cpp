@@ -54,6 +54,40 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void audioDisconnectionSilentlyPausesOnlyActivePlayback() {
+        FakePlayback playback;
+        LearningSession session(&playback);
+        QSignalSpy pauseChanges(&playback, &PlaybackEngine::pausedChanged);
+        QSignalSpy statusChanges(&session, &LearningSession::statusChanged);
+        const auto welcomeStatus = session.status();
+
+        // Device changes on the welcome screen should have no visible effect.
+        emit playback.outputDeviceRemoved();
+        QCOMPARE(pauseChanges.count(), 0);
+        QCOMPARE(statusChanges.count(), 0);
+        QCOMPARE(session.status(), welcomeStatus);
+
+        session.openVideo(QUrl("https://example.org/episode.webm"));
+        QVERIFY(!session.paused());
+        const auto playbackStatus = session.status();
+        pauseChanges.clear();
+        statusChanges.clear();
+        emit playback.outputDeviceRemoved();
+        QVERIFY(session.paused());
+        QCOMPARE(pauseChanges.count(), 1);
+        QCOMPARE(statusChanges.count(), 0);
+        QCOMPARE(session.status(), playbackStatus);
+
+        // An already paused video stays paused, while a missing output still falls back to auto.
+        session.preferences()->setAudioDevice("disconnected-headphones");
+        pauseChanges.clear();
+        emit playback.outputDeviceRemoved();
+        QCOMPARE(pauseChanges.count(), 0);
+        QCOMPARE(statusChanges.count(), 0);
+        QCOMPARE(session.preferences()->audioDevice(), QString("auto"));
+        QCOMPARE(playback.options[PlaybackEngine::Option::AudioDevice].toString(), QString("auto"));
+    }
+
     void finishedMediaRestartsWithSubtitleSettingsAndStaysOutOfContinueWatching() {
         QTemporaryDir directory;
         const auto video = directory.filePath("episode.webm");

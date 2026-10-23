@@ -69,7 +69,8 @@ PlatformMediaSession::PlatformMediaSession(LearningSession *player, QWindow *pla
           return;
       const auto next = defaultOutput();
       // Pause before a changed route can unexpectedly play through speakers.
-      if (self->native->output != kAudioObjectUnknown && next != self->native->output && guarded)
+      if (self->native->output != kAudioObjectUnknown && next != self->native->output && guarded &&
+          guarded->hasMedia() && !guarded->paused())
           guarded->setPaused(true);
       self->native->output = next;
     };

@@ -38,7 +38,8 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
             mediaQueue.next();
     });
     connect(playbackEngine, &PlaybackEngine::outputDeviceRemoved, this, [this] {
-        setPaused(true);
+        if (mediaReady && !paused())
+            setPaused(true);
         const auto selected = playerPreferences.audioDevice();
         bool available = selected == "auto";
         for (const auto &device : playbackEngine->audioDevices()) {
@@ -47,8 +48,6 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
         }
         if (!available)
             playerPreferences.setAudioDevice("auto");
-        statusText = "An audio device disconnected. Playback is paused.";
-        emit statusChanged();
     });
     connect(playbackEngine, &PlaybackEngine::operationFailed, this, [this](const QString &message) {
         statusText = message;
