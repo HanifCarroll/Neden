@@ -303,12 +303,11 @@ ApplicationWindow {
             onOpenVideo: dialogs.openVideo()
             onLocateVideo: oldUrl => dialogs.locateVideo(oldUrl)
         }
-        ColumnLayout {
-            spacing: 0
+        Item {
             Item {
                 clip: true
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.fill: parent
+                anchors.bottomMargin: root.fullscreenController.active ? 0 : playbackControls.height
                 VideoStage {
                     id: stage
                     anchors.fill: parent
@@ -317,6 +316,7 @@ ApplicationWindow {
                     playback: root.playback
                     appearance: root.appearance
                     hideCursor: root.hidePlaybackControls
+                    bottomOverlayHeight: root.fullscreenController.active && !root.hidePlaybackControls ? playbackControls.height : 0
                     onScreenshotFinished: saved => {
                         screenshotResult.text = saved ? "Screenshot saved" : "The screenshot could not be saved. Choose a writable folder.";
                         screenshotResult.open();
@@ -420,10 +420,15 @@ ApplicationWindow {
             }
             PlaybackControls {
                 id: playbackControls
+                objectName: "playbackControls"
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: root.fullscreenController.active ? inspector.reservedWidth : 0
+                z: 1
                 thumbnails: root.thumbnails
                 opacity: root.hidePlaybackControls ? 0 : 1
                 enabled: !root.hidePlaybackControls
-                Layout.fillWidth: true
                 session: root.session
                 sidebarOpen: root.transcriptOpen || root.dictionaryOpen
                 onToggleSidebar: {

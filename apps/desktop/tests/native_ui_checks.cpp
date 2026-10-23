@@ -804,6 +804,60 @@ private slots:
         QVERIFY(std::abs(session->position() - originalPosition) < 0.1);
     }
 
+    void fullscreenControlsOverlayVideoWithoutResizingIt() {
+        window->setProperty("showRecent", false);
+        session->closeDefinition();
+        session->setPaused(true);
+        const auto originalInspector = window->property("inspectorMode");
+        const auto restoreWindow = qScopeGuard([&] {
+            fullscreen->setActive(false);
+            window->setProperty("inspectorMode", originalInspector);
+            window->setProperty("controlsIdle", false);
+        });
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        auto *controls = visualItem(window->contentItem(), "playbackControls");
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        QVERIFY(video && controls && sidebar);
+        const auto bounds = [](QQuickItem *item) { return item->mapRectToScene(item->boundingRect()); };
+
+        for (const bool nativeMode : {false, true}) {
+            if (nativeMode && !fullscreen->supportsNativeMode())
+                continue;
+            window->setProperty("inspectorMode", 0);
+            QTRY_COMPARE(sidebar->property("reservedWidth").toDouble(), 0.0);
+            if (nativeMode)
+                fullscreen->toggleNative();
+            else
+                fullscreen->toggleInstant();
+            QTRY_VERIFY_WITH_TIMEOUT(fullscreen->active(), 10000);
+            window->setProperty("controlsIdle", false);
+            QTRY_VERIFY(std::abs(bounds(video).bottom() - bounds(controls).bottom()) < 1);
+            QVERIFY(bounds(video).intersects(bounds(controls)));
+            QVERIFY(std::abs(bounds(video).right() - bounds(controls).right()) < 1);
+
+            const auto videoBounds = bounds(video);
+            window->setProperty("controlsIdle", true);
+            QTRY_COMPARE(controls->opacity(), 0.0);
+            QCOMPARE(bounds(video), videoBounds);
+            window->setProperty("controlsIdle", false);
+            QTRY_COMPARE(controls->opacity(), 1.0);
+            QCOMPARE(bounds(video), videoBounds);
+
+            // Controls end at the video edge, leaving the full-height sidebar unobstructed.
+            window->setProperty("inspectorMode", 1);
+            QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
+            QTRY_VERIFY(std::abs(bounds(video).right() - bounds(controls).right()) < 1);
+            QVERIFY(std::abs(bounds(sidebar).bottom() - bounds(video).bottom()) < 1);
+            const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+            if (!artifacts.isEmpty())
+                QVERIFY(window->grabWindow().save(artifacts + (nativeMode ? "/native-fullscreen-overlay.png" : "/instant-fullscreen-overlay.png")));
+
+            fullscreen->setActive(false);
+            QTRY_VERIFY_WITH_TIMEOUT(!fullscreen->active(), 10000);
+            QTRY_VERIFY(std::abs(bounds(video).bottom() - bounds(controls).top()) < 1);
+        }
+    }
+
     void fullscreenAndCompactWindowKeepControlsAvailable() {
         window->setProperty("showRecent", false);
         if (!fullscreen->nativeMode()) {

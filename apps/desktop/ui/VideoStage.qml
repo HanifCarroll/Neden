@@ -11,6 +11,7 @@ Rectangle {
     required property SubtitleAppearance appearance
     property bool capturing: false
     property bool hideCursor: false
+    property real bottomOverlayHeight: 0
     readonly property bool selecting: subtitle.selecting || translation.selecting
     signal screenshotFinished(bool saved)
     function saveScreenshot(path) {
@@ -97,7 +98,9 @@ Rectangle {
         anchors.rightMargin: Theme.space6
         readonly property real videoAspect: stage.playback.sourceOutputSize.height > 0 ? stage.playback.sourceOutputSize.width / stage.playback.sourceOutputSize.height : 16 / 9
         readonly property real pictureHeight: Math.min(stage.height, stage.width / videoAspect)
-        anchors.bottomMargin: (stage.height - pictureHeight) / 2 + stage.appearance.bottomMargin + pictureHeight * stage.appearance.bottomPercent / 100
+        readonly property real preferredBottomMargin: (stage.height - pictureHeight) / 2 + stage.appearance.bottomMargin + pictureHeight * stage.appearance.bottomPercent / 100
+        readonly property real controlsClearance: !stage.capturing && stage.bottomOverlayHeight > 0 ? stage.bottomOverlayHeight + Theme.space3 : 0
+        anchors.bottomMargin: Math.max(preferredBottomMargin, controlsClearance)
         height: subtitleColumn.implicitHeight
         Rectangle {
             anchors.centerIn: parent
