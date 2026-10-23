@@ -272,6 +272,7 @@ Rectangle {
                 spacing: Theme.space2
                 RowLayout {
                     Label {
+                        objectName: "wordHeadword"
                         text: stage.session.study.words.word
                         textFormat: Text.PlainText
                         color: Theme.ink
@@ -286,6 +287,30 @@ Rectangle {
                         objectName: "closeWordCardButton"
                         onClicked: stage.session.closeWordCard()
                     }
+                }
+                Label {
+                    objectName: "wordGrammar"
+                    visible: text.length > 0
+                    text: {
+                        const words = stage.session.study.words;
+                        const base = words.lemma.length && words.lemma !== words.word ? "Base form: " + words.lemma : "";
+                        return [words.partOfSpeech, base].filter(detail => detail.length > 0).join(" · ");
+                    }
+                    textFormat: Text.PlainText
+                    color: Theme.muted
+                    font.pixelSize: Theme.caption
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Label {
+                    objectName: "wordFormNote"
+                    font.pixelSize: Theme.caption
+                    text: stage.session.study.words.formNote
+                    visible: text.length > 0
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: Theme.muted
+                    Layout.fillWidth: true
                 }
                 Label {
                     visible: stage.session.study.words.meanings.length > 0
@@ -309,37 +334,6 @@ Rectangle {
                 }
                 Label {
                     text: stage.session.study.words.contextNote
-                    visible: text.length > 0
-                    textFormat: Text.PlainText
-                    wrapMode: Text.WordWrap
-                    color: Theme.muted
-                    Layout.fillWidth: true
-                }
-                Label {
-                    text: "Word form"
-                    visible: wordGrammar.text.length > 0 || stage.session.study.words.formNote.length > 0
-                    color: Theme.muted
-                    font.pixelSize: Theme.caption
-                    Layout.topMargin: Theme.space2
-                }
-                Label {
-                    id: wordGrammar
-                    objectName: "wordGrammar"
-                    visible: text.length > 0
-                    text: {
-                        const words = stage.session.study.words;
-                        const base = words.lemma.length && words.lemma !== words.word ? "Base form: " + words.lemma : "";
-                        return [words.partOfSpeech, base].filter(detail => detail.length > 0).join(" · ");
-                    }
-                    textFormat: Text.PlainText
-                    color: Theme.muted
-                    font.pixelSize: Theme.caption
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-                Label {
-                    objectName: "wordFormNote"
-                    text: stage.session.study.words.formNote
                     visible: text.length > 0
                     textFormat: Text.PlainText
                     wrapMode: Text.WordWrap

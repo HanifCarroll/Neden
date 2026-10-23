@@ -1180,6 +1180,15 @@ private slots:
         QVERIFY(!senses->isVisible());
         QVERIFY(uses->isVisible());
         QVERIFY(form->isVisible());
+        auto *headword = visualItem(card, "wordHeadword");
+        auto *grammar = visualItem(card, "wordGrammar");
+        auto *meaning = visualItem(card, "wordContextMeaning");
+        QVERIFY(headword && grammar && meaning);
+        QCOMPARE(grammar->property("text").toString(), QString("adverb · Base form: uzak"));
+        QTRY_VERIFY(grammar->mapToItem(card, QPointF()).y() >=
+                    headword->mapToItem(card, QPointF()).y() + headword->height());
+        QTRY_VERIFY(meaning->mapToItem(card, QPointF()).y() >=
+                    form->mapToItem(card, QPointF()).y() + form->height());
         QCOMPARE(study->words()->otherUses().first().toMap().value("translation").toString(),
                  QString("to work remotely"));
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
