@@ -156,6 +156,17 @@ export const evalCases: EvalCase[] = [
       breakdown: 'Breakdown accounts for hesap and derken and explains how they connect.',
       ellipsis: 'Explains the implied question separately from the source words.'
     }
+  },
+  {
+    id: 'E14',
+    title: 'Speaker labels versus spoken names',
+    selected: '-[Elif] Merhaba.\n-Merhaba Elif.',
+    cue: '-[Elif] Merhaba.\n-Merhaba Elif.',
+    checks: {
+      dialogueOnly: 'Breakdown has exactly three entries: Merhaba, Merhaba, Elif, in that order.',
+      metadata: 'The bracketed speaker label and dialogue dashes receive no explanation.',
+      spokenName: 'The unbracketed Elif is covered as a spoken name.'
+    }
   }
 ];
 
