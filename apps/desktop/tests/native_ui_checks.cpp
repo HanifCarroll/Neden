@@ -232,7 +232,7 @@ private:
 
 private slots:
     void init() {
-        const QStringList headlessChecks{"wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "followUpSupportsMacDeleteToLineStart", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -1239,6 +1239,63 @@ private slots:
             QVERIFY(window->grabWindow().save(composerArtifacts + "/follow-up-composer.png"));
         question->setProperty("text", "");
         QTRY_COMPARE(inputViewport->height(), singleLineHeight);
+    }
+
+    void followUpSupportsMacDeleteToLineStart() {
+#ifndef Q_OS_MACOS
+        QSKIP("Command-Backspace is a macOS editing shortcut.");
+#endif
+        StudyResponseServer server;
+        prepareCompletedExplanation(server);
+        auto *question = visualItem(window->contentItem(), "followUpInput");
+        QVERIFY(question);
+        question->forceActiveFocus();
+        const QString draft = "What does this mean?";
+        question->setProperty("text", draft);
+        question->setProperty("cursorPosition", draft.size());
+        QTest::keyClick(window, Qt::Key_Backspace, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), QString());
+        QTest::keyClick(window, Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), draft);
+
+        question->setProperty("text", "First line\nSecond line");
+        question->setProperty("cursorPosition", 17);
+        QTest::keyClick(window, Qt::Key_Backspace, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), QString("First line\n line"));
+
+        const QString wrappedDraft = QString("How does this expression work? ").repeated(5);
+        question->setProperty("text", wrappedDraft);
+        question->setProperty("cursorPosition", wrappedDraft.size());
+        QTRY_VERIFY(question->property("lineCount").toInt() > 1);
+        const auto lastLineY = question->property("cursorRectangle").toRectF().y();
+        int lastLineStart = 0;
+        for (int position = 0; position <= wrappedDraft.size(); ++position) {
+            QRectF characterRectangle;
+            QVERIFY(QMetaObject::invokeMethod(question, "positionToRectangle", Q_RETURN_ARG(QRectF, characterRectangle), Q_ARG(int, position)));
+            if (characterRectangle.y() == lastLineY) {
+                lastLineStart = position;
+                break;
+            }
+        }
+        QVERIFY(lastLineStart > 0 && lastLineStart < wrappedDraft.size());
+        QTest::keyClick(window, Qt::Key_Backspace, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), wrappedDraft.left(lastLineStart));
+        QTest::keyClick(window, Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), wrappedDraft);
+
+        question->setProperty("text", "Keep this word");
+        QVERIFY(QMetaObject::invokeMethod(question, "select", Q_ARG(int, 5), Q_ARG(int, 9)));
+        QTest::keyClick(window, Qt::Key_Backspace, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), QString("Keep  word"));
+
+        question->setProperty("text", "öyle");
+        question->setProperty("cursorPosition", 4);
+        QTest::keyClick(window, Qt::Key_Backspace);
+        QCOMPARE(question->property("text").toString(), QString("öyl"));
+        question->setProperty("cursorPosition", 0);
+        QTest::keyClick(window, Qt::Key_Backspace, Qt::ControlModifier);
+        QCOMPARE(question->property("text").toString(), QString("öyl"));
+        question->setProperty("text", "");
     }
 
     void savingFlashcardShowsResultAndOpensCollection() {

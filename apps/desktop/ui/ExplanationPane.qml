@@ -247,6 +247,27 @@ Item {
                     color: Theme.ink
                     placeholderTextColor: Theme.muted
                     Accessible.name: "Follow-up question"
+                    function isDeleteToLineStart(event) {
+                        // Qt maps the macOS Command key to ControlModifier.
+                        return Qt.platform.os === "osx" && event.key === Qt.Key_Backspace && event.modifiers === Qt.ControlModifier;
+                    }
+                    Keys.onShortcutOverride: event => {
+                        if (question.isDeleteToLineStart(event))
+                            event.accepted = true;
+                    }
+                    Keys.onPressed: event => {
+                        if (!question.isDeleteToLineStart(event))
+                            return;
+                        event.accepted = true;
+                        if (question.selectionStart !== question.selectionEnd) {
+                            question.remove(question.selectionStart, question.selectionEnd);
+                            return;
+                        }
+                        const cursor = question.cursorRectangle;
+                        const lineStart = question.positionAt(0, cursor.y + cursor.height / 2);
+                        if (lineStart < question.cursorPosition)
+                            question.remove(lineStart, question.cursorPosition);
+                    }
                     background: Rectangle {
                         color: Theme.background
                         border.color: question.activeFocus ? Theme.accent : Theme.border
