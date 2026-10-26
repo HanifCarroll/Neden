@@ -49,6 +49,7 @@ jobs:
       - name: Test portable behavior and decoding
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build/desktop --output-on-failure
       - name: Collect pinned dependency sources and notices
         shell: bash
@@ -136,6 +137,7 @@ jobs:
       - name: Test portable behavior and decoding
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build/desktop --output-on-failure
       - name: Collect Windows dependency sources
         shell: msys2 {0}
@@ -212,6 +214,7 @@ jobs:
       - name: Test portable behavior and decoding
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build/desktop --output-on-failure
       - name: Collect pinned dependency sources and notices
         shell: bash
