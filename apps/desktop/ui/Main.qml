@@ -37,20 +37,12 @@ ApplicationWindow {
         controlsIdle = false;
         controlsIdleTimer.restart();
     }
-    HoverHandler {
-        blocking: false
-        property point lastPointerPosition: Qt.point(-1, -1)
-        onPointChanged: {
-            // Qt can deliver stationary hover updates while the video renders.
-            // Only actual pointer movement should restart the inactivity timer.
-            if (!hovered)
-                return;
-            const position = point.position;
-            if (position.x !== lastPointerPosition.x || position.y !== lastPointerPosition.y) {
-                lastPointerPosition = position;
-                root.revealPlaybackControls();
-            }
-        }
+    PlaybackPointer {
+        objectName: "playbackPointer"
+        window: root
+        videoArea: stage
+        hideRequested: root.hidePlaybackControls && !stage.wordCardOpen
+        onActivity: root.revealPlaybackControls()
     }
     Timer {
         id: controlsIdleTimer
@@ -315,7 +307,6 @@ ApplicationWindow {
                     session: root.session
                     playback: root.playback
                     appearance: root.appearance
-                    hideCursor: root.hidePlaybackControls
                     bottomOverlayHeight: root.fullscreenController.active && !root.hidePlaybackControls ? playbackControls.height : 0
                     onScreenshotFinished: saved => {
                         screenshotResult.text = saved ? "Screenshot saved" : "The screenshot could not be saved. Choose a writable folder.";

@@ -1,4 +1,6 @@
 #include "subtitle_appearance.h"
+#include "playback_pointer.h"
+#include <QEnterEvent>
 #include "fullscreen_controller.h"
 #include <QScopeGuard>
 #include "learning_session.h"
@@ -237,6 +239,7 @@ private slots:
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
                                          "pausedVideoHidesControlsAndCursorUntilPointerMoves",
+                                         "cursorRestoresAcrossOverlaysAndWindowBoundaries",
                                          "explanationPhraseUsesThePluginCardStyle",
                                          "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
                                          "singleClickShowsContextualWordCardWithoutChangingTheSidebar",
@@ -1444,16 +1447,105 @@ private slots:
         QTest::mouseMove(window, point);
         QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(window->property("hidePlaybackControls").toBool(), 4000);
-        QVERIFY(video->parentItem()->property("hideCursor").toBool());
-        QTRY_COMPARE(window->cursor().shape(), Qt::BlankCursor);
+        QTRY_VERIFY(QGuiApplication::overrideCursor());
+        QCOMPARE(QGuiApplication::overrideCursor()->shape(), Qt::BlankCursor);
         QTest::mouseMove(window, point + QPoint(10, 10));
         QTRY_VERIFY(!window->property("hidePlaybackControls").toBool());
-        QVERIFY(!video->parentItem()->property("hideCursor").toBool());
-        QTRY_COMPARE(window->cursor().shape(), Qt::ArrowCursor);
+        QVERIFY(!QGuiApplication::overrideCursor());
         QTest::mouseMove(window, playButton->mapToScene(QPointF(playButton->width() / 2, playButton->height() / 2)).toPoint());
         QTest::qWait(2800);
         QVERIFY(!window->property("hidePlaybackControls").toBool());
         QVERIFY(session->paused());
+    }
+
+    void cursorRestoresAcrossOverlaysAndWindowBoundaries() {
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 0);
+        session->closeWordCard(false);
+        session->setPaused(true);
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        auto *pointer = window->findChild<PlaybackPointer *>("playbackPointer");
+        QVERIFY(video && pointer);
+        window->requestActivate();
+        QTRY_VERIFY(window->isActive());
+
+        // An overlapping control deliberately consumes hover. Window activity
+        // must still wake the cursor on a single-pixel move inside that control.
+        QQmlComponent component(engine.get());
+        component.setData(R"(
+            import QtQuick
+            MouseArea {
+                width: 150; height: 150; z: 100
+                hoverEnabled: true
+                onPositionChanged: mouse => mouse.accepted = true
+            }
+        )", QUrl());
+        std::unique_ptr<QObject> overlay(component.create());
+        auto *hoverBlocker = qobject_cast<QQuickItem *>(overlay.get());
+        QVERIFY2(hoverBlocker, qPrintable(component.errorString()));
+        hoverBlocker->setParentItem(video->parentItem());
+        const auto point = hoverBlocker->mapToScene(QPointF(40, 40)).toPoint();
+        QTest::mouseMove(window, point);
+        QTRY_VERIFY_WITH_TIMEOUT(pointer->hidden(), 4000);
+        QTest::mouseMove(window, point + QPoint(1, 0));
+        QVERIFY(!pointer->hidden());
+        QVERIFY(!window->property("hidePlaybackControls").toBool());
+        QVERIFY(!QGuiApplication::overrideCursor());
+
+        // Repeated render/hover updates at one position are not activity.
+        window->setProperty("controlsIdle", true);
+        QVERIFY(pointer->hidden());
+        QHoverEvent stationaryHover(QEvent::HoverMove, point, point, point);
+        QCoreApplication::sendEvent(window, &stationaryHover);
+        QVERIFY(pointer->hidden());
+        QEvent leave(QEvent::Leave);
+        QCoreApplication::sendEvent(window, &leave);
+        QVERIFY(!pointer->hidden());
+        QVERIFY(!QGuiApplication::overrideCursor());
+        QEnterEvent enter(point, point, window->mapToGlobal(point));
+        QCoreApplication::sendEvent(window, &enter);
+        QVERIFY(!window->property("hidePlaybackControls").toBool());
+
+        window->setProperty("controlsIdle", true);
+        QVERIFY(pointer->hidden());
+        QEvent deactivate(QEvent::WindowDeactivate);
+        QCoreApplication::sendEvent(window, &deactivate);
+        QVERIFY(!pointer->hidden());
+        QVERIFY(!QGuiApplication::overrideCursor());
+
+        overlay.reset();
+        session->replaceCues({{0, 7200000, "Merhaba dünya", {}}});
+        auto *caption = visualItem(window->contentItem(), "primarySubtitleText");
+        QVERIFY(caption);
+        const auto captionPoint = wordPoint(caption);
+        QTest::mouseMove(window, captionPoint);
+        window->setProperty("controlsIdle", true);
+        QVERIFY(pointer->hidden());
+        QTest::mouseMove(window, captionPoint + QPoint(1, 0));
+        QVERIFY(!pointer->hidden());
+        QVERIFY(!QGuiApplication::overrideCursor());
+
+        // Detaching the controller must leave no application-wide blank cursor.
+        window->setProperty("controlsIdle", true);
+        QVERIFY(pointer->hidden());
+        pointer->setWindow(nullptr);
+        QVERIFY(!QGuiApplication::overrideCursor());
+        pointer->setWindow(window);
+        QCoreApplication::sendEvent(window, &enter);
+
+        // Entering the sidebar after idle restores the ordinary control cursor.
+        window->setProperty("inspectorMode", 1);
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        QVERIFY(sidebar);
+        QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
+        QTest::mouseMove(window, point);
+        window->setProperty("controlsIdle", true);
+        QVERIFY(pointer->hidden());
+        QTest::mouseMove(window, sidebar->mapToScene(QPointF(40, 90)).toPoint());
+        QVERIFY(!pointer->hidden());
+        window->setProperty("controlsIdle", true);
+        QVERIFY(!pointer->hidden());
+        window->setProperty("controlsIdle", false);
     }
 
     void explainButtonFootprintAndStationaryCueChanges() {

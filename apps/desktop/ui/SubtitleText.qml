@@ -9,7 +9,6 @@ Item {
     property alias text: textEditor.text
     property int pixelSize: 28
     property bool selectable: true
-    property bool hideCursor: false
     property color textColor: appearance.textColor
     property alias editor: textEditor
     signal selectionChanged(string selection)
@@ -132,7 +131,7 @@ Item {
         HoverHandler {
             id: wordHover
             blocking: false
-            cursorShape: line.hideCursor ? Qt.BlankCursor : line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
+            cursorShape: line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
         }
         onTextChanged: {
             wordDelay.stop();

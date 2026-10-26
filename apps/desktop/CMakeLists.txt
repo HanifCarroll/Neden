@@ -80,7 +80,7 @@ if(APPLE)
     set_source_files_properties(macos/Neden.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set(NEDEN_UI_SOURCES platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
+set(NEDEN_UI_SOURCES app/playback_pointer.cpp app/playback_pointer.h platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
     playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp)
 set(NEDEN_QML_FILES ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml

@@ -10,7 +10,7 @@ Rectangle {
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
     property bool capturing: false
-    property bool hideCursor: false
+    readonly property bool wordCardOpen: wordCard.visible
     property real bottomOverlayHeight: 0
     readonly property bool selecting: subtitle.selecting || translation.selecting
     signal screenshotFinished(bool saved)
@@ -31,11 +31,6 @@ Rectangle {
         });
     }
     property bool windowDragEnabled: false
-    HoverHandler {
-        id: stageHover
-        blocking: false
-        cursorShape: stage.hideCursor ? Qt.BlankCursor : Qt.ArrowCursor
-    }
     signal videoClicked
     signal fullscreenRequested
     signal moveWindowRequested
@@ -62,7 +57,6 @@ Rectangle {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         enabled: stage.session.hasMedia
-        cursorShape: stage.hideCursor ? Qt.BlankCursor : Qt.ArrowCursor
         onClicked: {
             stage.forceActiveFocus();
             singleClick.restart();
@@ -124,7 +118,6 @@ Rectangle {
                 wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.primarySize
                 selectable: stage.appearance.selectable
-                hideCursor: stage.hideCursor
                 Layout.row: stage.appearance.reversed ? 1 : 0
                 onWordRequested: offset => stage.session.lookupWordAt(text, offset, false)
                 onSelectionChanged: selection => stage.session.select(selection)
@@ -139,7 +132,6 @@ Rectangle {
                 wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.secondarySize
                 selectable: stage.appearance.selectable
-                hideCursor: stage.hideCursor
                 textColor: stage.appearance.secondaryColor
                 Layout.row: stage.appearance.reversed ? 0 : 1
                 onWordRequested: offset => stage.session.lookupWordAt(text, offset, true)
