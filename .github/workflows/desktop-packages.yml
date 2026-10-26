@@ -48,11 +48,16 @@ jobs:
       - name: Stage install
         run: |
           cmake --install build/desktop --prefix "$RUNNER_TEMP/Neden"
-          tar -C "$RUNNER_TEMP" -czf Neden-linux-x86_64-preview.tar.gz Neden
+          python3 scripts/release/package_linux.py "$RUNNER_TEMP/Neden" Neden-linux-x86_64-preview.deb
+      - name: Verify installed Linux package
+        run: |
+          sudo apt-get install -y ./Neden-linux-x86_64-preview.deb
+          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH QTWEBENGINE_DISABLE_SANDBOX=1 xvfb-run -a /usr/bin/neden --smoke-test --profile "$RUNNER_TEMP/package-profile"
+          sudo apt-get remove -y neden
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: linux-package-candidate
-          path: Neden-linux-x86_64-preview.tar.gz
+          path: Neden-linux-x86_64-preview.deb
   windows:
     if: inputs.platform == 'all' || inputs.platform == 'windows'
     runs-on: windows-2022
@@ -112,11 +117,26 @@ jobs:
           cmake --install build/desktop --prefix "$env:RUNNER_TEMP/Neden"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item "$env:RUNNER_TEMP/runtime/bin/*.dll" "$env:RUNNER_TEMP/Neden/bin/"
-          Compress-Archive "$env:RUNNER_TEMP/Neden" Neden-windows-x86_64-preview.zip
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DStaging=$env:RUNNER_TEMP/Neden" "/DOutput=$env:GITHUB_WORKSPACE" scripts/release/windows.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify installed Windows package
+        shell: pwsh
+        run: |
+          $destination = "$env:RUNNER_TEMP/installed-neden"
+          $installer = Start-Process ./Neden-windows-x86_64-preview-setup.exe -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$destination") -Wait -PassThru
+          if ($installer.ExitCode) { throw "Installer failed: $($installer.ExitCode)" }
+          $env:PATH = "$env:WINDIR/System32;$env:WINDIR"
+          Remove-Item Env:QT_PLUGIN_PATH, Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
+          $env:QT_OPENGL = 'software'
+          $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--profile', "$env:RUNNER_TEMP/package-profile") -PassThru
+          if (!$app.WaitForExit(30000)) { $app.Kill(); throw 'Packaged application did not exit' }
+          if ($app.ExitCode) { throw "Packaged application failed: $($app.ExitCode)" }
+          $uninstaller = Start-Process "$destination/unins000.exe" -ArgumentList '/VERYSILENT' -Wait -PassThru
+          if ($uninstaller.ExitCode) { throw 'Uninstall failed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-package-candidate
-          path: Neden-windows-x86_64-preview.zip
+          path: Neden-windows-x86_64-preview-setup.exe
   macos:
     if: inputs.platform == 'all' || inputs.platform == 'macos'
     runs-on: macos-15
