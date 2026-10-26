@@ -1,5 +1,6 @@
 """Create a Debian installer from a staged Qt deployment (Ubuntu 24.04 x86-64)."""
 import argparse
+import configparser
 from pathlib import Path
 import re
 import os
@@ -12,13 +13,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def system_dependencies(staging):
     dependencies = set()
+    environment = os.environ.copy()
+    environment.pop('LD_LIBRARY_PATH', None)
+    environment.pop('LD_PRELOAD', None)
     for binary in staging.rglob('*'):
         if not binary.is_file() or binary.is_symlink():
             continue
         with binary.open('rb') as stream:
             if stream.read(4) != b'\x7fELF':
                 continue
-        result = subprocess.run(['ldd', str(binary)], text=True, capture_output=True)
+        result = subprocess.run(['ldd', str(binary)], text=True, capture_output=True, env=environment)
         if 'not found' in result.stdout:
             raise RuntimeError(f'Unresolved library in {binary}: {result.stdout}')
         for match in re.finditer(r'(?:=>\s+)?(/[^\s]+)', result.stdout):
@@ -28,19 +32,49 @@ def system_dependencies(staging):
             # A runtime path into a build checkout is never a system dependency.
             if not str(library).startswith(('/usr/lib/', '/lib/')):
                 raise RuntimeError(f'Unbundled dependency: {library}')
-            owner = subprocess.check_output(['dpkg-query', '-S', str(library)], text=True).split(': ')[0]
+            # Ubuntu's merged /usr can resolve a path differently from dpkg's inventory.
+            candidates = [str(library)]
+            if str(library).startswith('/usr/lib/'):
+                candidates.append(str(library).removeprefix('/usr'))
+            for candidate in candidates:
+                ownership = subprocess.run(['dpkg-query', '-S', candidate], text=True, capture_output=True)
+                if ownership.returncode == 0:
+                    break
+            else:
+                raise RuntimeError(f'No distribution package owns {library}')
+            owner = ownership.stdout.split(': ')[0]
             package = subprocess.check_output(
                 ['dpkg-query', '-W', '-f=${binary:Package} (>= ${Version})', owner], text=True)
             dependencies.add(package)
     return sorted(dependencies)
 
 
+def stage_webengine(staging, qt_prefix):
+    """Qt WebView loads Chromium indirectly, so its helper/resources need staging."""
+    helper = staging / 'libexec/QtWebEngineProcess'
+    helper.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(qt_prefix / 'libexec/QtWebEngineProcess', helper)
+    shutil.copytree(qt_prefix / 'resources', staging / 'resources', dirs_exist_ok=True)
+    shutil.copytree(qt_prefix / 'translations/qtwebengine_locales',
+                    staging / 'translations/qtwebengine_locales', dirs_exist_ok=True)
+    config = configparser.ConfigParser()
+    config.optionxform = str
+    config.read(staging / 'bin/qt.conf')
+    for key, value in {'Prefix': '..', 'LibraryExecutables': 'libexec',
+                       'Data': '.', 'Translations': 'translations'}.items():
+        config['Paths'][key] = value
+    with (staging / 'bin/qt.conf').open('w') as output:
+        config.write(output)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('staging', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--qt-prefix', type=Path, required=True)
     args = parser.parse_args()
     staging = args.staging.resolve(strict=True)
+    stage_webengine(staging, args.qt_prefix.resolve(strict=True))
     version = (ROOT / 'apps/desktop/VERSION.txt').read_text().strip()
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise SystemExit('Invalid desktop version')

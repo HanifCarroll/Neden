@@ -58,7 +58,7 @@ jobs:
         run: |
           cmake --install build/desktop --prefix "$RUNNER_TEMP/Neden"
           cp -R "$RUNNER_TEMP/release-sources/notices" "$RUNNER_TEMP/Neden/share/licenses/neden/dependencies"
-          python3 scripts/release/package_linux.py "$RUNNER_TEMP/Neden" Neden-linux-x86_64-preview.deb
+          python3 scripts/release/package_linux.py "$RUNNER_TEMP/Neden" Neden-linux-x86_64-preview.deb --qt-prefix "$QT_ROOT_DIR"
       - name: Verify installed Linux package
         run: |
           sudo apt-get install -y ./Neden-linux-x86_64-preview.deb
