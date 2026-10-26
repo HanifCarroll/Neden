@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "./ui/alert"
 import { Separator } from "./ui/separator"
 
 interface Usage {
+  canSubscribe: boolean
   subscribed: boolean
   hasBillingAccount: boolean
   periodEnd: number | null
@@ -228,10 +229,15 @@ export default function Account({ apiUrl }: { apiUrl: string }) {
           <Separator />
           <div className="flex flex-col gap-4">
             <h2 className="text-xl font-semibold">Hosted AI</h2>
-            {!billingAvailable && (
+            {!billingAvailable && usage?.canSubscribe && (
               <p className="text-muted-foreground">
                 The hosted service is being tested. Subscriptions are not open
                 yet.
+              </p>
+            )}
+            {sandbox && usage && !usage.canSubscribe && (
+              <p className="text-muted-foreground">
+                The preview is currently invitation-only.
               </p>
             )}
             {usage?.subscribed ? (
@@ -253,7 +259,8 @@ export default function Account({ apiUrl }: { apiUrl: string }) {
                 )}
               </>
             ) : (
-              billingAvailable && (
+              billingAvailable &&
+              usage?.canSubscribe && (
                 <>
                   <p>
                     $10/month · 1,000 word lookups and 300 explanations or
