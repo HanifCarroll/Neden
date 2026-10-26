@@ -206,6 +206,11 @@ if(NEDEN_PACKAGE)
     qt_generate_deploy_qml_app_script(TARGET NedenQt OUTPUT_SCRIPT NEDEN_DEPLOY_SCRIPT
         NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT ${NEDEN_DEPLOY_SCRIPT})
+    if(UNIX AND NOT APPLE)
+        qt_generate_deploy_script(TARGET NedenQt OUTPUT_SCRIPT NEDEN_RUNTIME_DEPLOY_SCRIPT
+            CONTENT "qt_deploy_runtime_dependencies(EXECUTABLE \"$<TARGET_FILE:NedenQt>\" GENERATE_QT_CONF)")
+        install(SCRIPT ${NEDEN_RUNTIME_DEPLOY_SCRIPT})
+    endif()
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE" DESTINATION share/licenses/neden)
     install(FILES "${NEDEN_QTKEYCHAIN_LICENSE}" DESTINATION share/licenses/neden RENAME QtKeychain-BSD.txt)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/fonts/LICENSE.txt" DESTINATION share/licenses/neden RENAME Inter-OFL.txt)

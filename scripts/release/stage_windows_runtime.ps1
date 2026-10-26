@@ -1,4 +1,7 @@
-param([Parameter(Mandatory=$true)][string]$Runtime)
+param(
+    [Parameter(Mandatory=$true)][string]$Runtime,
+    [Parameter(Mandatory=$true)][string]$MsysDirectory
+)
 $ErrorActionPreference = 'Stop'
 $binaryDirectory = Join-Path $Runtime 'bin'
 $library = @(Get-ChildItem "$binaryDirectory/*mpv*.dll")
@@ -27,7 +30,7 @@ while ($pending.Count -gt 0) {
         $destination = Join-Path $binaryDirectory $name
         if (Test-Path $destination) { $pending.Enqueue($destination); continue }
         if ($name -match '^(api-ms-|ext-ms-)' -or (Test-Path "$env:WINDIR/System32/$name")) { continue }
-        $source = "C:/msys64/ucrt64/bin/$name"
+        $source = Join-Path $MsysDirectory "ucrt64/bin/$name"
         if (!(Test-Path $source)) { throw "Unresolved runtime dependency: $name" }
         Copy-Item $source $destination
         $copied += $name
