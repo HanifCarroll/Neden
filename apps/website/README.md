@@ -1,7 +1,7 @@
 # Neden website
 
 Static Astro site with Tailwind 4 and shadcn/ui (Radix). Run commands from the
-repository root:
+repository root with Node.js 24 LTS and Bun 1.3.14 or newer:
 
 ```sh
 bun install --frozen-lockfile
