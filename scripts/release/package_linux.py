@@ -55,6 +55,9 @@ def system_dependencies(staging):
 
 def stage_webengine(staging, qt_prefix):
     """Qt WebView loads Chromium indirectly, so its helper/resources need staging."""
+    # Neden does not read serial GPS devices. Qt deploy copies this optional
+    # positioning plugin even when the SerialPort module is not installed.
+    (staging / 'plugins/position/libqtposition_nmea.so').unlink(missing_ok=True)
     helper = staging / 'libexec/QtWebEngineProcess'
     helper.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(qt_prefix / 'libexec/QtWebEngineProcess', helper)

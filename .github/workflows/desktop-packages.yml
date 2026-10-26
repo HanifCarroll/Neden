@@ -74,6 +74,7 @@ jobs:
         with:
           name: linux-corresponding-sources
           compression-level: 0
+          include-hidden-files: true
           path: |
             ${{ runner.temp }}/release-sources
 
@@ -184,6 +185,7 @@ jobs:
         with:
           name: windows-corresponding-sources
           compression-level: 0
+          include-hidden-files: true
           path: |
             ${{ runner.temp }}/release-sources
             ${{ runner.temp }}/dependency-sources
@@ -235,5 +237,6 @@ jobs:
         with:
           name: macos-corresponding-sources
           compression-level: 0
+          include-hidden-files: true
           path: |
             ${{ runner.temp }}/release-sources

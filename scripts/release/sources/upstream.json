@@ -220,5 +220,13 @@
     ],
     "url": "https://github.com/media-kit/libmpv-darwin-build/archive/refs/tags/v0.6.0.tar.gz",
     "sha256": "afade6a15e001700c6d92860bb33eba43020450001e7464595717ab9a222d28a"
+  },
+  {
+    "name": "icu-linux",
+    "platforms": [
+      "linux"
+    ],
+    "url": "https://github.com/unicode-org/icu/releases/download/release-73-2/icu4c-73_2-src.tgz",
+    "sha256": "818a80712ed3caacd9b652305e01afc7fa167e6f2e94996da44b90c2ab604ce1"
   }
 ]
