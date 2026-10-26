@@ -41,7 +41,7 @@ def main():
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     staging = args.staging.resolve(strict=True)
-    version = (ROOT / 'apps/desktop/VERSION').read_text().strip()
+    version = (ROOT / 'apps/desktop/VERSION.txt').read_text().strip()
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise SystemExit('Invalid desktop version')
     # Every private ELF resolves dependencies relative to the installed tree.

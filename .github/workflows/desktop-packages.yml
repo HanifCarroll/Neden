@@ -154,7 +154,7 @@ jobs:
           Copy-Item "$env:RUNNER_TEMP/release-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/dependencies" -Recurse
           Copy-Item "$env:RUNNER_TEMP/dependency-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/msys2" -Recurse
           Copy-Item "$env:RUNNER_TEMP/runtime/bin/*.dll" "$env:RUNNER_TEMP/Neden/bin/"
-          $version = (Get-Content apps/desktop/VERSION -Raw).Trim()
+          $version = (Get-Content apps/desktop/VERSION.txt -Raw).Trim()
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DDesktopVersion=$version" "/DStaging=$env:RUNNER_TEMP/Neden" "/DOutput=$env:GITHUB_WORKSPACE" scripts/release/windows.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Verify installed Windows package
