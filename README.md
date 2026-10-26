@@ -2,7 +2,11 @@
 
 A desktop video player for language learning. Watch your own videos with two subtitle tracks, look up words in context, and ask follow-up questions about the dialogue.
 
-Neden includes a standalone **Qt Quick desktop player** and a separate **IINA plugin**. The GitHub repository keeps its original plugin name so existing IINA update links continue to work.
+Neden includes a standalone **Qt Quick desktop player** and a separate **IINA plugin**.
+
+Visit [neden.hanifcarroll.com](https://neden.hanifcarroll.com) for a walkthrough,
+screenshots, and current download availability. Legacy IINA update URLs redirect
+to this repository.
 
 ## What it does
 
@@ -30,7 +34,7 @@ One setup using Homebrew:
 xcode-select --install  # Only if developer tools are not installed
 brew install cmake qt mpv python
 
-git clone https://github.com/HanifCarroll/iina-language-learning-plugin.git neden
+git clone https://github.com/HanifCarroll/Neden.git neden
 cd neden
 export CMAKE_PREFIX_PATH="$(brew --prefix qt)"
 export PATH="$(brew --prefix qt)/bin:$PATH"
@@ -77,11 +81,12 @@ The legacy desktop bundle identifier and macOS application-support directory (`N
 | --- | --- |
 | `apps/desktop/` | C++ application modules, QML interface, native platform adapters, and tests |
 | `apps/iina-plugin/` | TypeScript IINA integration, web UI, Swift transport helper, and tests |
+| `apps/website/` | Astro product website, shared design styles, and verified download links |
 | `shared/` | Fonts, icons, branding, and their license notices |
 | `scripts/` | Builds, packaging, runtime checks, and validation |
 | `docs/` | Architecture, behavior contracts, setup, and platform limitations |
 
-Start with [development conventions](docs/development.md), [desktop architecture](docs/desktop/ARCHITECTURE.md), or the [plugin specification](docs/iina-plugin/SPEC.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible bugs through [GitHub Issues](https://github.com/HanifCarroll/iina-language-learning-plugin/issues).
+Start with [development conventions](docs/development.md), [desktop architecture](docs/desktop/ARCHITECTURE.md), or the [plugin specification](docs/iina-plugin/SPEC.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible bugs through [GitHub Issues](https://github.com/HanifCarroll/Neden/issues).
 
 ## License
 
