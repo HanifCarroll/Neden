@@ -4,7 +4,7 @@ import { registerDesktopClient } from "../src/desktop-registration";
 import { identity } from "../src/identity";
 import { authenticate, requireSandboxAccess } from "../src/auth";
 import type { Env } from "../src/environment";
-const emails: { text: string }[] = [];
+const emails: { subject: string; text: string; html: string }[] = [];
 const settings: Env = {
   ...env,
   BETTER_AUTH_SECRET: "local-tests-only-secret-with-more-than-32-characters",
@@ -45,6 +45,10 @@ describe("account lifecycle", () => {
     );
     expect(before.status).toBe(403);
     const link = emails.at(-1)!.text.match(/https?:\/\/[^\s]+/)![0];
+    expect(emails.at(-1)!.html).toContain(">Verify email</a>");
+    expect(emails.at(-1)!.html).toContain(
+      `href="${link.replaceAll("&", "&amp;")}"`,
+    );
     expect((await auth.handler(new Request(link))).status).toBeLessThan(400);
     const login = await auth.handler(
       request("sign-in/email", { email, password }),

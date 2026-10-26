@@ -14,6 +14,7 @@ export interface Env {
       to: string;
       subject: string;
       text: string;
+      html: string;
     }): Promise<unknown>;
   };
   DEEPSEEK_API_KEY?: string;

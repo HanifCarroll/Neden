@@ -3,6 +3,7 @@ import { jwt } from "better-auth/plugins";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { Env } from "./environment";
 import { ServiceError } from "./contracts";
+import { accountEmail, type AccountEmailPurpose } from "./account-email";
 
 export const desktopClientId = "neden-desktop";
 
@@ -41,7 +42,7 @@ export function identityOptions(env: Env) {
       }: {
         user: { email: string };
         url: string;
-      }) => sendAccountEmail(env, user.email, "Reset your Neden password", url),
+      }) => sendAccountEmail(env, user.email, "password-reset", url),
     },
     emailVerification: {
       sendOnSignUp: true,
@@ -53,7 +54,7 @@ export function identityOptions(env: Env) {
       }: {
         user: { email: string };
         url: string;
-      }) => sendAccountEmail(env, user.email, "Verify your Neden email", url),
+      }) => sendAccountEmail(env, user.email, "verification", url),
     },
     user: {
       deleteUser: {
@@ -125,7 +126,7 @@ export function identity(env: Env) {
 async function sendAccountEmail(
   env: Env,
   email: string,
-  subject: string,
+  purpose: AccountEmailPurpose,
   url: string,
 ) {
   if (!env.EMAIL || !env.EMAIL_FROM)
@@ -133,7 +134,6 @@ async function sendAccountEmail(
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: "Neden" },
     to: email,
-    subject,
-    text: `${subject}\n\nOpen this link to continue:\n${url}\n\nIf you did not request this, you can ignore this email.`,
+    ...accountEmail(purpose, url),
   });
 }
