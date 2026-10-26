@@ -1,0 +1,28 @@
+1
+00:00:00,000 --> 00:00:06,000
+Hava bugün gerçekten güzel.
+
+2
+00:00:06,000 --> 00:00:12,000
+Şehir başka türlü görünüyor.
+
+3
+00:00:12,000 --> 00:00:18,000
+Biraz daha kalalım.
+
+4
+00:00:18,000 --> 00:00:24,000
+Yarın yine yoğun olacak.
+
+5
+00:00:24,000 --> 00:00:30,000
+Şimdi sadece izleyelim.
+
+6
+00:00:30,000 --> 00:00:36,000
+Evet, iyi fikir.
+
+7
+00:00:36,000 --> 00:00:42,000
+Burası her zaman güzel.
+

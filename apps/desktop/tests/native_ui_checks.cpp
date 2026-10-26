@@ -41,6 +41,7 @@ public:
     int wordRequests = 0;
     QJsonObject sentContext;
     QString wordCardResponse = R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","formNote":"Dalmışım is an inflected form of dalmak.","otherSenses":[{"meaning":"to dive into water","example":"suya dalmak","translation":"to dive into the water","formNote":"Uses the infinitive dalmak."}],"otherUses":[]})";
+    QString explanationResponse = "### Natural meaning\nI became absorbed.";
     StudyResponseServer() {
         connect(this, &QTcpServer::newConnection, this, [this] {
             auto *socket = nextPendingConnection();
@@ -75,9 +76,11 @@ public:
                                                              {"finish_reason", "stop"},
                                                              {"message", QJsonObject{{"content", wordCardResponse}}}}}}})
                                  .toJson();
-                } else
-                    answer = "data: {\"choices\":[{\"delta\":{\"content\":\"### Natural meaning\\nI became "
-                             "absorbed.\"}}]}\n\ndata: [DONE]\n\n";
+                } else {
+                    answer = "data: " + QJsonDocument(QJsonObject{{"choices", QJsonArray{
+                        QJsonObject{{"delta", QJsonObject{{"content", explanationResponse}}}}}}})
+                        .toJson(QJsonDocument::Compact) + "\n\ndata: [DONE]\n\n";
+                }
                 socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " +
                               QByteArray::number(answer.size()) + "\r\n\r\n" + answer);
                 socket->disconnectFromHost();
@@ -233,6 +236,41 @@ private:
     }
 
 private slots:
+    void captureWebsiteScreenshots() {
+        if (!qEnvironmentVariableIsSet("NEDEN_CAPTURE_WEBSITE"))
+            QSKIP("Opt-in website capture uses original sample media and deterministic study responses.");
+        StudyResponseServer server;
+        configureStudyResponses(server);
+        server.wordCardResponse = R"({"lemma":"kalmak","partOfSpeech":"verb","meaning":"let’s stay","explanation":"","formNote":"kal- (stay) + -alım (let’s).","otherSenses":[],"otherUses":[]})";
+        server.explanationResponse = "### Translation\nLet’s stay a little longer.\n\n### Breakdown\n"
+            "- **Biraz** — a little; a small amount. Here it refers to time.\n"
+            "- **daha** — more. Together, **biraz daha** means ‘a little longer’.\n"
+            "- **kalalım** — let’s stay. **kal-** means ‘stay’; **-alım** makes a suggestion that includes the speaker.";
+        window->resize(1440, 900);
+        session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        session->setPaused(true);
+        chooseSubtitleFile(false, qEnvironmentVariable("NEDEN_CHECK_PRIMARY"));
+        chooseSubtitleFile(true, qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
+        session->seek(14);
+        QTRY_VERIFY(std::abs(session->position() - 14) < 1);
+        window->setProperty("showRecent", false);
+        QMetaObject::invokeMethod(window, "toggleTranscript");
+        QTest::qWait(700);
+        const auto output = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        QVERIFY(window->grabWindow().save(output + "/website-player.png"));
+        const QString cue = "Biraz daha kalalım.";
+        session->lookupWordAt(cue, cue.indexOf("kalalım"));
+        QTRY_COMPARE(study->words()->state(), QString("complete"));
+        QTest::qWait(300);
+        QVERIFY(window->grabWindow().save(output + "/website-word.png"));
+        session->closeDefinition();
+        session->explainCue();
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
+        QTest::qWait(700);
+        QVERIFY(window->grabWindow().save(output + "/website-explanation.png"));
+    }
+
     void init() {
         const QStringList headlessChecks{"wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "followUpSupportsMacDeleteToLineStart", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",

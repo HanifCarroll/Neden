@@ -1,0 +1,28 @@
+1
+00:00:00,000 --> 00:00:06,000
+The weather is really nice today.
+
+2
+00:00:06,000 --> 00:00:12,000
+The city looks different this way.
+
+3
+00:00:12,000 --> 00:00:18,000
+Let’s stay a little longer.
+
+4
+00:00:18,000 --> 00:00:24,000
+It’ll be busy again tomorrow.
+
+5
+00:00:24,000 --> 00:00:30,000
+Let’s just watch for now.
+
+6
+00:00:30,000 --> 00:00:36,000
+Yes, good idea.
+
+7
+00:00:36,000 --> 00:00:42,000
+It’s always beautiful here.
+
