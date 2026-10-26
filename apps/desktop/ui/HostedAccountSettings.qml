@@ -26,7 +26,6 @@ ColumnLayout {
     }
     Flow {
         Layout.fillWidth: true
-        implicitHeight: childrenRect.height
         spacing: Theme.space2
         ActionButton {
             text: "Sign in"
