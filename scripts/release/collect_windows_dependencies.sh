@@ -46,6 +46,10 @@ while IFS= read -r package; do
         mkdir -p "$(dirname "$target")"
         cp "$notice" "$target"
     done < <(pacman -Qlq "$package" | grep '/share/licenses/' || true)
+    if [[ ! -d "$destination/notices/$package" ]]; then
+        python scripts/release/extract_package_notices.py \
+            "$destination/archives/$archive" "$destination/notices/$package"
+    fi
     rm "$binary_archive"
 done < "$destination/metadata/packages.txt"
 (cd "$destination" && sha256sum archives/* > SHA256SUMS)
