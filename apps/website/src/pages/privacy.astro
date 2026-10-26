@@ -14,14 +14,45 @@ import SiteLayout from "../layouts/SiteLayout.astro"
     </p>
     <h2>This website</h2>
     <p>
-      There are no accounts, advertising trackers, or analytics scripts on this
-      site. Cloudflare hosts the website and processes network information,
-      including IP addresses, to deliver and protect it. See{" "}
+      There are no advertising trackers or analytics scripts on this site.
+      Cloudflare hosts the website and processes network information, including
+      IP addresses, to deliver and protect it. See{" "}
       <a href="https://www.cloudflare.com/privacypolicy/">
         Cloudflare’s privacy policy
       </a>
       .
     </p>
+    {import.meta.env.PUBLIC_API_URL && (
+      <>
+        <h2>Optional Neden accounts — test environment</h2>
+        <p>
+          Account sign-in uses Better Auth on Cloudflare. We store your name,
+          email, password hash, verification status, and session records.
+          Passwords are hashed before storage. A necessary session cookie keeps
+          you signed in. Cloudflare sends verification and password recovery
+          messages. Temporary rate-limit records help protect accounts from
+          repeated sign-in attempts.
+        </p>
+        <p>
+          Hosted AI and subscriptions are not open yet. The planned service
+          sends selected subtitle text and conversation context to DeepSeek.
+          Videos and local flashcards stay on your computer. Our service does
+          not store prompt or response text; the AI provider has its own data
+          handling practices. Usage records contain request identifiers,
+          allowance counts, and token counts. Old usage records are pruned after
+          100 days.
+        </p>
+        <p>
+          Stripe handles payment details separately. Neden keeps a billing
+          customer reference and subscription status. Deleting your account
+          cancels any subscription and removes sign-in and usage records. A
+          minimal deletion marker and billing event identifiers remain to
+          prevent delayed billing updates from restoring access; Stripe retains
+          its own billing records. You can delete your account from the account
+          page.
+        </p>
+      </>
+    )}
     <p>
       Download and source links take you to GitHub, which has its own{" "}
       <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">

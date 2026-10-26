@@ -1,0 +1,23 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro"
+import Account from "../components/Account"
+const apiUrl = import.meta.env.PUBLIC_API_URL
+---
+
+<SiteLayout
+  title="Your account — Neden"
+  description="Manage your Neden account and optional hosted AI subscription."
+>
+  {apiUrl ? (
+    <Account client:only="react" apiUrl={apiUrl} />
+  ) : (
+    <section class="site-container prose-page">
+      <h1>Neden accounts</h1>
+      <p>
+        The hosted AI service is being tested. Accounts and subscriptions are
+        not open yet.
+      </p>
+      <a href="/#downloads">Download the free player</a>
+    </section>
+  )}
+</SiteLayout>

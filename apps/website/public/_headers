@@ -1,7 +1,11 @@
 /*
   X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
+  Referrer-Policy: no-referrer
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
+
+/account/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
