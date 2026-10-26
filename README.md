@@ -82,6 +82,7 @@ The legacy desktop bundle identifier and macOS application-support directory (`N
 | `apps/desktop/` | C++ application modules, QML interface, native platform adapters, and tests |
 | `apps/iina-plugin/` | TypeScript IINA integration, web UI, Swift transport helper, and tests |
 | `apps/website/` | Astro product website, shared design styles, and verified download links |
+| `apps/api/` | Experimental Better Auth, billing, and hosted AI service ([setup and limits](apps/api/README.md)) |
 | `shared/` | Fonts, icons, branding, and their license notices |
 | `scripts/` | Builds, packaging, runtime checks, and validation |
 | `docs/` | Architecture, behavior contracts, setup, and platform limitations |

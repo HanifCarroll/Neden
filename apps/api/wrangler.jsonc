@@ -1,0 +1,91 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neden-api-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "WEBSITE_ORIGIN": "http://localhost:4321",
+    "API_ORIGIN": "http://localhost:8787",
+    "AI_ENABLED": "false",
+    "BILLING_LIVE": "false",
+    "GLOBAL_DAILY_REQUEST_LIMIT": "2000",
+    "MONTHLY_WORD_LIMIT": "1000",
+    "MONTHLY_EXPLANATION_LIMIT": "300"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ACCOUNT_USAGE",
+        "class_name": "AccountUsage"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "AccountUsage"
+      ]
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "neden-local",
+      "database_id": "local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": false
+  },
+  "env": {
+    "staging": {
+      "name": "neden-api-staging",
+      "vars": {
+        "WEBSITE_ORIGIN": "https://neden-staging.hanifcarroll.com",
+        "API_ORIGIN": "https://neden-api-staging.hanifcarroll.com",
+        "AI_ENABLED": "false",
+        "BILLING_LIVE": "false",
+        "GLOBAL_DAILY_REQUEST_LIMIT": "2000",
+        "MONTHLY_WORD_LIMIT": "1000",
+        "MONTHLY_EXPLANATION_LIMIT": "300",
+        "STRIPE_PRICE_ID": "price_1UUvDSK7alsSe3q54tjIZBWt",
+        "EMAIL_FROM": "accounts@mail.neden.hanifcarroll.com"
+      },
+      "routes": [
+        {
+          "pattern": "neden-api-staging.hanifcarroll.com",
+          "custom_domain": true
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "ACCOUNT_USAGE",
+            "class_name": "AccountUsage"
+          }
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "neden-staging",
+          "database_id": "ac066618-b893-4a06-9911-1dc409401046",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": [
+            "accounts@mail.neden.hanifcarroll.com"
+          ]
+        }
+      ]
+    }
+  }
+}

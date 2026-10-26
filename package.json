@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/iina-plugin",
-    "apps/website"
+    "apps/website",
+    "apps/api"
   ],
   "scripts": {
     "typecheck": "bun run --cwd apps/iina-plugin typecheck",
@@ -24,6 +25,7 @@
     "install:desktop": "python3 scripts/install_desktop.py",
     "dev:website": "bun run --cwd apps/website dev",
     "build:website": "bun run --cwd apps/website build",
-    "check:website": "bun run --cwd apps/website typecheck && bun run --cwd apps/website lint"
+    "check:website": "bun run --cwd apps/website typecheck && bun run --cwd apps/website lint",
+    "check:api": "bun run --cwd apps/api typecheck && bun run --cwd apps/api test"
   }
 }
