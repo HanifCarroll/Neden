@@ -34,6 +34,20 @@ class LinuxDependencyTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'Unbundled dependency'):
                     package_linux.system_dependencies(staging)
 
+    def test_merged_usr_library_uses_distribution_inventory_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory)
+            (staging / 'Neden').write_bytes(b'\x7fELF')
+            results = [
+                subprocess.CompletedProcess([], 0, 'libc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x1)', ''),
+                subprocess.CompletedProcess([], 1, '', 'No path found'),
+                subprocess.CompletedProcess([], 0, 'libc6:amd64: /lib/x86_64-linux-gnu/libc.so.6', ''),
+            ]
+            with patch.object(package_linux.subprocess, 'run', side_effect=results) as run, \
+                 patch.object(package_linux.subprocess, 'check_output', return_value='libc6:amd64 (>= 2.39)'):
+                self.assertEqual(package_linux.system_dependencies(staging), ['libc6:amd64 (>= 2.39)'])
+                self.assertEqual(run.call_args.args[0][-1], '/lib/x86_64-linux-gnu/libc.so.6')
+
 
 if __name__ == '__main__':
     unittest.main()
