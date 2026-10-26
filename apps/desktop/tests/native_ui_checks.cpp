@@ -818,10 +818,18 @@ private slots:
         auto *primary = visualItem(window->contentItem(), "primaryTrackChoice");
         auto *secondary = visualItem(window->contentItem(), "secondaryTrackChoice");
         QVERIFY(primary && secondary);
-        QCOMPARE(primary->property("count").toInt(), session->subtitleTracks().size() + 1);
-        QCOMPARE(secondary->property("count").toInt(), session->subtitleTracks().size() + 1);
-        QCOMPARE(primary->property("currentText").toString(), session->sourceSubtitleName());
-        QCOMPARE(secondary->property("currentText").toString(), session->translationSubtitleName());
+        // Each picker includes Off and Load file, and hides the other slot's track.
+        int primaryChoices = 2;
+        int secondaryChoices = 2;
+        for (const auto &entry : session->subtitleTracks()) {
+            const auto track = entry.toMap();
+            primaryChoices += !track.value("secondary").toBool();
+            secondaryChoices += !track.value("primary").toBool();
+        }
+        QCOMPARE(primary->property("count").toInt(), primaryChoices);
+        QCOMPARE(secondary->property("count").toInt(), secondaryChoices);
+        QCOMPARE(primary->property("currentText").toString(), session->sourceSubtitleName().isEmpty() ? QString("Off") : session->sourceSubtitleName());
+        QCOMPARE(secondary->property("currentText").toString(), session->translationSubtitleName().isEmpty() ? QString("Off") : session->translationSubtitleName());
 
         QTest::keyClick(window, Qt::Key_Comma, Qt::ControlModifier);
         auto *settings = window->findChild<QObject *>("settingsDialog");
@@ -1142,6 +1150,11 @@ private slots:
     }
 
     void videoAndSidebarReachTheTopWithoutATitleStrip() {
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+            QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+            session->setPaused(true);
+        }
         window->setProperty("showRecent", false);
         window->setProperty("inspectorMode", 1);
         const auto savedSize = window->size();
@@ -1220,8 +1233,10 @@ private slots:
         QVERIFY(!visualItem(card, "wordFullExplanationButton"));
         auto *grammar = visualItem(card, "wordGrammar");
         QVERIFY(grammar);
-        QCOMPARE(grammar->property("text").toString(), QString("verb · Base form: dalmak"));
+        QCOMPARE(grammar->property("text").toString(), QString("verb"));
         QVERIFY(card->height() < window->height());
+        QVERIFY(!visualItem(card, "wordOtherSenses")->isVisible());
+        click("wordDetailsButton");
         QVERIFY(visualItem(card, "wordOtherSenses")->isVisible());
         QVERIFY(!visualItem(card, "wordOtherUses")->isVisible());
         auto *explainButton = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
