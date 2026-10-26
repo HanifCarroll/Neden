@@ -13,6 +13,7 @@
 #include "mpv_playback.h"
 #include "thumbnail_service.h"
 #include <QQuickImageProvider>
+#include <QQuickItem>
 #include <QColorSpace>
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -26,6 +27,30 @@
 #include <QtWebView/QtWebView>
 
 namespace {
+bool showsWhiteVideoFrame(QQuickWindow *window) {
+    const auto *video = window->findChild<QQuickItem *>("videoSurface");
+    if (!video || video->width() < 1 || video->height() < 1)
+        return false;
+    const auto image = window->grabWindow();
+    if (image.isNull())
+        return false;
+    // Sample the center of the generated white fixture, clear of letterboxing
+    // and playback controls. Metadata and a running clock cannot prove rendering.
+    for (const qreal vertical : {0.45, 0.5, 0.55}) {
+        for (const qreal horizontal : {0.45, 0.5, 0.55}) {
+            const auto position = video->mapToScene(QPointF(video->width() * horizontal, video->height() * vertical));
+            const QPoint pixel(qRound(position.x() * image.width() / window->width()),
+                               qRound(position.y() * image.height() / window->height()));
+            if (!image.rect().contains(pixel))
+                return false;
+            const auto color = image.pixelColor(pixel);
+            if (color.red() < 220 || color.green() < 220 || color.blue() < 220)
+                return false;
+        }
+    }
+    return true;
+}
+
 class PreviewImages : public QQuickImageProvider {
 public:
     explicit PreviewImages(ThumbnailService *service)
@@ -72,11 +97,15 @@ int main(int argc, char **argv) {
     commandLineParser.addHelpOption();
     commandLineParser.addVersionOption();
     commandLineParser.addOption({"smoke-test", "Render one frame and exit; with a video, verify playback advances (requires --profile)."});
+    commandLineParser.addOption({"smoke-test-white-frame", "Also verify visible pixels of the generated white video fixture (requires --smoke-test and a video)."});
     commandLineParser.addOption(
         {"profile", "Use a separate local data directory for development checks.", "directory"});
     commandLineParser.addPositionalArgument("video", "Local video to open.", "[video]");
     commandLineParser.process(application);
     if (commandLineParser.isSet("smoke-test") && !commandLineParser.isSet("profile"))
+        commandLineParser.showHelp(2);
+    if (commandLineParser.isSet("smoke-test-white-frame") &&
+        (!commandLineParser.isSet("smoke-test") || commandLineParser.positionalArguments().isEmpty()))
         commandLineParser.showHelp(2);
     // Retain existing study data while using Neden for every visible application name.
     const auto storage =
@@ -127,8 +156,11 @@ int main(int argc, char **argv) {
         // Supplying a synthetic video also exercises the installed renderer and
         // playback clock. This mode is isolated from the normal user profile.
         const bool verifyPlayback = !commandLineParser.positionalArguments().isEmpty();
+        const bool verifyPixels = commandLineParser.isSet("smoke-test-white-frame");
         QObject::connect(mainWindow, &QQuickWindow::frameSwapped, &application,
-                         [&application, &session, &playbackEngine, verifyPlayback] {
+                         [&application, &session, &playbackEngine, verifyPlayback, verifyPixels] {
+            if (verifyPixels)
+                return;
             if (!verifyPlayback || (session.duration() > 0 && session.position() >= 0.2 &&
                                      !playbackEngine.sourceOutputSize().isEmpty()))
                 application.exit(0);
@@ -136,6 +168,15 @@ int main(int argc, char **argv) {
         if (verifyPlayback) {
             QObject::connect(&playbackEngine, &PlaybackEngine::loaded, &application,
                              [&session] { session.setPaused(false); });
+        }
+        if (verifyPixels) {
+            auto *pixelCheck = new QTimer(&application);
+            QObject::connect(pixelCheck, &QTimer::timeout, &application,
+                             [&application, &session, mainWindow] {
+                if (session.position() >= 0.2 && showsWhiteVideoFrame(mainWindow))
+                    application.exit(0);
+            });
+            pixelCheck->start(100);
         }
         QTimer::singleShot(20000, &application, [&application] { application.exit(4); });
         mainWindow->update();
