@@ -2,9 +2,10 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
+import { dependencyNotices } from './scripts/dependency-notices.mjs';
 export default defineConfig({
   site: 'https://neden.hanifcarroll.com',
   devToolbar: { enabled: false },
-  vite: { plugins: [tailwindcss()] },
+  vite: { plugins: [tailwindcss(), dependencyNotices()] },
   integrations: [react(), sitemap()],
 });
