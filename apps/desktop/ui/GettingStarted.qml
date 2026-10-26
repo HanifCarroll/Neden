@@ -57,7 +57,7 @@ ScrollView {
             color: Theme.ink
         }
         Label {
-            text: "Playback works without AI. For word meanings and explanations, choose your provider and save its API key in Settings → Services. The provider bills your usage separately; Neden does not include AI credits. Relevant subtitle text and your questions are sent to that provider. Your key is stored in your operating system's credential store."
+            text: "Playback works without an account. For word meanings and explanations, choose Neden Cloud or your own API key in Settings → AI & accounts. Cloud is an invited preview; your own provider bills API usage separately. Relevant subtitle text and questions are sent to your chosen service. Keys are stored securely on your device."
             color: Theme.muted
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
