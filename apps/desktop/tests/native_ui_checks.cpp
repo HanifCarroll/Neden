@@ -316,6 +316,7 @@ private slots:
                                          "trackDropdownsDisplayTheirNamedRolesAndReadableSelection",
                                          "subtitlePickersExcludeTheOtherSlotsTrack",
                                          "settingsDraftAndShortcutPolicyUseTheActualUi",
+                                         "settingsSeparateCloudFromProviderDrafts",
                                          "streamingRepliesStayAnchoredToTheLatestQuestion"};
         if (qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS") &&
             !headlessChecks.contains(QString::fromUtf8(QTest::currentTestFunction()))) {
@@ -624,6 +625,63 @@ private slots:
         QTest::keyClick(window, Qt::Key_M);
         QCOMPARE(session->volumeLevel(), 0.0);
         session->volume(60);
+    }
+
+    void settingsSeparateCloudFromProviderDrafts() {
+        const auto originalMode = study->account()->enabled();
+        const auto originalSize = window->size();
+        const auto restore = qScopeGuard([&] {
+            study->account()->setEnabled(originalMode);
+            window->resize(originalSize);
+        });
+        study->account()->setEnabled(false);
+        window->findChild<QObject *>("playerDialogs")->setProperty("settingsPage", 2);
+        QVERIFY(QMetaObject::invokeMethod(window, "openSettings", Q_ARG(QVariant, QVariant())));
+        auto *dialog = window->findChild<QObject *>("settingsDialog");
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        auto *mode = visualItem(window->contentItem(), "aiModeChoice");
+        auto *provider = visualItem(window->contentItem(), "ownProviderSettings");
+        auto *model = visualItem(window->contentItem(), "aiModelField");
+        auto *advanced = visualItem(window->contentItem(), "advancedAiSettings");
+        auto *wordProvider = visualItem(window->contentItem(), "wordProviderChoice");
+        auto *downloads = visualItem(window->contentItem(), "subtitleDownloadSettings");
+        QVERIFY(mode && provider && model && advanced && wordProvider && downloads);
+        QVERIFY(provider->isVisible());
+        QVERIFY(!wordProvider->isVisible());
+        QVERIFY(!downloads->property("expanded").toBool());
+        const auto originalModel = model->property("text");
+        QVERIFY(model->setProperty("text", QString("unsaved-test-model")));
+        QVERIFY(mode->setProperty("currentIndex", 0));
+        QVERIFY(QMetaObject::invokeMethod(mode, "activated", Q_ARG(int, 0)));
+        QVERIFY(study->account()->enabled());
+        QVERIFY(!provider->isVisible());
+        QVERIFY(downloads->isVisible());
+        for (const QSize size : {QSize(1280, 820), QSize(900, 540)}) {
+            window->resize(size);
+            QTest::qWait(100);
+            QVERIFY(mode->width() > 200);
+            const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+            if (!artifacts.isEmpty())
+                QVERIFY(window->grabWindow().save(artifacts + QString("/settings-cloud-%1.png").arg(size.width())));
+        }
+        QVERIFY(mode->setProperty("currentIndex", 1));
+        QVERIFY(QMetaObject::invokeMethod(mode, "activated", Q_ARG(int, 1)));
+        QVERIFY(!study->account()->enabled());
+        QVERIFY(provider->isVisible());
+        QCOMPARE(model->property("text").toString(), QString("unsaved-test-model"));
+        QTest::qWait(100);
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty())
+            QVERIFY(window->grabWindow().save(artifacts + "/settings-own-key-900.png"));
+        auto *toggle = visualItem(window->contentItem(), "advancedAiSettingsToggle");
+        QVERIFY(toggle);
+        QVERIFY(QMetaObject::invokeMethod(toggle, "clicked"));
+        QVERIFY(wordProvider->isVisible());
+        QVERIFY(QMetaObject::invokeMethod(toggle, "clicked"));
+        QVERIFY(!wordProvider->isVisible());
+        QVERIFY(model->setProperty("text", originalModel));
+        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+        QTRY_VERIFY(!dialog->property("opened").toBool());
     }
 
     void playbackOptionsPresentGroupedControlsAndReadableDetails() {

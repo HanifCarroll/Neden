@@ -15,7 +15,7 @@ Item {
         SettingsGroup {
             title: "Playback history"
             Layout.fillWidth: true
-            description: "Positions, subtitle tracks and picture adjustments are saved for local videos. Network URLs stay in the current queue."
+            description: "Save your position and settings for local videos."
             CheckBox {
                 text: "Remember recently played videos"
                 checked: pane.session.preferences.rememberHistory

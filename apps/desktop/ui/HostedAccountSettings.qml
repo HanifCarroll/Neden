@@ -9,41 +9,29 @@ ColumnLayout {
     required property HostedAccount account
     spacing: Theme.space3
     Label {
-        text: "Neden Cloud · Preview"
-        color: Theme.ink
-        font.pixelSize: Theme.title
-    }
-    Label {
-        text: "An invited preview with AI included. Sign in in your browser; your API keys stay separate. Billing is in test mode."
+        text: "AI included · Invited preview · Test billing"
         color: Theme.muted
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
-    }
-    CheckBox {
-        text: "Use Neden Cloud for explanations and word lookups"
-        checked: pane.account.enabled
-        onToggled: pane.account.enabled = checked
     }
     Flow {
         Layout.fillWidth: true
         spacing: Theme.space2
         ActionButton {
             text: "Sign in"
+            primary: true
+            visible: !pane.account.connected
             enabled: !pane.account.busy
             onClicked: pane.account.signIn()
         }
         ActionButton {
-            text: "Connect saved account"
-            enabled: !pane.account.busy
-            onClicked: pane.account.connectSaved()
-        }
-        ActionButton {
             text: "Account & billing"
+            visible: pane.account.connected
             onClicked: pane.account.manageAccount()
         }
     }
     Label {
-        text: (!pane.account.connected && !pane.account.busy ? "Not connected. " : "") + pane.account.message
+        text: pane.account.message
         color: Theme.muted
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
@@ -53,15 +41,27 @@ ColumnLayout {
         visible: pane.account.connected
         text: {
             const allowance = pane.account.allowance;
-            if (!allowance.words || !allowance.explanations) return "Checking allowance…";
-            if (!allowance.canSubscribe) return "This preview is available to invited accounts only.";
-            if (!allowance.subscribed) return "Subscribe on your account page to use hosted AI.";
-            return allowance.words.used + " / " + allowance.words.limit + " word lookups · "
-                + allowance.explanations.used + " / " + allowance.explanations.limit + " explanations and follow-ups";
+            if (!allowance.words || !allowance.explanations)
+                return "Checking allowance…";
+            if (!allowance.canSubscribe)
+                return "This preview is available to invited accounts only.";
+            if (!allowance.subscribed)
+                return "Subscribe on your account page to use hosted AI.";
+            return allowance.words.used + " / " + allowance.words.limit + " word lookups · " + allowance.explanations.used + " / " + allowance.explanations.limit + " explanations and follow-ups";
         }
         color: Theme.muted
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
+    }
+    SettingsDisclosure {
+        title: "Connection options"
+        objectName: "cloudConnectionOptions"
+        visible: !pane.account.connected && !pane.account.busy
+        Layout.fillWidth: true
+        ActionButton {
+            text: "Use saved account"
+            onClicked: pane.account.connectSaved()
+        }
     }
     ActionButton {
         text: pane.account.connected ? "Sign out" : "Cancel connection"
