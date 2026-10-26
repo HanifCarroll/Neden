@@ -2,7 +2,8 @@
   "name": "neden",
   "private": true,
   "workspaces": [
-    "apps/iina-plugin"
+    "apps/iina-plugin",
+    "apps/website"
   ],
   "scripts": {
     "typecheck": "bun run --cwd apps/iina-plugin typecheck",
@@ -20,6 +21,9 @@
     "test:desktop:core": "sh scripts/desktop.sh core-test",
     "lint:desktop": "sh scripts/desktop.sh lint",
     "check:layout": "python3 scripts/check_layout.py",
-    "install:desktop": "python3 scripts/install_desktop.py"
+    "install:desktop": "python3 scripts/install_desktop.py",
+    "dev:website": "bun run --cwd apps/website dev",
+    "build:website": "bun run --cwd apps/website build",
+    "check:website": "bun run --cwd apps/website typecheck && bun run --cwd apps/website lint"
   }
 }
