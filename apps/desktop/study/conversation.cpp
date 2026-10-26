@@ -26,7 +26,7 @@ const QString systemPrompt = QStringLiteral(
     "Start each bullet with the bold source word, then its meaning here, then the useful grammar "
     "or usage that produces that meaning. Connect inflected words to their dictionary forms and explain the "
     "endings that matter here "
-    "in plain language. For Turkish, show the useful stem/suffix relationship and what it contributes to "
+    "in plain language. Show the useful stem/affix relationship and what it contributes to "
     "this sentence. "
     "Distinguish a word's grammatical form from its conversational function: a repeated command form can, "
     "for example, "
