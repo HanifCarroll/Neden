@@ -41,6 +41,9 @@ def main():
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     staging = args.staging.resolve(strict=True)
+    version = (ROOT / 'apps/desktop/VERSION').read_text().strip()
+    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+        raise SystemExit('Invalid desktop version')
     # Every private ELF resolves dependencies relative to the installed tree.
     for binary in staging.rglob('*'):
         if not binary.is_file() or binary.is_symlink():
@@ -58,7 +61,7 @@ def main():
         (package / 'DEBIAN').mkdir()
         size = sum(p.stat().st_size for p in staging.rglob('*') if p.is_file()) // 1024
         (package / 'DEBIAN/control').write_text(
-            'Package: neden\nVersion: 0.1.0~preview1\nArchitecture: amd64\n'
+            f'Package: neden\nVersion: {version}~preview1\nArchitecture: amd64\n'
             'Maintainer: Neden contributors\n'
             'Section: video\nPriority: optional\n'
             f'Installed-Size: {size}\nDepends: {", ".join(dependencies)}\n'

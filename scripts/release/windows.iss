@@ -5,10 +5,14 @@
 #ifndef Output
   #error Output is required
 #endif
+#ifndef DesktopVersion
+  #error DesktopVersion is required
+#endif
 [Setup]
 AppId={{6D1E6B8B-8427-46C6-B4E5-8D4AF9558E22}
 AppName=Neden
-AppVersion=0.1.0-preview
+AppVersion={#DesktopVersion}-preview
+VersionInfoVersion={#DesktopVersion}.0
 AppPublisher=Neden contributors
 AppPublisherURL=https://neden.hanifcarroll.com
 DefaultDirName={localappdata}\Programs\Neden

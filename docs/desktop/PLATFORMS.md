@@ -4,7 +4,13 @@ macOS is the current development target. The player uses Qt Quick/OpenGL, an exp
 
 Linux has a source-build recipe at `scripts/build_linux_runtime.sh` and an explicit `AUDITED_MPV_PREFIX` CMake option. The configuration check binds the reviewed mpv manifest to its binary and queries FFmpeg's embedded license. Qt WebView may use a Qt WebEngine backend, bringing its own dependencies and notices. Earlier container checks do not establish physical desktop playback or release support. QtKeychain provides the credential interface, but its Linux backend still needs native validation.
 
-Windows has no reviewed playback runtime configuration. QtKeychain provides the credential interface; its Windows backend still needs native validation. The full player build deliberately fails rather than selecting an arbitrary mpv binary. Portable core tests can be built using `NEDEN_CORE_ONLY=ON` on a compatible Qt toolchain.
+Windows has an experimental source-build recipe in `scripts/release/build_windows_runtime.sh`.
+It builds shared FFmpeg and libmpv in MSYS2 UCRT64 with GPL/nonfree components
+disabled, then generates the C import library for the MSVC/Qt application.
+`AUDITED_MPV_PREFIX` selects this runtime explicitly; an arbitrary system mpv
+binary is rejected. QtKeychain provides the credential interface; its Windows
+backend still needs native validation. Portable core tests can be built using
+`NEDEN_CORE_ONLY=ON` on a compatible Qt toolchain.
 
 Before claiming Windows or Linux support, verify a reviewed runtime and distributable package, hardware decoding and software fallback, actual visible playback, dual Turkish/English subtitles, Turkish search, dictionary navigation and cleanup, explanation streaming/cancellation with mock credentials, settings shortcuts, fullscreen and focus, and local card persistence. Containers can validate builds and pure logic; they cannot establish representative GPU, display, or fullscreen performance.
 

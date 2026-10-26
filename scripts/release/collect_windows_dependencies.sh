@@ -4,6 +4,9 @@ set -euo pipefail
 runtime="$(cygpath -u "$1")"
 destination="$(cygpath -u "$2")"
 mkdir -p "$destination/archives" "$destination/notices" "$destination/metadata"
+# The disposable MSYS2 runner can install packages before initializing its GPG home.
+pacman-key --init
+pacman-key --populate msys2
 packages=()
 while IFS= read -r dll; do
     dll="${dll//$'\r'/}"

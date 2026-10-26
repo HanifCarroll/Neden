@@ -32,11 +32,16 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/runtime
-            ${{ runner.temp }}/runtime-sources
           key: runtime-linux-v1-${{ hashFiles('scripts/build_linux_runtime.sh') }}
       - name: Build and verify LGPL playback
         if: steps.runtime-cache.outputs.cache-hit != 'true'
         run: bash scripts/build_linux_runtime.sh "$RUNNER_TEMP/runtime" "$RUNNER_TEMP/runtime-sources"
+      - name: Cache the completed runtime before application checks
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/runtime
+          key: runtime-linux-v1-${{ hashFiles('scripts/build_linux_runtime.sh') }}
       - name: Configure and build
         run: |
           cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release -DAUDITED_MPV_PREFIX="$RUNNER_TEMP/runtime" -DNEDEN_PACKAGE=ON
@@ -92,17 +97,25 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-libass mingw-w64-ucrt-x86_64-libplacebo
             mingw-w64-ucrt-x86_64-nasm mingw-w64-ucrt-x86_64-python
+      - id: runtime-environment
+        shell: msys2 {0}
+        run: echo "hash=$(pacman -Q | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - id: runtime-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ${{ runner.temp }}/runtime
-            ${{ runner.temp }}/runtime-sources
-          key: runtime-windows-v1-${{ hashFiles('scripts/release/build_windows_runtime.sh') }}
+          key: runtime-windows-v2-${{ steps.runtime-environment.outputs.hash }}-${{ hashFiles('scripts/release/build_windows_runtime.sh') }}
       - name: Build LGPL playback
         if: steps.runtime-cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: bash scripts/release/build_windows_runtime.sh "$RUNNER_TEMP/runtime" "$RUNNER_TEMP/runtime-sources"
+      - name: Cache the completed runtime before application checks
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/runtime
+          key: runtime-windows-v2-${{ steps.runtime-environment.outputs.hash }}-${{ hashFiles('scripts/release/build_windows_runtime.sh') }}
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06
         with:
@@ -141,7 +154,8 @@ jobs:
           Copy-Item "$env:RUNNER_TEMP/release-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/dependencies" -Recurse
           Copy-Item "$env:RUNNER_TEMP/dependency-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/msys2" -Recurse
           Copy-Item "$env:RUNNER_TEMP/runtime/bin/*.dll" "$env:RUNNER_TEMP/Neden/bin/"
-          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DStaging=$env:RUNNER_TEMP/Neden" "/DOutput=$env:GITHUB_WORKSPACE" scripts/release/windows.iss
+          $version = (Get-Content apps/desktop/VERSION -Raw).Trim()
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DDesktopVersion=$version" "/DStaging=$env:RUNNER_TEMP/Neden" "/DOutput=$env:GITHUB_WORKSPACE" scripts/release/windows.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Verify installed Windows package
         shell: pwsh
