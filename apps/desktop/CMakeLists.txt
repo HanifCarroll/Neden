@@ -79,6 +79,10 @@ if(APPLE)
     target_sources(NedenQt PRIVATE macos/Neden.icns)
     set_source_files_properties(macos/Neden.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
+if(UNIX AND NOT APPLE)
+    # The generated QML module already occupies build/Neden on case-sensitive filesystems.
+    set_target_properties(NedenQt PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
+endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set(NEDEN_UI_SOURCES app/playback_pointer.cpp app/playback_pointer.h platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
