@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def system_dependencies(staging):
     dependencies = set()
+    inspected_libraries = set()
     environment = os.environ.copy()
     environment.pop('LD_LIBRARY_PATH', None)
     environment.pop('LD_PRELOAD', None)
@@ -29,6 +30,9 @@ def system_dependencies(staging):
             library = Path(match.group(1)).resolve()
             if library.is_relative_to(staging.resolve()):
                 continue
+            if library in inspected_libraries:
+                continue
+            inspected_libraries.add(library)
             # A runtime path into a build checkout is never a system dependency.
             if not str(library).startswith(('/usr/lib/', '/lib/')):
                 raise RuntimeError(f'Unbundled dependency: {library}')
