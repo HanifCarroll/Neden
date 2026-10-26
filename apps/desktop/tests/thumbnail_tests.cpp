@@ -1,3 +1,4 @@
+#include "playback_environment.h"
 #include "thumbnail_service.h"
 #include <QFile>
 #include <QSignalSpy>
@@ -18,6 +19,16 @@ public:
 class ThumbnailTests : public QObject {
     Q_OBJECT
 private slots:
+    void bundledDecoderRendersLocalVideo() {
+        const auto path = QFINDTESTDATA("fixtures/white.mp4");
+        QVERIFY(!path.isEmpty());
+        ThumbnailService service;
+        service.request(path, 0);
+        QTRY_VERIFY_WITH_TIMEOUT(!service.currentImage().isNull(), 7000);
+        QCOMPARE(service.currentImage().size(), QSize(320, 180));
+        const auto center = service.currentImage().pixelColor(160, 90);
+        QVERIFY(center.red() > 225 && center.green() > 225 && center.blue() > 225);
+    }
     void immediateThrottledAndRefined() {
         QTemporaryDir directory;
         QFile file(directory.filePath("video"));
@@ -77,5 +88,10 @@ private slots:
         QVERIFY(worker.requests.isEmpty());
     }
 };
-QTEST_GUILESS_MAIN(ThumbnailTests)
+int main(int argc, char **argv) {
+    QCoreApplication application(argc, argv);
+    initializePlaybackEnvironment();
+    ThumbnailTests tests;
+    return QTest::qExec(&tests, argc, argv);
+}
 #include "thumbnail_tests.moc"
