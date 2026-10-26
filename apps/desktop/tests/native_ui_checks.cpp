@@ -246,21 +246,50 @@ private slots:
             "- **Biraz** — a little; a small amount. Here it refers to time.\n"
             "- **daha** — more. Together, **biraz daha** means ‘a little longer’.\n"
             "- **kalalım** — let’s stay. **kal-** means ‘stay’; **-alım** makes a suggestion that includes the speaker.";
+        double captureSeconds = 14;
+        QString cue = "Biraz daha kalalım.";
+        QString word = "kalalım";
+        QString expectedTranslation;
+        const auto fixturePath = qEnvironmentVariable("NEDEN_CAPTURE_FIXTURE");
+        if (!fixturePath.isEmpty()) {
+            QFile fixtureFile(fixturePath);
+            QVERIFY(fixtureFile.open(QIODevice::ReadOnly));
+            QJsonParseError error;
+            const auto document = QJsonDocument::fromJson(fixtureFile.readAll(), &error);
+            QVERIFY2(error.error == QJsonParseError::NoError, qPrintable(error.errorString()));
+            QVERIFY(document.isObject());
+            const auto fixture = document.object();
+            captureSeconds = fixture.value("seconds").toDouble(-1);
+            cue = fixture.value("cue").toString();
+            word = fixture.value("word").toString();
+            expectedTranslation = fixture.value("translation").toString();
+            QVERIFY(std::isfinite(captureSeconds) && captureSeconds >= 0);
+            QVERIFY(!cue.isEmpty() && !word.isEmpty() && cue.contains(word));
+            QVERIFY(fixture.value("wordCard").isObject());
+            server.wordCardResponse = QString::fromUtf8(
+                QJsonDocument(fixture.value("wordCard").toObject()).toJson(QJsonDocument::Compact));
+            server.explanationResponse = fixture.value("explanation").toString();
+            QVERIFY(!server.explanationResponse.isEmpty());
+        }
         window->resize(1440, 900);
         session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
         QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
         session->setPaused(true);
         chooseSubtitleFile(false, qEnvironmentVariable("NEDEN_CHECK_PRIMARY"));
         chooseSubtitleFile(true, qEnvironmentVariable("NEDEN_CHECK_SECONDARY"));
-        session->seek(14);
-        QTRY_VERIFY(std::abs(session->position() - 14) < 1);
+        session->seek(captureSeconds);
+        QTRY_VERIFY(std::abs(session->position() - captureSeconds) < 0.25);
+        QTRY_COMPARE(session->subtitle(), cue);
+        if (!expectedTranslation.isEmpty())
+            QTRY_COMPARE(session->translation(), expectedTranslation);
         window->setProperty("showRecent", false);
-        QMetaObject::invokeMethod(window, "toggleTranscript");
+        window->setProperty("inspectorMode", 1);
+        QTRY_COMPARE(window->property("inspectorMode").toInt(), 1);
+        QTest::mouseMove(window, QPoint(12, 200));
         QTest::qWait(700);
         const auto output = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         QVERIFY(window->grabWindow().save(output + "/website-player.png"));
-        const QString cue = "Biraz daha kalalım.";
-        session->lookupWordAt(cue, cue.indexOf("kalalım"));
+        session->lookupWordAt(cue, cue.indexOf(word));
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QTest::qWait(300);
         QVERIFY(window->grabWindow().save(output + "/website-word.png"));

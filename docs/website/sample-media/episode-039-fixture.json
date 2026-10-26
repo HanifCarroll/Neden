@@ -1,0 +1,16 @@
+{
+  "seconds": 3178.36,
+  "cue": "Nail, vereyim mi asayı sana ha?",
+  "translation": "Nail, shall I give you the staff?",
+  "word": "vereyim",
+  "wordCard": {
+    "lemma": "vermek",
+    "partOfSpeech": "verb",
+    "meaning": "let me give",
+    "explanation": "",
+    "formNote": "ver- (give) + -eyim (let me). With mi: shall I give?",
+    "otherSenses": [],
+    "otherUses": []
+  },
+  "explanation": "### Translation\nNail, shall I give you the staff?\n\n### Breakdown\n- **vereyim mi** — shall I give? **ver-** means ‘give’; **-eyim** proposes an action by the speaker. **mi** turns it into a question.\n- **asayı** — the staff. **asa** takes **-yı** to mark the specific object.\n- **sana** — to you; the dative form of **sen**.\n- **ha?** — a spoken tag, roughly ‘huh?’"
+}
