@@ -160,6 +160,8 @@ int main(int argc, char **argv) {
         // playback clock. This mode is isolated from the normal user profile.
         const bool verifyPlayback = !commandLineParser.positionalArguments().isEmpty();
         const bool verifyPixels = commandLineParser.isSet("smoke-test-white-frame");
+        if (verifyPixels)
+            mpv_request_log_messages(playbackEngine.handle(), "v");
         QObject::connect(mainWindow, &QQuickWindow::frameSwapped, &application,
                          [&application, &session, &playbackEngine, verifyPlayback, verifyPixels] {
             if (verifyPixels)

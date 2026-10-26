@@ -214,6 +214,13 @@ void MpvPlayback::drainEvents() {
         if (event->event_id == MPV_EVENT_NONE)
             break;
 
+        // Log events are disabled by default. The explicit synthetic-video
+        // smoke check requests them to diagnose installed rendering failures.
+        if (event->event_id == MPV_EVENT_LOG_MESSAGE) {
+            const auto *message = static_cast<const mpv_event_log_message *>(event->data);
+            qInfo().noquote() << message->prefix << message->text;
+        }
+
         if (event->event_id == MPV_EVENT_FILE_LOADED) {
             const std::unique_ptr<char, decltype(&mpv_free)> path(mpv_get_property_string(mpv.get(), "path"),
                                                                   &mpv_free);

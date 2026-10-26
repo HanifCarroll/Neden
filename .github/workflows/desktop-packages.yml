@@ -195,7 +195,16 @@ jobs:
           if (!$app.WaitForExit(30000)) { $app.Kill(); throw 'Packaged application did not exit' }
           $app.Refresh()
           Write-Output "Installed application exit code: $($app.ExitCode)"
-          if ($app.ExitCode -ne 0) { throw "Packaged application failed: $($app.ExitCode)" }
+          if ($app.ExitCode -ne 0) {
+            # A diagnostic comparison only: this does not turn a failed default
+            # configuration into an accepted package.
+            $env:QSG_RENDER_LOOP = 'basic'
+            $comparison = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile/basic", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -PassThru
+            if (!$comparison.WaitForExit(30000)) { $comparison.Kill(); throw 'Basic-loop comparison timed out' }
+            $comparison.Refresh()
+            Write-Output "Basic-loop comparison exit code: $($comparison.ExitCode)"
+            throw "Packaged application failed in its default configuration: $($app.ExitCode)"
+          }
           $uninstaller = Start-Process "$destination/unins000.exe" -ArgumentList '/VERYSILENT' -Wait -PassThru
           if ($uninstaller.ExitCode -ne 0) { throw 'Uninstall failed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -209,7 +218,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-smoke-failure
-          path: ${{ runner.temp }}/package-profile/smoke-failure.png
+          path: |
+            ${{ runner.temp }}/package-profile/**/smoke-failure.png
+            Neden-windows-x86_64-preview-setup.exe
       - name: Preserve corresponding sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
