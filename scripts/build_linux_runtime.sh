@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Development-only Linux LGPL runtime. Run in a disposable prepared build environment.
+# Linux LGPL runtime. Requires the build packages listed in desktop-packages.yml.
 set -euo pipefail
 runtime_prefix="${1:-/opt/neden-lgpl}"
 source_directory="${2:-/opt/neden-runtime-sources}"
@@ -33,8 +33,14 @@ python3 - "$runtime_prefix" <<'PY'
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 prefix = pathlib.Path(sys.argv[1])
+# Resolve codec dependencies beside each library, both during checks and after
+# relocation. An executable's RUNPATH does not cover indirect dependencies.
+for dependency in (prefix / 'lib').glob('*.so*'):
+    if dependency.is_file() and not dependency.is_symlink():
+        subprocess.run(['patchelf', '--set-rpath', '$ORIGIN', str(dependency)], check=True)
 library = (prefix / 'lib/libmpv.so').resolve(strict=True)
 manifest = {
     'version': '0.41.0', 'gpl': False,

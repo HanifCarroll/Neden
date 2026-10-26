@@ -49,14 +49,11 @@ jobs:
       - name: Test portable behavior and decoding
         env:
           QT_QPA_PLATFORM: offscreen
-          LD_LIBRARY_PATH: ${{ runner.temp }}/runtime/lib
         run: ctest --test-dir build/desktop --output-on-failure
       - name: Collect pinned dependency sources and notices
         shell: bash
         run: python3 scripts/release/collect_sources.py linux "$RUNNER_TEMP/release-sources"
       - name: Stage install
-        env:
-          LD_LIBRARY_PATH: ${{ runner.temp }}/runtime/lib
         run: |
           cmake --install build/desktop --prefix "$RUNNER_TEMP/Neden"
           cp -R "$RUNNER_TEMP/release-sources/notices" "$RUNNER_TEMP/Neden/share/licenses/neden/dependencies"
