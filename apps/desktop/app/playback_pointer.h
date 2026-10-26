@@ -3,6 +3,7 @@
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QTimer>
 #include <QtQml/qqmlregistration.h>
 
 // Observes window input before child controls consume it and owns the idle cursor.
@@ -13,6 +14,7 @@ class PlaybackPointer : public QObject {
     Q_PROPERTY(QQuickItem *videoArea READ videoArea WRITE setVideoArea NOTIFY videoAreaChanged)
     Q_PROPERTY(bool hideRequested READ hideRequested WRITE setHideRequested NOTIFY hideRequestedChanged)
     Q_PROPERTY(bool hidden READ hidden NOTIFY hiddenChanged)
+    Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
 public:
     explicit PlaybackPointer(QObject *parent = nullptr);
     ~PlaybackPointer() override;
@@ -23,21 +25,29 @@ public:
     bool hideRequested() const { return shouldHide; }
     void setHideRequested(bool requested);
     bool hidden() const { return ownsBlankCursor; }
+    bool enabled() const { return monitoringEnabled; }
+    void setEnabled(bool enabled);
 signals:
     void windowChanged();
     void videoAreaChanged();
     void hideRequestedChanged();
     void hiddenChanged();
     void activity();
+    void enabledChanged();
 protected:
     bool eventFilter(QObject *object, QEvent *event) override;
 private:
     void reveal();
     void restoreCursor();
     void updateCursor();
+    void updatePositionMonitoring();
+    void checkPointerPosition();
     QPointer<QQuickWindow> playerWindow;
     QPointer<QQuickItem> videoItem;
     QPointF lastPosition;
+    QPoint lastGlobalPosition;
+    QTimer positionTimer;
+    bool monitoringEnabled = true;
     bool pointerInside = false;
     bool shouldHide = false;
     bool ownsBlankCursor = false;

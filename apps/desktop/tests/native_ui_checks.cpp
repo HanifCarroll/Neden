@@ -240,6 +240,7 @@ private slots:
                                          "explainButtonFootprintAndStationaryCueChanges",
                                          "pausedVideoHidesControlsAndCursorUntilPointerMoves",
                                          "cursorRestoresAcrossOverlaysAndWindowBoundaries",
+                                         "cursorMovementRecoversWithoutWindowEvents",
                                          "explanationPhraseUsesThePluginCardStyle",
                                          "hoveringAndExplainingTheFullLineUseOneExplicitRequest",
                                          "singleClickShowsContextualWordCardWithoutChangingTheSidebar",
@@ -1546,6 +1547,79 @@ private slots:
         window->setProperty("controlsIdle", true);
         QVERIFY(!pointer->hidden());
         window->setProperty("controlsIdle", false);
+    }
+
+    void cursorMovementRecoversWithoutWindowEvents() {
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+            QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        }
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 0);
+        session->setPaused(true);
+        session->closeWordCard(false);
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        auto *pointer = window->findChild<PlaybackPointer *>("playbackPointer");
+        QVERIFY(video && pointer);
+        window->requestActivate();
+        QTRY_VERIFY(window->isActive());
+        window->contentItem()->forceActiveFocus();
+
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            QTest::keyClick(window, Qt::Key_F);
+            QTRY_VERIFY(fullscreen->active());
+        }
+        const auto restoreFullscreen = qScopeGuard([&] { fullscreen->setActive(false); });
+        QPoint position = video->mapToScene(QPointF(80, 80)).toPoint();
+        QCursor::setPos(window->mapToGlobal(position));
+        QTest::mouseMove(window, position);
+        QTRY_VERIFY_WITH_TIMEOUT(pointer->hidden(), 4000);
+
+        // Model the AppKit failure: the OS pointer moves, but no tracking-area
+        // movement/entry/exit reaches the player. Never touch a screen edge.
+        class BlockPointerEvents : public QObject {
+            bool eventFilter(QObject *, QEvent *event) override {
+                return event->type() == QEvent::MouseMove || event->type() == QEvent::Enter ||
+                       event->type() == QEvent::Leave;
+            }
+        } blocker;
+        window->installEventFilter(&blocker);
+        const auto removeFilter = qScopeGuard([&] { window->removeEventFilter(&blocker); });
+        const auto movePointer = [&] {
+            position += QPoint(1, 0);
+            QCursor::setPos(window->mapToGlobal(position));
+        };
+        movePointer();
+        QTRY_VERIFY_WITH_TIMEOUT(!pointer->hidden(), 250);
+        QVERIFY(!window->property("hidePlaybackControls").toBool());
+        QVERIFY(!QGuiApplication::overrideCursor());
+
+        // Keep receiving physical movement without Qt movement events for longer
+        // than the idle delay: the bar must not repeatedly disappear and reappear.
+        for (int movement = 0; movement < 30; ++movement) {
+            movePointer();
+            QTest::qWait(100);
+            QVERIFY(!pointer->hidden());
+            QVERIFY(!window->property("hidePlaybackControls").toBool());
+        }
+        QTRY_VERIFY_WITH_TIMEOUT(pointer->hidden(), 4000);
+        QTest::qWait(150);
+        QVERIFY(pointer->hidden()); // Sampling a stationary cursor is not activity.
+        movePointer();
+        QTRY_VERIFY_WITH_TIMEOUT(!pointer->hidden(), 250);
+
+        // The recent-videos screen must stop polling and release a hidden cursor.
+        window->setProperty("controlsIdle", true);
+        QVERIFY(pointer->hidden());
+        window->setProperty("showRecent", true);
+        QVERIFY(!pointer->enabled());
+        QVERIFY(!pointer->hidden());
+        QTest::qWait(100);
+        QSignalSpy activity(pointer, &PlaybackPointer::activity);
+        movePointer();
+        QTest::qWait(150);
+        QCOMPARE(activity.count(), 0);
+        window->setProperty("showRecent", false);
     }
 
     void explainButtonFootprintAndStationaryCueChanges() {

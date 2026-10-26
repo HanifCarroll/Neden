@@ -41,6 +41,7 @@ ApplicationWindow {
         objectName: "playbackPointer"
         window: root
         videoArea: stage
+        enabled: root.session.hasMedia && !root.showRecent
         hideRequested: root.hidePlaybackControls && !stage.wordCardOpen
         onActivity: root.revealPlaybackControls()
     }
