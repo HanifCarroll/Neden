@@ -50,6 +50,10 @@ using software rendering and disposable profiles. Native credential integration
 checks write/read/delete one unique synthetic account only in disposable CI sessions.
 Packaged `--smoke-test --profile TEMP VIDEO` waits for decoded video dimensions,
 advancing playback and a rendered window frame, not just process creation.
+Installed CI checks also pass `--smoke-test-white-frame` with the generated
+30-second `white-smoke.mp4` fixture. Nine central samples must contain white
+video pixels. A timed-out pixel check saves `smoke-failure.png` in its disposable
+profile for diagnosis; ordinary app use does not capture these images.
 
 Signing certificates, paid accounts and physical hardware are external prerequisites;
 absence must remain explicit in the release record. The app's manual checker offers
