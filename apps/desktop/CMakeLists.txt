@@ -5,6 +5,9 @@ if(APPLE)
     enable_language(OBJCXX)
 endif()
 add_compile_definitions(NEDEN_VERSION="${NEDEN_VERSION}")
+set(NEDEN_CLOUD_API_ORIGIN "https://neden-api-staging.hanifcarroll.com" CACHE STRING "Optional hosted API origin")
+set(NEDEN_CLOUD_WEBSITE_ORIGIN "https://neden-staging.hanifcarroll.com" CACHE STRING "Hosted account website origin")
+add_compile_definitions(NEDEN_CLOUD_API_ORIGIN="${NEDEN_CLOUD_API_ORIGIN}" NEDEN_CLOUD_WEBSITE_ORIGIN="${NEDEN_CLOUD_WEBSITE_ORIGIN}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -20,13 +23,20 @@ find_package(Qt6 REQUIRED COMPONENTS Test Qml Network Gui)
 enable_testing()
 set(NEDEN_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/app" "${CMAKE_CURRENT_SOURCE_DIR}/study"
     "${CMAKE_CURRENT_SOURCE_DIR}/subtitles" "${CMAKE_CURRENT_SOURCE_DIR}/playback"
-    "${CMAKE_CURRENT_SOURCE_DIR}/platform")
+    "${CMAKE_CURRENT_SOURCE_DIR}/platform" "${CMAKE_CURRENT_SOURCE_DIR}/account")
 include_directories(${NEDEN_INCLUDE_DIRS})
-set(NEDEN_STUDY_SOURCES app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h study/ai_client.cpp study/ai_client.h
+set(NEDEN_STUDY_SOURCES account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h study/ai_client.cpp study/ai_client.h
     study/flashcard_deck.cpp study/flashcard_deck.h study/explanation_session.cpp study/explanation_session.h subtitles/subtitle_service.cpp subtitles/subtitle_service.h
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/conversation.cpp study/conversation.h study/study_target.h)
 set(NEDEN_SESSION_SOURCES app/media_history.cpp app/media_history.h playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
     subtitles/subtitle_timeline.cpp subtitles/subtitle_timeline.h app/recent_videos.cpp app/recent_videos.h playback/playback_engine.h subtitles/cues.cpp subtitles/cues.h)
+
+qt_add_executable(hosted_account_tests tests/hosted_account_tests.cpp account/hosted_account.cpp account/hosted_account.h study/ai_client.cpp study/conversation.cpp)
+target_link_libraries(hosted_account_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Network)
+add_test(NAME hosted_account_tests COMMAND hosted_account_tests)
+# Run manually against staging with an output path for the browser authorization link.
+qt_add_executable(hosted_service_check EXCLUDE_FROM_ALL tests/hosted_service_check.cpp ${NEDEN_STUDY_SOURCES} subtitles/cues.cpp)
+target_link_libraries(hosted_service_check PRIVATE Qt6::Qml Qt6::Network)
 
 qt_add_executable(conversation_tests tests/conversation_tests.cpp study/conversation.cpp study/conversation.h)
 target_link_libraries(conversation_tests PRIVATE Qt6::Test)
@@ -91,8 +101,8 @@ endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set(NEDEN_UI_SOURCES app/release_check.cpp app/release_check.h app/support_diagnostics.cpp app/support_diagnostics.h app/playback_pointer.cpp app/playback_pointer.h platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
-    playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp)
-set(NEDEN_QML_FILES ui/GettingStarted.qml ui/SupportDialog.qml ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
+    playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp platform/hosted_credentials.h platform/hosted_credentials.cpp)
+set(NEDEN_QML_FILES ui/HostedAccountSettings.qml ui/GettingStarted.qml ui/SupportDialog.qml ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
         ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/ExplanationPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0

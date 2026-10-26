@@ -1,4 +1,5 @@
 #include "word_lookup.h"
+#include "hosted_account.h"
 #include "network_error.h"
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -184,6 +185,8 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
         request.endpoint = endpoint;
         request.model = model;
         request.messages = messages;
+        request.hostedBody = QJsonObject{{"operation", "word"}, {"word", word},
+                                         {"context", HostedAccount::languageContext(context)}};
         request.streamResponse = false;
         request.requireJsonResponse = true;
         request.noKeyRequired = noKeyRequired;
@@ -222,7 +225,7 @@ void WordLookup::observe(QNetworkReply *networkReply) {
         const int code = networkReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (networkReply->error() != QNetworkReply::NoError || code != 200) {
             requestState = "failed";
-            statusText = networkFailureMessage(code, networkReply->error(), "Word lookup failed");
+            statusText = hostedFailureMessage(networkReply, networkReply->readAll(), networkFailureMessage(code, networkReply->error(), "Word lookup failed"));
         } else {
             try {
                 const auto answer = parseContextMeaning(networkReply->readAll());

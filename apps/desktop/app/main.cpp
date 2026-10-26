@@ -2,6 +2,9 @@
 #include "shortcut_map.h"
 #include "subtitle_appearance.h"
 #include "credentials.h"
+#include "hosted_credentials.h"
+#include <QDesktopServices>
+#include <QSettings>
 #include "platform_media_session.h"
 #include "desktop_application.h"
 #include "recent_videos.h"
@@ -120,6 +123,16 @@ int main(int argc, char **argv) {
     RecentVideos recentVideos(storage);
     CredentialStore credentials;
     StudyServices study(storage, [&](const QString &endpoint) { return credentials.read(endpoint); });
+    QSettings cloudPreferences(storage + "/cloud.ini", QSettings::IniFormat);
+    study.account()->setEnabled(cloudPreferences.value("enabled", false).toBool());
+    configureHostedCredentials(*study.account());
+    QObject::connect(study.account(), &HostedAccount::changed, &application, [&] {
+        cloudPreferences.setValue("enabled", study.account()->enabled());
+    });
+    if (study.account()->enabled()) restoreHostedCredentialsWithoutInteraction(*study.account());
+    QObject::connect(study.account(), &HostedAccount::browserRequested, &application, [](const QUrl &url) {
+        QDesktopServices::openUrl(url);
+    });
     study.settings()->setCredentialAuthorizer([&](const QString &endpoint, CredentialStore::Completion completed) { credentials.authorize(endpoint, std::move(completed)); });
     study.settings()->setCredentialWriter([&](const QString &endpoint, QByteArray key, CredentialStore::Completion completed) { credentials.save(endpoint, std::move(key), std::move(completed)); });
     study.subtitles()->setSubtitleLoginReader([&] { return credentials.subtitleLogin(); });

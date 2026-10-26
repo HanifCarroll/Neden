@@ -19,6 +19,7 @@ public:
     void followUp(const QString &question);
     void retry();
     QJsonArray messages() const;
+    QJsonObject hostedRequest() const;
     void append(const QString &text);
     void finish(const QString &status, const QString &error = {});
     void setProvider(const QString &name, bool fallback);

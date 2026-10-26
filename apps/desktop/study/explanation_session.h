@@ -34,6 +34,7 @@ public:
     Q_INVOKABLE void retryExplanation();
     Q_INVOKABLE void stop();
     void invalidateContext();
+    void setHostedAccount(HostedAccount *account) { aiClient.setHostedAccount(account); }
 signals:
     void changed();
     void replyStarted();

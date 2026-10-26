@@ -1,4 +1,5 @@
 #include "conversation.h"
+#include "hosted_context.h"
 #include <QJsonDocument>
 #include <stdexcept>
 
@@ -191,4 +192,22 @@ void Conversation::clear() {
     active = false;
     frozenContext = {};
     history.clear();
+}
+
+QJsonObject Conversation::hostedRequest() const {
+    if (history.isEmpty()) throw std::runtime_error("Select a subtitle first.");
+    const auto context = hostedLanguageContext(frozenContext);
+    QJsonObject request{{"operation", history.size() == 1 ? "explain" : "followup"}, {"context", context}};
+    if (history.size() > 1) {
+        QJsonArray completed;
+        for (int index = 0; index + 1 < history.size(); ++index) {
+            const auto &turn = history.at(index);
+            if (turn.status == "complete") completed.append(QJsonObject{{"question", turn.question}, {"answer", turn.answer}});
+        }
+        if (completed.isEmpty() || completed.size() > 10)
+            throw std::runtime_error("Start a new explanation. Hosted follow-ups need a completed answer and allow ten previous turns.");
+        request.insert("history", completed);
+        request.insert("question", latest().question);
+    }
+    return request;
 }

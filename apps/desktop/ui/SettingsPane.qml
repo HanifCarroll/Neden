@@ -309,6 +309,15 @@ ColumnLayout {
         ColumnLayout {
             width: parent.width
             spacing: Theme.space4
+            HostedAccountSettings {
+                Layout.fillWidth: true
+                account: pane.session.study.account
+            }
+            Label {
+                text: "Your own AI provider"
+                color: Theme.ink
+                font.pixelSize: Theme.title
+            }
             Label {
                 text: "AI API base URL"
                 color: Theme.muted

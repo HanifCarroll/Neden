@@ -4,6 +4,7 @@ The Qt Quick desktop application is organized around complete workflows. QML ren
 
 ```text
 apps/desktop/
+  account/    optional hosted sign-in, renewal, allowances and authenticated transport
   app/        composition, settings, profile storage, history, player session
   playback/   libmpv adapter, video surface, geometry and renderer lifetime
   subtitles/  file decoding, two-track timeline, transcript, subtitle acquisition
@@ -29,6 +30,17 @@ apps/desktop/
 - `FlashcardDeck` owns bounded cards, review scheduling, atomic updates and TSV export. Saving returns a `FlashcardSaveResult` with success and a message; the session emits that result to the explanation view. The deck message remains available to its own management UI. `StudyInteraction` saves the explanation's original target and answer, never a mixture of that answer with the current playhead.
 - `AppSettings` parses Qt form drafts into typed connection/learning settings. Provider choices expose stable IDs and names rather than positional mappings. All fields validate and persist before active settings change; failed saves leave active values unchanged. Credential actions use the native adapter and return status only.
 - `ProfileStore` privately coordinates atomic updates to the existing `study.json` document. Settings writes preserve cards and card writes preserve settings. Version 1 data remains readable; damaged documents are preserved and writes are disabled. No migration, duplicate profile, or plaintext credential storage is introduced.
+
+`HostedAccount` owns the optional browser authorization-code/PKCE flow, bounded
+loopback callback, access-token lifetime, refresh, revocation and hosted transport.
+QML receives connection state and allowance counts, never credentials. The platform
+adapter stores refresh tokens through QtKeychain without plaintext fallback; the
+credential namespace includes the API origin. `AiClient` selects hosted transport
+only when enabled, with no automatic fallback to a personal paid key. Conversation
+and word lookup serialize only whitelisted language context; paths stay local.
+Changing account mode cancels in-flight study work. Hosted prompts/model selection
+belong to the server. The default connection targets the invited staging preview;
+CMake's `NEDEN_CLOUD_API_ORIGIN` and `NEDEN_CLOUD_WEBSITE_ORIGIN` configure deployments.
 
 ## Presentation and platform boundaries
 

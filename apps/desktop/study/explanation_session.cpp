@@ -61,7 +61,7 @@ void ExplanationSession::launchConversation(bool fallback) {
     if (!fallback)
         emit replyStarted();
     const quint64 requestGenerationAtStart = ++requestGeneration;
-    fallbackWaiting = !fallback && settings.learningJson().value("fallbackEnabled").toBool();
+    fallbackWaiting = !aiClient.usesHostedAccount() && !fallback && settings.learningJson().value("fallbackEnabled").toBool();
     if (fallbackWaiting) {
         QTimer::singleShot(5000, this, [this, requestGenerationAtStart] {
             if (requestGenerationAtStart != requestGeneration || !fallbackWaiting ||
@@ -88,8 +88,9 @@ void ExplanationSession::launchConversation(bool fallback) {
         request.endpoint = endpoint;
         request.model = model;
         request.messages = conversation.messages();
+        if (aiClient.usesHostedAccount()) request.hostedBody = conversation.hostedRequest();
         request.noKeyRequired = !luna && settings.learning().noKeyRequired;
-        conversation.setProvider(model, fallback);
+        conversation.setProvider(aiClient.usesHostedAccount() ? "Neden Cloud" : model, fallback);
 
         // 2. Bind chunks, completion and cancellation to this exact network reply.
         pendingEvents.clear();
@@ -112,7 +113,7 @@ void ExplanationSession::launchConversation(bool fallback) {
             const auto code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() != QNetworkReply::NoError || code != 200) {
                 requestState = answerText.isEmpty() ? "failed" : "incomplete";
-                statusText = networkFailureMessage(code, reply->error(), "Explanation failed");
+                statusText = hostedFailureMessage(reply, pendingEvents, networkFailureMessage(code, reply->error(), "Explanation failed"));
             } else if (!sawDone || truncated || answerText.isEmpty()) {
                 requestState = "incomplete";
                 statusText = "The response ended before a complete answer arrived.";
@@ -162,6 +163,10 @@ void ExplanationSession::consumeEvents() {
         setMessage("The response exceeded the size limit; the answer is incomplete.");
         return;
     }
+
+    if (aiReply->property("nedenHosted").toBool() &&
+        aiReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() >= 400)
+        return; // Keep the bounded JSON error for the completion handler.
 
     // 2. Accept only the protocol's text deltas and explicit end marker.
     while (pendingEvents.contains('\n')) {

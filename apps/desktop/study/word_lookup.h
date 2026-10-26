@@ -41,6 +41,7 @@ public:
     static QString wordAt(const QString &text, int offset);
     Q_INVOKABLE QVariantMap wordRangeAt(const QString &text, int offset) const;
     static QVariantMap parseContextMeaning(const QByteArray &body);
+    void setHostedAccount(HostedAccount *account) { aiClient.setHostedAccount(account); }
 signals:
     void changed();
 

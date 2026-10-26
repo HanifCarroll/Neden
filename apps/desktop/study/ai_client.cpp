@@ -1,4 +1,5 @@
 #include "ai_client.h"
+#include "hosted_account.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSslSocket>
@@ -10,7 +11,12 @@ bool AiClient::allowedEndpoint(const QUrl &url) {
     return url.isValid() && !url.host().isEmpty() && (url.scheme() == "https" || isLoopbackEndpoint) &&
            url.userInfo().isEmpty() && !url.hasQuery() && !url.hasFragment();
 }
+bool AiClient::usesHostedAccount() const { return hosted && hosted->enabled(); }
 QNetworkReply *AiClient::post(const ChatRequest &options) {
+    if (usesHostedAccount()) {
+        if (options.hostedBody.isEmpty()) throw std::runtime_error("Missing hosted study context.");
+        return hosted->postStudy(options.hostedBody);
+    }
     if (!allowedEndpoint(QUrl(options.endpoint)) || options.model.trimmed().isEmpty() ||
         options.model.size() > 200)
         throw std::runtime_error("Choose a valid AI endpoint and model in Settings.");

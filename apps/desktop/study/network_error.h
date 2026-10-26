@@ -1,6 +1,8 @@
 #pragma once
 #include <QNetworkReply>
 #include <QString>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 inline QString networkFailureMessage(int status, QNetworkReply::NetworkError error,
                                      const QString &operation) {
@@ -40,4 +42,10 @@ inline QString networkFailureMessage(int status, QNetworkReply::NetworkError err
         }
     }
     return operation + ": " + reason + " No automatic retry was made.";
+}
+
+inline QString hostedFailureMessage(QNetworkReply *reply, const QByteArray &body, const QString &fallback) {
+    if (!reply->property("nedenHosted").toBool() || body.size() > 16000) return fallback;
+    const auto message = QJsonDocument::fromJson(body).object().value("error").toObject().value("message").toString().trimmed();
+    return !message.isEmpty() && message.size() <= 300 ? message : fallback;
 }
