@@ -153,6 +153,7 @@ jobs:
           Copy-Item "$env:RUNNER_TEMP/release-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/dependencies" -Recurse
           Copy-Item "$env:RUNNER_TEMP/dependency-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/msys2" -Recurse
           Copy-Item "$env:RUNNER_TEMP/runtime/bin/*.dll" "$env:RUNNER_TEMP/Neden/bin/"
+          ./scripts/release/finalize_windows_package.ps1 -Staging "$env:RUNNER_TEMP/Neden"
           $version = (Get-Content apps/desktop/VERSION.txt -Raw).Trim()
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DDesktopVersion=$version" "/DStaging=$env:RUNNER_TEMP/Neden" "/DOutput=$env:GITHUB_WORKSPACE" scripts/release/windows.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -161,15 +162,18 @@ jobs:
         run: |
           $destination = "$env:RUNNER_TEMP/installed-neden"
           $installer = Start-Process ./Neden-windows-x86_64-preview-setup.exe -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$destination") -Wait -PassThru
-          if ($installer.ExitCode) { throw "Installer failed: $($installer.ExitCode)" }
+          if ($installer.ExitCode -ne 0) { throw "Installer failed: $($installer.ExitCode)" }
           $env:PATH = "$env:WINDIR/System32;$env:WINDIR"
           Remove-Item Env:QT_PLUGIN_PATH, Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
           $env:QT_OPENGL = 'software'
+          $env:QT_FORCE_STDERR_LOGGING = '1'
           $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--profile', "$env:RUNNER_TEMP/package-profile") -PassThru
           if (!$app.WaitForExit(30000)) { $app.Kill(); throw 'Packaged application did not exit' }
-          if ($app.ExitCode) { throw "Packaged application failed: $($app.ExitCode)" }
+          $app.Refresh()
+          Write-Output "Installed application exit code: $($app.ExitCode)"
+          if ($app.ExitCode -ne 0) { throw "Packaged application failed: $($app.ExitCode)" }
           $uninstaller = Start-Process "$destination/unins000.exe" -ArgumentList '/VERYSILENT' -Wait -PassThru
-          if ($uninstaller.ExitCode) { throw 'Uninstall failed' }
+          if ($uninstaller.ExitCode -ne 0) { throw 'Uninstall failed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-package-candidate
