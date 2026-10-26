@@ -1,3 +1,4 @@
+#include "playback_environment.h"
 #include "subtitle_appearance.h"
 #include "playback_pointer.h"
 #include <QEnterEvent>
@@ -2395,6 +2396,7 @@ int main(int argc, char **argv) {
     QSurfaceFormat::setDefaultFormat(format);
     QtWebView::initialize();
     QGuiApplication application(argc, argv);
+    initializePlaybackEnvironment();
     application.setApplicationName("Neden UI checks");
     application.setQuitOnLastWindowClosed(false);
     QQuickStyle::setStyle("Basic");

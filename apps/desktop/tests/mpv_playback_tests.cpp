@@ -1,3 +1,4 @@
+#include "playback_environment.h"
 #include "mpv_playback.h"
 #include "screenshot_image.h"
 #include <QtTest>
@@ -103,5 +104,10 @@ private slots:
     }
 };
 
-QTEST_GUILESS_MAIN(MpvPlaybackTests)
+int main(int argc, char **argv) {
+    QCoreApplication application(argc, argv);
+    initializePlaybackEnvironment();
+    MpvPlaybackTests tests;
+    return QTest::qExec(&tests, argc, argv);
+}
 #include "mpv_playback_tests.moc"

@@ -1,3 +1,4 @@
+#include "playback_environment.h"
 #include "shortcut_map.h"
 #include "subtitle_appearance.h"
 #include "credentials.h"
@@ -54,6 +55,7 @@ int main(int argc, char **argv) {
     QSurfaceFormat::setDefaultFormat(format);
     QtWebView::initialize();
     DesktopApplication application(argc, argv);
+    initializePlaybackEnvironment();
     application.setApplicationName("Neden");
     application.setApplicationDisplayName("Neden");
     application.setWindowIcon(QIcon(":/branding/neden.png"));
