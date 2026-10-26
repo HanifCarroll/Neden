@@ -1189,6 +1189,10 @@ private slots:
     }
 
     void singleClickShowsContextualWordCardWithoutChangingTheSidebar() {
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+            QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        }
         window->setProperty("showRecent", false);
         session->closeDefinition();
         session->setPaused(true);
