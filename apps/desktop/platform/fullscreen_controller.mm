@@ -3,6 +3,26 @@
 #include <QSettings>
 #import <AppKit/AppKit.h>
 
+namespace {
+void rebuildMouseTracking(QQuickWindow *window) {
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    // Changing the titlebar style can leave AppKit's tracking registration stale.
+    // Register fresh areas after the new geometry is in place, keeping Qt's
+    // event owner and options so movement and hover still use the normal path.
+    NSArray<NSTrackingArea *> *areas = [view.trackingAreas copy];
+    for (NSTrackingArea *area in areas) {
+        if (!(area.options & NSTrackingMouseMoved))
+            continue;
+        NSTrackingArea *replacement = [[NSTrackingArea alloc] initWithRect:area.rect
+                                                                options:area.options
+                                                                  owner:area.owner
+                                                               userInfo:area.userInfo];
+        [view removeTrackingArea:area];
+        [view addTrackingArea:replacement];
+    }
+}
+} // namespace
+
 @interface NedenFullscreenTarget : NSObject
 @property(nonatomic, assign) FullscreenController *controller;
 - (void)toggleFullScreen:(id)sender;
@@ -264,6 +284,7 @@ void FullscreenController::setActiveInMode(bool enabled, bool useNativeMode) {
     fullscreenActive = enabled;
     // Qt resets the standard button action when window flags change.
     bindZoomButton();
+    rebuildMouseTracking(window);
     native->fullscreenMenuItem.title = enabled ? @"Exit Full Screen" : @"Enter Full Screen";
     window->raise();
     window->requestActivate();

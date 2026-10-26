@@ -5,11 +5,6 @@
 #include <QMouseEvent>
 
 PlaybackPointer::PlaybackPointer(QObject *parent) : QObject(parent) {
-    // AppKit can stop delivering tracking-area movement during an instant
-    // fullscreen transition. While the player is active, check the OS position too:
-    // revealing the pointer must not depend on another enter/move event.
-    positionTimer.setInterval(50);
-    connect(&positionTimer, &QTimer::timeout, this, &PlaybackPointer::checkPointerPosition);
     connect(qGuiApp, &QGuiApplication::focusWindowChanged, this, [this](QWindow *focused) {
         if (focused != playerWindow) {
             pointerInside = false;
@@ -30,19 +25,13 @@ void PlaybackPointer::setWindow(QQuickWindow *window) {
     if (playerWindow) {
         playerWindow->removeEventFilter(this);
         disconnect(playerWindow, nullptr, this, nullptr);
-        disconnect(playerWindow, nullptr, &positionTimer, nullptr);
     }
-    positionTimer.stop();
     playerWindow = window;
     pointerInside = false;
     if (playerWindow) {
         playerWindow->installEventFilter(this);
         connect(playerWindow, &QObject::destroyed, this, &PlaybackPointer::restoreCursor);
-        connect(playerWindow, &QObject::destroyed, &positionTimer, &QTimer::stop);
-        connect(playerWindow, &QWindow::activeChanged, this, &PlaybackPointer::updatePositionMonitoring);
-        connect(playerWindow, &QWindow::visibleChanged, this, &PlaybackPointer::updatePositionMonitoring);
     }
-    updatePositionMonitoring();
     emit windowChanged();
 }
 
@@ -70,42 +59,6 @@ void PlaybackPointer::restoreCursor() {
     emit hiddenChanged();
 }
 
-void PlaybackPointer::setEnabled(bool enabled) {
-    if (monitoringEnabled == enabled)
-        return;
-    monitoringEnabled = enabled;
-    updatePositionMonitoring();
-    emit enabledChanged();
-}
-
-void PlaybackPointer::updatePositionMonitoring() {
-    if (!monitoringEnabled || !playerWindow || !playerWindow->isActive() || !playerWindow->isVisible()) {
-        positionTimer.stop();
-        pointerInside = false;
-        restoreCursor();
-    } else if (!positionTimer.isActive()) {
-        lastGlobalPosition = QCursor::pos();
-        positionTimer.start();
-    }
-}
-
-void PlaybackPointer::checkPointerPosition() {
-    if (!monitoringEnabled || !playerWindow || !playerWindow->isActive() || !playerWindow->isVisible()) {
-        updatePositionMonitoring();
-        return;
-    }
-    const QPoint globalPosition = QCursor::pos();
-    if (globalPosition == lastGlobalPosition)
-        return;
-
-    lastGlobalPosition = globalPosition;
-    const bool wasInside = pointerInside;
-    lastPosition = playerWindow->mapFromGlobal(globalPosition);
-    pointerInside = QRectF(QPointF(), playerWindow->size()).contains(lastPosition);
-    if (pointerInside || wasInside)
-        reveal();
-}
-
 void PlaybackPointer::reveal() {
     restoreCursor();
     emit activity();
@@ -114,7 +67,7 @@ void PlaybackPointer::reveal() {
 void PlaybackPointer::updateCursor() {
     const bool overVideo = playerWindow && videoItem && pointerInside && videoItem->isVisible()
         && videoItem->contains(videoItem->mapFromScene(lastPosition));
-    if (!monitoringEnabled || !shouldHide || !overVideo || !playerWindow->isActive() || !playerWindow->isVisible()) {
+    if (!shouldHide || !overVideo || !playerWindow->isActive() || !playerWindow->isVisible()) {
         restoreCursor();
         return;
     }
@@ -132,7 +85,6 @@ bool PlaybackPointer::eventFilter(QObject *object, QEvent *event) {
         return false;
     switch (event->type()) {
     case QEvent::MouseMove: {
-        lastGlobalPosition = QCursor::pos();
         const auto position = static_cast<QMouseEvent *>(event)->position();
         if (!pointerInside || position != lastPosition) {
             lastPosition = position;
@@ -142,15 +94,13 @@ bool PlaybackPointer::eventFilter(QObject *object, QEvent *event) {
         break;
     }
     case QEvent::Enter:
-        lastGlobalPosition = QCursor::pos();
         lastPosition = static_cast<QEnterEvent *>(event)->position();
         pointerInside = true;
         reveal();
         break;
     case QEvent::Move:
     case QEvent::Resize:
-        lastGlobalPosition = QCursor::pos();
-        lastPosition = playerWindow->mapFromGlobal(lastGlobalPosition);
+        lastPosition = playerWindow->mapFromGlobal(QCursor::pos());
         pointerInside = QRectF(QPointF(), playerWindow->size()).contains(lastPosition);
         reveal();
         break;
