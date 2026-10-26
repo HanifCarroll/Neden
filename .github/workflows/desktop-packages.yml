@@ -21,7 +21,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build meson nasm pkg-config libass-dev libplacebo-dev libegl1-mesa-dev libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libpulse-dev libasound2-dev libsecret-1-dev xvfb patchelf
+          sudo apt-get install -y ninja-build meson nasm pkg-config libass-dev libplacebo-dev libegl1-mesa-dev libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libpulse-dev libasound2-dev libsecret-1-dev gnome-keyring dbus-x11 xvfb patchelf
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.10.2'
@@ -44,13 +44,21 @@ jobs:
           key: runtime-linux-v1-${{ hashFiles('scripts/build_linux_runtime.sh') }}
       - name: Configure and build
         run: |
-          cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release -DAUDITED_MPV_PREFIX="$RUNNER_TEMP/runtime" -DNEDEN_PACKAGE=ON
+          cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release -DAUDITED_MPV_PREFIX="$RUNNER_TEMP/runtime" -DNEDEN_PACKAGE=ON -DNEDEN_NATIVE_UI_CHECKS=ON
           cmake --build build/desktop --parallel 4
       - name: Test portable behavior and decoding
         env:
           QT_QPA_PLATFORM: offscreen
           QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Test desktop workflows with mock AI
+        run: python3 scripts/release/check_desktop_ui.py build/desktop
+      - name: Test native Linux credential storage
+        run: |
+          dbus-run-session -- sh -c 'printf "test-keyring-password" | gnome-keyring-daemon --unlock --components=secrets; ./build/desktop/credential_backend_checks'
+      - name: Record package source revision
+        shell: bash
+        run: python3 scripts/release/write_build_record.py "${{ github.sha }}" "$RUNNER_TEMP/release-record.json"
       - name: Collect pinned dependency sources and notices
         shell: bash
         run: python3 scripts/release/collect_sources.py linux "$RUNNER_TEMP/release-sources"
@@ -62,12 +70,14 @@ jobs:
       - name: Verify installed Linux package
         run: |
           sudo apt-get install -y ./Neden-linux-x86_64-preview.deb
-          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH QTWEBENGINE_DISABLE_SANDBOX=1 xvfb-run -a /usr/bin/neden --smoke-test --profile "$RUNNER_TEMP/package-profile"
+          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH QTWEBENGINE_DISABLE_SANDBOX=1 xvfb-run -a /usr/bin/neden --smoke-test --profile "$RUNNER_TEMP/package-profile" "$GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white.mp4"
           sudo apt-get remove -y neden
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: linux-package-candidate
-          path: Neden-linux-x86_64-preview.deb
+          path: |
+            Neden-linux-x86_64-preview.deb
+            ${{ runner.temp }}/release-record.json
       - name: Preserve corresponding sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -131,7 +141,7 @@ jobs:
       - name: Configure and build
         shell: pwsh
         run: |
-          cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release "-DAUDITED_MPV_PREFIX=$env:RUNNER_TEMP/runtime" -DNEDEN_PACKAGE=ON
+          cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release "-DAUDITED_MPV_PREFIX=$env:RUNNER_TEMP/runtime" -DNEDEN_PACKAGE=ON -DNEDEN_NATIVE_UI_CHECKS=ON
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build/desktop --parallel 4
           exit $LASTEXITCODE
@@ -140,9 +150,16 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Test desktop workflows with mock AI
+        run: python3 scripts/release/check_desktop_ui.py build/desktop
+      - name: Test native Windows credential storage
+        run: ./build/desktop/credential_backend_checks.exe
       - name: Collect Windows dependency sources
         shell: msys2 {0}
         run: bash scripts/release/collect_windows_dependencies.sh "$RUNNER_TEMP/runtime" "$RUNNER_TEMP/dependency-sources"
+      - name: Record package source revision
+        shell: bash
+        run: python3 scripts/release/write_build_record.py "${{ github.sha }}" "$RUNNER_TEMP/release-record.json"
       - name: Collect pinned dependency sources and notices
         shell: bash
         run: python3 scripts/release/collect_sources.py windows "$RUNNER_TEMP/release-sources"
@@ -168,7 +185,7 @@ jobs:
           Remove-Item Env:QT_PLUGIN_PATH, Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
           $env:QT_OPENGL = 'software'
           $env:QT_FORCE_STDERR_LOGGING = '1'
-          $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--profile', "$env:RUNNER_TEMP/package-profile") -PassThru
+          $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--profile', "$env:RUNNER_TEMP/package-profile", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white.mp4") -PassThru
           if (!$app.WaitForExit(30000)) { $app.Kill(); throw 'Packaged application did not exit' }
           $app.Refresh()
           Write-Output "Installed application exit code: $($app.ExitCode)"
@@ -178,7 +195,9 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-package-candidate
-          path: Neden-windows-x86_64-preview-setup.exe
+          path: |
+            Neden-windows-x86_64-preview-setup.exe
+            ${{ runner.temp }}/release-record.json
       - name: Preserve corresponding sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -215,13 +234,18 @@ jobs:
           done
       - name: Configure and build
         run: |
-          cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DMPV_INCLUDE_DIR="$PWD/.cache/mpv-headers" -DNEDEN_MPV_FRAMEWORKS="$PWD/.cache/playback-frameworks" -DNEDEN_SIGNING_IDENTITY=-
+          cmake -S apps/desktop -B build/desktop -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DMPV_INCLUDE_DIR="$PWD/.cache/mpv-headers" -DNEDEN_MPV_FRAMEWORKS="$PWD/.cache/playback-frameworks" -DNEDEN_SIGNING_IDENTITY=- -DNEDEN_NATIVE_UI_CHECKS=ON
           cmake --build build/desktop --parallel 4
       - name: Test portable behavior and decoding
         env:
           QT_QPA_PLATFORM: offscreen
           QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Test desktop workflows with mock AI
+        run: python3 scripts/release/check_desktop_ui.py build/desktop
+      - name: Record package source revision
+        shell: bash
+        run: python3 scripts/release/write_build_record.py "${{ github.sha }}" "$RUNNER_TEMP/release-record.json"
       - name: Collect pinned dependency sources and notices
         shell: bash
         run: python3 scripts/release/collect_sources.py macos "$RUNNER_TEMP/release-sources"
@@ -230,7 +254,9 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-package-candidate
-          path: dist/desktop/Neden-macos-arm64-preview.dmg
+          path: |
+            dist/desktop/Neden-macos-arm64-preview.dmg
+            ${{ runner.temp }}/release-record.json
       - name: Preserve corresponding sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
