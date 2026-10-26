@@ -5,8 +5,8 @@ runtime_prefix="$(cygpath -u "$1")"
 source_directory="$(cygpath -u "$2")"
 mkdir -p "$runtime_prefix" "$source_directory"
 cd "$source_directory"
-curl --fail --location https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz -o ffmpeg.tar.xz
-curl --fail --location https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz -o mpv.tar.gz
+curl --fail --location --retry 4 --retry-all-errors --connect-timeout 30 https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz -o ffmpeg.tar.xz
+curl --fail --location --retry 4 --retry-all-errors --connect-timeout 30 https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz -o mpv.tar.gz
 printf '%s\n' \
   '05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41  ffmpeg.tar.xz' \
   'ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209  mpv.tar.gz' | sha256sum --check
