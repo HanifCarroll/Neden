@@ -8,6 +8,7 @@
 #include "mpv_playback.h"
 #include "recent_videos.h"
 #include <QColorSpace>
+#include <QClipboard>
 #include <QFile>
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -302,7 +303,7 @@ private slots:
     }
 
     void init() {
-        const QStringList headlessChecks{"wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "followUpSupportsMacDeleteToLineStart", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"helpDialogsKeepShortcutsIsolated","wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "followUpSupportsMacDeleteToLineStart", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -512,6 +513,34 @@ private slots:
         QTRY_VERIFY(std::abs(session->position() - stoppedAt) < 0.1);
         session->setPaused(true);
         session->checkpoint();
+    }
+
+    void helpDialogsKeepShortcutsIsolated() {
+        session->closeDefinition();
+        window->contentItem()->forceActiveFocus();
+        auto *menu = window->findChild<QObject *>("playerMenuBar");
+        QVERIFY(menu);
+        QVERIFY(QMetaObject::invokeMethod(menu, "gettingStartedRequested"));
+        auto *guide = window->findChild<QObject *>("gettingStartedDialog");
+        QVERIFY(guide);
+        QTRY_VERIFY(guide->property("opened").toBool());
+        QVERIFY(!window->property("commandShortcutsEnabled").toBool());
+        QVERIFY(QMetaObject::invokeMethod(guide, "close"));
+        QTRY_VERIFY(!guide->property("visible").toBool());
+        QVERIFY(QMetaObject::invokeMethod(menu, "supportRequested", Q_ARG(bool, false)));
+        auto *support = window->findChild<QObject *>("supportDialog");
+        QVERIFY(support);
+        QTRY_VERIFY(support->property("opened").toBool());
+        QVERIFY(!window->property("commandShortcutsEnabled").toBool());
+        auto *copy = visualItem(window->contentItem(), "copyDiagnosticsButton");
+        QVERIFY(copy && copy->isVisible() && copy->isEnabled());
+        copy->forceActiveFocus(Qt::TabFocusReason);
+        QCOMPARE(window->activeFocusItem(), copy);
+        QTest::keyClick(window, Qt::Key_Space);
+        QVERIFY(QGuiApplication::clipboard()->text().contains("Neden:"));
+        QVERIFY(QMetaObject::invokeMethod(support, "close"));
+        QTRY_VERIFY(!support->property("visible").toBool());
+        QTRY_VERIFY(window->property("commandShortcutsEnabled").toBool());
     }
 
     void menusOpenOwnedDialogsAndBlockShortcuts() {

@@ -10,6 +10,7 @@ Item {
     required property LearningSession session
     signal locateVideo(url oldUrl)
     signal openVideo
+    signal gettingStarted
 
     RecentVideosFilter {
         id: historyView
@@ -52,6 +53,11 @@ Item {
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
         }
+        ActionButton {
+            text: "Getting started"
+            Accessible.description: "Learn how to open videos, choose subtitles, and connect AI"
+            onClicked: pane.gettingStarted()
+        }
         SegmentBar {
             id: historyTabs
             Layout.fillWidth: true
@@ -68,7 +74,7 @@ Item {
         }
         Label {
             visible: recentList.count === 0
-            text: pane.recentVideos.count === 0 ? "Open a video to get started." : "You're all caught up. Finished videos are in History."
+            text: pane.recentVideos.count === 0 ? "Open a video, choose your subtitles, then click a word to explore its meaning. Playback works without an AI connection." : "You're all caught up. Finished videos are in History."
             color: Theme.muted
             font.pixelSize: Theme.body
             wrapMode: Text.WordWrap

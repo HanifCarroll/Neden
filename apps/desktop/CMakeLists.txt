@@ -4,6 +4,7 @@ project(NedenQt VERSION ${NEDEN_VERSION} LANGUAGES CXX)
 if(APPLE)
     enable_language(OBJCXX)
 endif()
+add_compile_definitions(NEDEN_VERSION="${NEDEN_VERSION}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -51,6 +52,9 @@ add_test(NAME video_render_lifetime_tests COMMAND video_render_lifetime_tests)
 qt_add_executable(shortcut_map_tests tests/shortcut_map_tests.cpp app/shortcut_map.cpp app/shortcut_map.h)
 target_link_libraries(shortcut_map_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Qml)
 add_test(NAME shortcut_map_tests COMMAND shortcut_map_tests)
+qt_add_executable(support_tests tests/support_tests.cpp app/release_check.cpp app/release_check.h app/support_diagnostics.cpp app/support_diagnostics.h)
+target_link_libraries(support_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Network Qt6::Qml)
+add_test(NAME support_tests COMMAND support_tests)
 if(NEDEN_CORE_ONLY)
     return()
 endif()
@@ -85,10 +89,10 @@ if(UNIX AND NOT APPLE)
     set_target_properties(NedenQt PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
 endif()
 set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set(NEDEN_UI_SOURCES app/playback_pointer.cpp app/playback_pointer.h platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
+set(NEDEN_UI_SOURCES app/release_check.cpp app/release_check.h app/support_diagnostics.cpp app/support_diagnostics.h app/playback_pointer.cpp app/playback_pointer.h platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
     playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp)
-set(NEDEN_QML_FILES ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
+set(NEDEN_QML_FILES ui/GettingStarted.qml ui/SupportDialog.qml ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
         ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/ExplanationPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
@@ -176,6 +180,11 @@ endif()
 # Optional native interaction checks run only on an explicitly selected real Mac display.
 option(NEDEN_NATIVE_UI_CHECKS "Build the opt-in native interaction check executable" OFF)
 if(NEDEN_NATIVE_UI_CHECKS)
+    if(NOT APPLE)
+        qt_add_executable(credential_backend_checks tests/credential_backend_checks.cpp
+            platform/credentials.cpp platform/credentials.h platform/credentials_unavailable.cpp)
+        target_link_libraries(credential_backend_checks PRIVATE Qt6::Test qt6keychain)
+    endif()
     qt_add_executable(NedenNativeChecks tests/native_ui_checks.cpp)
     if(APPLE)
         target_sources(NedenNativeChecks PRIVATE tests/native_menu_checks.mm)

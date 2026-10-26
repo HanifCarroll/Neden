@@ -27,6 +27,8 @@ MenuBar {
     signal floatingRequested
     signal closeRequested
     signal recentVideosRequested
+    signal gettingStartedRequested
+    signal supportRequested(bool updates)
     signal sidebarRequested
 
     Menu {
@@ -359,4 +361,20 @@ MenuBar {
             onTriggered: playerMenu.settingsRequested(0)
         }
     }
+    Menu {
+        title: "Help"
+        Action {
+            text: "Getting started…"
+            onTriggered: playerMenu.gettingStartedRequested()
+        }
+        Action {
+            text: "Check for updates…"
+            onTriggered: playerMenu.supportRequested(true)
+        }
+        Action {
+            text: "Report a problem…"
+            onTriggered: playerMenu.supportRequested(false)
+        }
+    }
+
 }

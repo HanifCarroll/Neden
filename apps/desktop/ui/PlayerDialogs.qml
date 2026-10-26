@@ -17,10 +17,34 @@ Item {
     property bool screenshotWithSubtitles: true
     property int settingsPage: 0
     readonly property bool settingsOpen: settingsDialog.opened
-    readonly property bool blocksShortcuts: settingsDialog.opened || playerOptionsDialog.opened || timeDialog.opened || urlDialog.opened
+    readonly property bool blocksShortcuts: guideDialog.opened || supportDialog.opened || settingsDialog.opened || playerOptionsDialog.opened || timeDialog.opened || urlDialog.opened
     signal focusRequested
     signal subtitleScreenshotRequested(string path)
 
+    function openGuide() { guideDialog.open(); }
+    function openSupport(updates) {
+        supportDialog.updates = updates;
+        supportDialog.open();
+    }
+    OptionsDialog {
+        id: guideDialog
+        objectName: "gettingStartedDialog"
+        title: "Getting started"
+        anchors.centerIn: parent
+        width: Math.min(dialogs.width - 40, 640)
+        height: Math.min(dialogs.height - 40, 660)
+        contentItem: GettingStarted {
+            onOpenVideoRequested: { guideDialog.close(); dialogs.openVideo(); }
+            onSubtitlesRequested: { guideDialog.close(); dialogs.openPlayerOptions(PlayerOptions.Subtitles); }
+            onServicesRequested: { guideDialog.close(); dialogs.openSettings(2); }
+        }
+        onClosed: dialogs.focusRequested()
+    }
+    SupportDialog {
+        id: supportDialog
+        session: dialogs.session
+        onClosed: dialogs.focusRequested()
+    }
     function openVideo(append = false) {
         appendToQueue = append;
         videoDialog.open();

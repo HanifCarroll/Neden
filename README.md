@@ -86,7 +86,7 @@ The legacy desktop bundle identifier and macOS application-support directory (`N
 | `scripts/` | Builds, packaging, runtime checks, and validation |
 | `docs/` | Architecture, behavior contracts, setup, and platform limitations |
 
-Start with [development conventions](docs/development.md), [desktop architecture](docs/desktop/ARCHITECTURE.md), or the [plugin specification](docs/iina-plugin/SPEC.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible bugs through [GitHub Issues](https://github.com/HanifCarroll/Neden/issues).
+Start with [development conventions](docs/development.md), [desktop architecture](docs/desktop/ARCHITECTURE.md), or the [plugin specification](docs/iina-plugin/SPEC.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). In development builds, Help → Getting started explains setup, Help → Check for updates checks stable releases, and Help → Report a problem provides private-by-default diagnostics to copy. Report reproducible bugs through [GitHub Issues](https://github.com/HanifCarroll/Neden/issues).
 
 ## License
 

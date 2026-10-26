@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
     DesktopApplication application(argc, argv);
     initializePlaybackEnvironment();
     application.setApplicationName("Neden");
+    application.setApplicationVersion(QStringLiteral(NEDEN_VERSION));
     application.setApplicationDisplayName("Neden");
     application.setWindowIcon(QIcon(":/branding/neden.png"));
     QQuickStyle::setStyle("Basic");
@@ -69,7 +70,8 @@ int main(int argc, char **argv) {
     // 2. Keep playback alive until QML and its rendering resources have been released.
     QCommandLineParser commandLineParser;
     commandLineParser.addHelpOption();
-    commandLineParser.addOption({"smoke-test", "Render one frame and exit for packaged installation checks (requires --profile)."});
+    commandLineParser.addVersionOption();
+    commandLineParser.addOption({"smoke-test", "Render one frame and exit; with a video, verify playback advances (requires --profile)."});
     commandLineParser.addOption(
         {"profile", "Use a separate local data directory for development checks.", "directory"});
     commandLineParser.addPositionalArgument("video", "Local video to open.", "[video]");
@@ -122,11 +124,20 @@ int main(int argc, char **argv) {
     fullscreen.attach(mainWindow);
     PlatformMediaSession platformMedia(&session, mainWindow);
     if (commandLineParser.isSet("smoke-test")) {
-        // A rendered window proves QML, fonts, platform plugins, and the scene
-        // graph initialize from the installed tree. Playback has separate tests.
+        // Supplying a synthetic video also exercises the installed renderer and
+        // playback clock. This mode is isolated from the normal user profile.
+        const bool verifyPlayback = !commandLineParser.positionalArguments().isEmpty();
         QObject::connect(mainWindow, &QQuickWindow::frameSwapped, &application,
-                         [&application] { application.exit(0); }, Qt::QueuedConnection);
-        QTimer::singleShot(10000, &application, [&application] { application.exit(4); });
+                         [&application, &session, &playbackEngine, verifyPlayback] {
+            if (!verifyPlayback || (session.duration() > 0 && session.position() >= 0.2 &&
+                                     !playbackEngine.sourceOutputSize().isEmpty()))
+                application.exit(0);
+        }, Qt::QueuedConnection);
+        if (verifyPlayback) {
+            QObject::connect(&playbackEngine, &PlaybackEngine::loaded, &application,
+                             [&session] { session.setPaused(false); });
+        }
+        QTimer::singleShot(20000, &application, [&application] { application.exit(4); });
         mainWindow->update();
     }
     mainWindow->raise();

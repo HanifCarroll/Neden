@@ -36,6 +36,7 @@ ComboBox {
         id: row
         objectName: control.objectName + "Option" + index
         required property int index
+        Accessible.name: control.textAt(row.index)
         width: control.popup.availableWidth
         height: Math.max(Theme.controlHeight, contentItem.implicitHeight + topPadding + bottomPadding)
         leftPadding: Theme.space3

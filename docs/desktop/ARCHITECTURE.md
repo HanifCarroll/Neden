@@ -59,3 +59,12 @@ The app/executable remains **Neden**, with bundle/signing identifier `io.github.
 Word lookup, composer sizing, and flashcard saving have independent UI tests sharing a deterministic local response fixture. Portable tests exercise module behavior and controlled local HTTP/SSE contracts. Regressions cover saving/replaying an explained cue after seeking elsewhere, transaction failure, independent feature messages, Unicode/Turkish text, profile compatibility, cancellation, replay and history restoration. Off-screen checks exercise the actual QML controls, word/phrase gestures, follow-ups, provider models, draft saving and shortcut focus policy without saved keys or visible windows. They do not establish native macOS presentation or playback performance; those checks require a real display.
 
 The macOS `fullscreenPreservesNativeMouseTracking` regression uses OS mouse events, rather than Qt-injected input, to verify that movement reaches the window and subtitle hover after fullscreen transitions. It checks the first interior pixel before visiting the menu bar or Dock, sustained movement, idle recovery, repeated instant fullscreen, native fullscreen, and return to windowed mode. Run it on an isolated native display; an off-screen pass cannot establish AppKit tracking behavior.
+
+## Release support
+
+`ReleaseCheck` owns a manual anonymous GitHub stable-release request, bounded response size,
+timeout, semantic version comparison, and repository-scoped release links. It neither
+polls in the background nor installs binaries. `SupportDiagnostics` constructs an
+allowlisted report from app/OS versions, playback state, and numeric media dimensions;
+it does not copy raw metadata or logs. `GettingStarted` and `SupportDialog` provide the
+Help menu flows and share the existing dialog focus/shortcut boundaries.

@@ -118,6 +118,8 @@ ApplicationWindow {
         commandShortcutsEnabled: root.commandShortcutsEnabled
         floatingMode: root.floatingMode
         transcriptOpen: root.transcriptOpen
+        onGettingStartedRequested: dialogs.openGuide()
+        onSupportRequested: updates => dialogs.openSupport(updates)
         onOpenVideoRequested: append => dialogs.openVideo(append)
         onOpenFolderRequested: dialogs.openFolder()
         onOpenUrlRequested: dialogs.openUrl()
@@ -293,6 +295,7 @@ ApplicationWindow {
             recentVideos: root.recentVideos
             session: root.session
             onOpenVideo: dialogs.openVideo()
+            onGettingStarted: dialogs.openGuide()
             onLocateVideo: oldUrl => dialogs.locateVideo(oldUrl)
         }
         Item {
