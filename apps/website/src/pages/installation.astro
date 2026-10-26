@@ -1,0 +1,68 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro"
+import { releases } from "../data/releases"
+---
+
+<SiteLayout
+  title="Installation — Neden"
+  description="Download requirements, installation guidance, and first steps for Neden."
+>
+  <article class="site-container prose-page">
+    <h1>
+      A little setup.
+      <br />A lot to discover.
+    </h1>
+    <p>
+      Neden is in early development. Each platform’s download is published after
+      its packaged build passes release checks. Read the release notes for known
+      limitations.
+    </p>
+    {releases.map((platform) => (
+      <section id={platform.id}>
+        <h2>{platform.name}</h2>
+        <p>
+          {platform.requirement}. {platform.status}.
+        </p>
+        {platform.download && (
+          <p>
+            <a href={platform.download}>Download Neden for {platform.name}</a>
+          </p>
+        )}
+      </section>
+    ))}
+    <h2>Your first video</h2>
+    <ol>
+      <li>Open a video from your computer.</li>
+      <li>
+        Load a primary subtitle track in the language you’re learning. Add a
+        secondary track for translation if you have one.
+      </li>
+      <li>
+        For definitions and explanations, configure an AI provider and your API
+        key in Settings → Services.
+      </li>
+      <li>
+        Click a word to look it up, or choose Explain line to pause and explore
+        the whole sentence.
+      </li>
+    </ol>
+    <h2>Build it yourself</h2>
+    <p>
+      The{" "}
+      <a href="https://github.com/HanifCarroll/Neden/blob/main/docs/desktop/INSTALLATION.md">
+        desktop build guide
+      </a>{" "}
+      documents dependencies and current platform support. The{" "}
+      <a href="https://github.com/HanifCarroll/Neden/releases">release page</a>{" "}
+      includes published builds and their notes.
+    </p>
+    <h2>IINA plugin</h2>
+    <p>
+      Already using IINA on a Mac? Follow the separate{" "}
+      <a href="https://github.com/HanifCarroll/Neden#iina-plugin">
+        plugin instructions
+      </a>{" "}
+      in the repository.
+    </p>
+  </article>
+</SiteLayout>

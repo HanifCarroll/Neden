@@ -1,0 +1,53 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro"
+---
+
+<SiteLayout
+  title="Privacy — Neden"
+  description="How the Neden website and desktop player handle your data."
+>
+  <article class="site-container prose-page">
+    <h1>Your videos stay yours.</h1>
+    <p>
+      Neden is an independent, open-source project. The website and the desktop
+      player handle different kinds of information.
+    </p>
+    <h2>This website</h2>
+    <p>
+      There are no accounts, advertising trackers, or analytics scripts on this
+      site. Cloudflare hosts the website and processes network information,
+      including IP addresses, to deliver and protect it. See{" "}
+      <a href="https://www.cloudflare.com/privacypolicy/">
+        Cloudflare’s privacy policy
+      </a>
+      .
+    </p>
+    <p>
+      Download and source links take you to GitHub, which has its own{" "}
+      <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
+        privacy policy
+      </a>
+      .
+    </p>
+    <h2>The desktop player</h2>
+    <p>
+      Playback history, settings, and saved flashcards are stored on your
+      computer. API credentials are stored through the operating system’s
+      credential service. You can clear playback history in the app’s settings.
+    </p>
+    <h2>AI features</h2>
+    <p>
+      When you ask for a definition, explanation, or follow-up, Neden sends the
+      relevant text and subtitle context to the provider you configure. That
+      provider’s data handling, retention, and billing rules apply. Video
+      playback itself does not require an AI request.
+    </p>
+    <h2>Questions and source</h2>
+    <p>
+      You can inspect the implementation or report a concern in the{" "}
+      <a href="https://github.com/HanifCarroll/Neden">Neden repository</a>.
+      Please keep API keys, private filenames, and other personal information
+      out of public reports.
+    </p>
+  </article>
+</SiteLayout>

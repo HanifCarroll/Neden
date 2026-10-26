@@ -1,0 +1,108 @@
+---
+import LinkButton from "./LinkButton.astro"
+import { releases, releasesUrl } from "../data/releases"
+---
+
+<section id="downloads" class="site-container section downloads">
+  <h2 class="section-title">
+    Make your next watch
+    <br />
+    mean a little more.
+  </h2>
+  <p class="body-copy intro">
+    Free and open source. Bring your videos, subtitles, and curiosity.
+  </p>
+  <div class="platforms">
+    {releases.map((platform) => (
+      <div class="platform">
+        <h3>{platform.name}</h3>
+        <p class="requirement">{platform.requirement}</p>
+        {platform.download ? (
+          <LinkButton href={platform.download}>
+            Download for {platform.name}
+          </LinkButton>
+        ) : (
+          <p class="status">{platform.status}</p>
+        )}
+        <a
+          class="text-link installation"
+          href={`/installation/#${platform.id}`}
+        >
+          Installation details <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    ))}
+  </div>
+  <p class="release-links">
+    <a class="text-link" href={releasesUrl}>
+      Release notes
+    </a>
+    <span aria-hidden="true">·</span>
+    <a class="text-link" href="https://github.com/HanifCarroll/Neden">
+      View source on GitHub
+    </a>
+  </p>
+</section>
+<style>
+  .downloads {
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+  .intro {
+    margin: 24px auto 56px;
+  }
+  .platforms {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .platform {
+    padding: 8px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .platform + .platform {
+    border-left: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .requirement {
+    font-size: 14px;
+    color: var(--muted-foreground);
+    margin: 12px 0 24px;
+  }
+  .installation {
+    margin-top: 20px;
+    font-size: 14px;
+  }
+  .status {
+    padding: 14px 0;
+    font-size: 14px;
+    color: var(--muted-foreground);
+  }
+  .release-links {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 48px;
+    font-size: 14px;
+  }
+  @media (max-width: 760px) {
+    .platforms {
+      grid-template-columns: 1fr;
+    }
+    .platform {
+      padding: 32px 0;
+    }
+    .platform + .platform {
+      border-left: none;
+      border-top: 1px solid var(--border);
+    }
+    .intro {
+      margin-bottom: 24px;
+    }
+  }
+</style>

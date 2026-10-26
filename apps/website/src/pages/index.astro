@@ -1,0 +1,423 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro"
+import LinkButton from "../components/LinkButton.astro"
+import Downloads from "../components/Downloads.astro"
+import Faq from "../components/Faq"
+import { questions } from "../data/faq"
+import {
+  ArrowDown,
+  Download,
+  Captions,
+  Search,
+  Repeat2,
+  SlidersHorizontal,
+} from "lucide-react"
+const steps = [
+  {
+    title: "Open a video",
+    text: "Bring a video and subtitles in the language you’re learning. Add a translation track if you like.",
+  },
+  {
+    title: "Follow your curiosity",
+    text: "Click a word for its meaning in context. Explain a line to see how the words fit together.",
+  },
+  {
+    title: "Make it stick",
+    text: "Replay the line, ask a follow-up, or save a flashcard. Pick up where you left off.",
+  },
+]
+const features = [
+  { icon: Captions, text: "Two subtitle tracks" },
+  { icon: Search, text: "Searchable transcript" },
+  { icon: Repeat2, text: "One-click line replay" },
+  { icon: SlidersHorizontal, text: "Your choice of AI provider" },
+]
+---
+
+<SiteLayout>
+  <section class="site-container hero">
+    <h1>
+      Stay in the story.
+      <br />
+      <span>Understand every word.</span>
+    </h1>
+    <p class="body-copy hero-copy">
+      Turn your own videos into language practice. Follow two subtitle tracks,
+      look up a word, and get an explanation without leaving the scene.
+    </p>
+    <div class="hero-actions">
+      <LinkButton href="#downloads">
+        <Download aria-hidden="true" />
+        Get Neden
+      </LinkButton>
+      <LinkButton href="#how-it-works" variant="ghost">
+        See how it works
+        <ArrowDown aria-hidden="true" />
+      </LinkButton>
+    </div>
+    <figure class="hero-figure">
+      <a
+        href="/images/player.webp"
+        target="_blank"
+        rel="noopener"
+        aria-label="View full-size player screenshot (opens in a new tab)"
+      >
+        <img
+          class="product-image"
+          src="/images/player.webp"
+          width="1440"
+          height="900"
+          fetchpriority="high"
+          alt="Neden playing Leyla ile Mecnun with Turkish and English subtitles and the searchable transcript open."
+        />
+      </a>
+      <figcaption>
+        Your videos. Your subtitles. A little more understanding.
+      </figcaption>
+    </figure>
+  </section>
+  <section id="how-it-works" class="site-container section workflow">
+    <div class="section-intro">
+      <h2 class="section-title">
+        A new way to watch.
+        <br />A natural way to learn.
+      </h2>
+      <p class="body-copy">
+        Keep the scene in view. Find the meaning you need. Then press play.
+      </p>
+    </div>
+    <div class="workflow-content">
+      <ol>
+        {steps.map((step, index) => (
+          <li>
+            <span class="step-number">0{index + 1}</span>
+            <div>
+              <h3>{step.title}</h3>
+              <p class="body-copy">{step.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <figure>
+        <a
+          href="/images/word.webp"
+          target="_blank"
+          rel="noopener"
+          aria-label="View full-size word screenshot (opens in a new tab)"
+        >
+          <img
+            class="product-image"
+            src="/images/word.webp"
+            width="1440"
+            height="900"
+            loading="lazy"
+            alt="A contextual word definition shown over the scene in Neden."
+          />
+        </a>
+        <figcaption>
+          A word’s meaning, right where you need it.{" "}
+          <span class="enlarge-hint">Select image to enlarge.</span>
+        </figcaption>
+      </figure>
+    </div>
+    <div class="feature-rail">
+      {features.map(({ icon: Icon, text }) => (
+        <div>
+          <Icon size={22} strokeWidth={1.75} aria-hidden="true" />
+          <span>{text}</span>
+        </div>
+      ))}
+    </div>
+  </section>
+  <section class="explanation-section">
+    <div class="site-container explanation-content">
+      <figure>
+        <a
+          href="/images/explanation.webp"
+          target="_blank"
+          rel="noopener"
+          aria-label="View full-size explanation screenshot (opens in a new tab)"
+        >
+          <img
+            class="product-image"
+            src="/images/explanation.webp"
+            width="1440"
+            height="900"
+            loading="lazy"
+            alt="Neden’s explanation sidebar translates a subtitle line and breaks down its words, with a follow-up input below."
+          />
+        </a>
+      </figure>
+      <div>
+        <h2 class="section-title">
+          There’s more
+          <br />
+          behind the line.
+        </h2>
+        <p class="body-copy">
+          Get a natural translation and a word-by-word breakdown. See how a
+          phrase works, ask what you’re missing, and hear it again in the scene.
+        </p>
+        <a class="text-link" href="#downloads">
+          Start watching with Neden <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+  <Downloads />
+  <section class="site-container section faq-section">
+    <h2 class="section-title">
+      A few things
+      <br />
+      to know.
+    </h2>
+    <div>
+      <Faq client:load />
+      <noscript>
+        <style>
+          astro-island[component-export="default"]:has(
+              [data-slot="accordion"]
+            ) {
+            display: none;
+          }
+        </style>
+        {questions.map((item) => (
+          <details>
+            <summary>{item.question}</summary>
+            <p class="body-copy">{item.answer}</p>
+          </details>
+        ))}
+      </noscript>
+    </div>
+  </section>
+  <p class="site-container media-credit">
+    Screenshots show Leyla ile Mecnun for product demonstration. Neden is an
+    independent project; videos and subtitles are not included.
+  </p>
+</SiteLayout>
+<style>
+  .hero {
+    padding-top: 72px;
+    text-align: center;
+  }
+  h1 {
+    font-size: clamp(40px, 5.5vw, 72px);
+    line-height: 1.08;
+    font-weight: 620;
+    letter-spacing: -0.055em;
+  }
+  h1 span {
+    color: #0879f9;
+  }
+  .hero-copy {
+    max-width: 640px;
+    margin: 24px auto 0;
+  }
+  .hero-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 28px;
+  }
+  figure {
+    margin: 0;
+    min-width: 0;
+  }
+  .hero-figure {
+    margin-top: 56px;
+  }
+  .enlarge-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  figcaption {
+    color: var(--muted-foreground);
+    font-size: 14px;
+    margin-top: 24px;
+    text-align: center;
+  }
+  .section-intro {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 64px;
+    align-items: end;
+    margin-bottom: 56px;
+  }
+  .section-intro p {
+    max-width: 360px;
+    justify-self: end;
+  }
+  .workflow-content {
+    display: grid;
+    grid-template-columns: 0.85fr 1.3fr;
+    gap: 64px;
+    align-items: center;
+  }
+  ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  li {
+    display: flex;
+    gap: 24px;
+    padding: 28px 0;
+    border-top: 1px solid var(--border);
+  }
+  li:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+  li:last-child {
+    padding-bottom: 0;
+  }
+  .step-number {
+    color: var(--primary);
+    font-size: 14px;
+    padding-top: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  h3 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    margin-bottom: 12px;
+  }
+  li p {
+    font-size: 16px;
+  }
+  .feature-rail {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 24px;
+    padding-top: 56px;
+    margin-top: 56px;
+    border-top: 1px solid var(--border);
+  }
+  .feature-rail div {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 14px;
+    color: var(--muted-foreground);
+  }
+  .explanation-section {
+    background: #f4f6f8;
+    padding-block: 88px;
+  }
+  .explanation-content {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 64px;
+    align-items: center;
+  }
+  .explanation-content p {
+    margin: 24px 0;
+  }
+  .explanation-content a {
+    font-size: 16px;
+  }
+  .faq-section {
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 96px;
+  }
+  details {
+    border-bottom: 1px solid var(--border);
+    padding: 24px 0;
+  }
+  summary {
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .media-credit {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+    padding-bottom: 24px;
+  }
+  @media (max-width: 900px) {
+    .workflow-content {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+    ol {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    li {
+      border: none;
+      padding: 0;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .explanation-content {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+    .explanation-content > div {
+      max-width: 560px;
+    }
+    .faq-section {
+      gap: 48px;
+    }
+  }
+  @media (max-width: 640px) {
+    .hero {
+      padding-top: 48px;
+    }
+    h1 {
+      font-size: 42px;
+    }
+    .hero-copy {
+      margin-top: 24px;
+    }
+    .hero-actions {
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .hero-figure {
+      margin-top: 40px;
+    }
+    .section-intro {
+      grid-template-columns: 1fr;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .section-intro p {
+      justify-self: start;
+    }
+    ol {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    li {
+      flex-direction: row;
+      gap: 20px;
+    }
+    .feature-rail {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding-top: 32px;
+      margin-top: 40px;
+    }
+    .feature-rail div {
+      align-items: start;
+      font-size: 13px;
+    }
+    .feature-rail svg {
+      flex-shrink: 0;
+    }
+    .explanation-section {
+      padding-block: 64px;
+    }
+    .faq-section {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+  }
+</style>
