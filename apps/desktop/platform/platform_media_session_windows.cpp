@@ -3,6 +3,7 @@
 #include <QPointer>
 #include <QTimer>
 #include <windows.h>
+#include <roapi.h>
 #include <systemmediatransportcontrolsinterop.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.h>
