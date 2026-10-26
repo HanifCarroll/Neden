@@ -1,5 +1,6 @@
 #pragma once
 #include "profile_store.h"
+#include "language_catalog.h"
 #include <QObject>
 #include <QVariantMap>
 #include <QVariantList>
@@ -12,7 +13,7 @@ struct ConnectionSettings {
     bool automaticSubtitles = false;
 };
 struct LearningSettings {
-    QString sourceLanguage = "Turkish", explanationLanguage = "English";
+    QString sourceLanguage = "Auto-detect", explanationLanguage = LanguageCatalog::systemLanguage();
     enum class WordProvider { ContextualAi, Off };
     enum class PrimaryProvider { Configured, Luna };
     WordProvider wordProvider = WordProvider::ContextualAi;
@@ -31,6 +32,12 @@ class AppSettings : public QObject {
     Q_PROPERTY(bool automaticSubtitles READ automaticSubtitles NOTIFY changed)
     Q_PROPERTY(QString sourceLanguage READ sourceLanguage NOTIFY changed)
     Q_PROPERTY(QString explanationLanguage READ explanationLanguage NOTIFY changed)
+    Q_PROPERTY(QVariantList sourceLanguages READ sourceLanguages CONSTANT)
+    Q_PROPERTY(QVariantList explanationLanguages READ explanationLanguages CONSTANT)
+    Q_PROPERTY(QVariantList subtitleLanguages READ subtitleLanguages CONSTANT)
+    Q_PROPERTY(QString sourceLanguageCode READ sourceLanguageCode NOTIFY changed)
+    Q_PROPERTY(QString explanationLanguageCode READ explanationLanguageCode NOTIFY changed)
+    Q_PROPERTY(QString subtitleLanguageCode READ subtitleLanguageCode NOTIFY changed)
     Q_PROPERTY(bool includeSecondary READ includeSecondary NOTIFY changed)
     Q_PROPERTY(QVariantMap learningSettings READ learningSettings NOTIFY changed)
     Q_PROPERTY(QVariantList wordProviders READ wordProviders CONSTANT)
@@ -51,6 +58,15 @@ public:
     bool automaticSubtitles() const { return connectionValues.automaticSubtitles; }
     QString sourceLanguage() const { return learningValues.sourceLanguage; }
     QString explanationLanguage() const { return learningValues.explanationLanguage; }
+    QVariantList sourceLanguages() const { return LanguageCatalog::options(true); }
+    QVariantList explanationLanguages() const { return LanguageCatalog::options(); }
+    QVariantList subtitleLanguages() const { return LanguageCatalog::subtitleOptions(); }
+    QString sourceLanguageCode() const { return LanguageCatalog::code(sourceLanguage()); }
+    QString explanationLanguageCode() const { return LanguageCatalog::code(explanationLanguage()); }
+    QString subtitleLanguageCode() const { return LanguageCatalog::subtitleCode(sourceLanguage()); }
+    Q_INVOKABLE QString subtitleCodeForLanguage(const QString &language) const {
+        return LanguageCatalog::subtitleCode(language);
+    }
     bool includeSecondary() const { return learningValues.includeSecondary; }
     QVariantMap learningSettings() const { return learningValues.json().toVariantMap(); }
     QJsonObject learningJson() const { return learningValues.json(); }

@@ -23,13 +23,15 @@ QJsonObject LearningSettings::json() const {
 }
 LearningSettings LearningSettings::parse(const QVariantMap &values) {
     LearningSettings next;
-    next.sourceLanguage = values.value("sourceLanguage", "Turkish").toString().trimmed();
-    next.explanationLanguage = values.value("explanationLanguage", "English").toString().trimmed();
+    next.sourceLanguage = LanguageCatalog::canonicalName(
+        values.value("sourceLanguage", next.sourceLanguage).toString(), true);
+    next.explanationLanguage = LanguageCatalog::canonicalName(
+        values.value("explanationLanguage", next.explanationLanguage).toString());
     const auto word = wordIds.indexOf(values.value("wordProvider", "ai").toString());
     const auto primary = primaryIds.indexOf(values.value("primaryProvider", "configured").toString());
     if (next.sourceLanguage.isEmpty() || next.explanationLanguage.isEmpty() ||
         next.sourceLanguage.size() > 100 || next.explanationLanguage.size() > 100 || word < 0 || primary < 0)
-        throw std::runtime_error("Use language names or codes and a supported provider.");
+        throw std::runtime_error("Choose a language from the list and a supported provider.");
     next.wordProvider = static_cast<WordProvider>(word);
     next.primaryProvider = static_cast<PrimaryProvider>(primary);
     next.includeSecondary = values.value("includeSecondary", true).toBool();
@@ -46,6 +48,15 @@ AppSettings::AppSettings(ProfileStore &profile, QObject *parent) : QObject(paren
     connectionValues.automaticSubtitles = data.value("automaticSubtitles").toBool();
     try {
         auto savedLearning = data.value("learning").toObject().toVariantMap();
+        // Older versions accepted free text. Migrate each unrecognized language independently.
+        const LearningSettings defaults;
+        for (const auto &field : {QString("sourceLanguage"), QString("explanationLanguage")}) {
+            if (savedLearning.contains(field) &&
+                LanguageCatalog::canonicalName(savedLearning.value(field).toString(), field == "sourceLanguage")
+                    .isEmpty())
+                savedLearning.insert(field, field == "sourceLanguage" ? defaults.sourceLanguage
+                                                                      : defaults.explanationLanguage);
+        }
         const auto savedWordProvider = savedLearning.value("wordProvider").toString();
         // Retired translation providers migrate without discarding languages or AI preferences.
         if (savedWordProvider == "google" || savedWordProvider == "microsoft")

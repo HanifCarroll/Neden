@@ -25,7 +25,7 @@ set(NEDEN_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/app" "${CMAKE_CURRENT_SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/subtitles" "${CMAKE_CURRENT_SOURCE_DIR}/playback"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform" "${CMAKE_CURRENT_SOURCE_DIR}/account")
 include_directories(${NEDEN_INCLUDE_DIRS})
-set(NEDEN_STUDY_SOURCES account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h study/ai_client.cpp study/ai_client.h
+set(NEDEN_STUDY_SOURCES account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h app/language_catalog.cpp app/language_catalog.h study/ai_client.cpp study/ai_client.h
     study/flashcard_deck.cpp study/flashcard_deck.h study/explanation_session.cpp study/explanation_session.h subtitles/subtitle_service.cpp subtitles/subtitle_service.h
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/conversation.cpp study/conversation.h study/study_target.h)
 set(NEDEN_SESSION_SOURCES app/media_history.cpp app/media_history.h playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h

@@ -20,7 +20,7 @@ public:
         subtitleLoginReader = std::move(credentialReader);
     }
     void cancel();
-    Q_INVOKABLE void findSubtitles(const QString &language = "tr", bool autoDownload = false,
+    Q_INVOKABLE void findSubtitles(const QString &language, bool autoDownload = false,
                                    const QString &query = {}, int season = 0, int episode = 0);
     Q_INVOKABLE void downloadSubtitle(int index);
     static QString movieHash(const QString &path);

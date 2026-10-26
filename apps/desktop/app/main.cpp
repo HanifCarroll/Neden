@@ -146,7 +146,6 @@ int main(int argc, char **argv) {
         session.checkpoint();
         study.explanation()->stop();
     });
-    session.cueModel()->setSearchLanguage(CueModel::Turkish);
     FullscreenController fullscreen;
     ThumbnailService thumbnails;
     ShortcutMap keymap;

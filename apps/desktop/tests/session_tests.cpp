@@ -54,6 +54,23 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void transcriptSearchFollowsLanguagePreferences() {
+        QTemporaryDir directory;
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setStudyServices(&study);
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Unicode);
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "tr"}}));
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Turkish);
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "es"}}));
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Unicode);
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "az"}}));
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Turkish);
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "auto"}}));
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Unicode);
+    }
+
     void audioDisconnectionSilentlyPausesOnlyActivePlayback() {
         FakePlayback playback;
         LearningSession session(&playback);

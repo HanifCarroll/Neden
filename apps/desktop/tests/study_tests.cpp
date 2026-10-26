@@ -15,6 +15,93 @@
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void languagePreferencesUseValidatedChoicesAndNeutralDefaults() {
+        QTemporaryDir directory;
+        ProfileStore profile(directory.path());
+        AppSettings settings(profile);
+        QCOMPARE(settings.sourceLanguageCode(), QString("auto"));
+        QCOMPARE(settings.explanationLanguage(), LanguageCatalog::systemLanguage());
+        QVERIFY(settings.sourceLanguages().size() > 100);
+        QVERIFY(settings.subtitleLanguages().size() > 50);
+        QSet<QString> languageIds;
+        for (const auto &option : settings.sourceLanguages()) {
+            const auto id = option.toMap().value("id").toString();
+            QVERIFY2(!languageIds.contains(id), qPrintable(id));
+            languageIds.insert(id);
+        }
+        QVERIFY(settings.configureLearning({{"sourceLanguage", "es"}, {"explanationLanguage", "French"}}));
+        QCOMPARE(settings.sourceLanguage(), QString("Spanish"));
+        QCOMPARE(settings.explanationLanguageCode(), QString("fr"));
+        QCOMPARE(settings.subtitleLanguageCode(), QString("es"));
+        const auto saved = settings.learningSettings();
+        QVERIFY(!settings.configureLearning({{"sourceLanguage", "invented language"}}));
+        QVERIFY(!settings.configureLearning({{"explanationLanguage", "auto"}}));
+        QCOMPARE(settings.learningSettings(), saved);
+        QCOMPARE(LanguageCatalog::subtitleCode("Portuguese (Brazil)"), QString("pt-br"));
+        QCOMPARE(LanguageCatalog::subtitleCode("Azerbaijani"), QString("az-az"));
+        QCOMPARE(LanguageCatalog::subtitleCode("auto"), QString());
+        QVERIFY(!LanguageCatalog::supportsSubtitleCode("anything"));
+    }
+
+    void legacyFreeTextLanguagesMigrateWithoutLosingOtherPreferences() {
+        QTemporaryDir directory;
+        ProfileStore profile(directory.path());
+        QVERIFY(profile.update({{"learning", QJsonObject{{"sourceLanguage", "not a language"},
+                                                         {"explanationLanguage", "fr"},
+                                                         {"wordProvider", "off"},
+                                                         {"includeSecondary", false}}}}));
+        AppSettings settings(profile);
+        QCOMPARE(settings.sourceLanguageCode(), QString("auto"));
+        QCOMPARE(settings.explanationLanguage(), QString("French"));
+        QCOMPARE(settings.wordProvider(), QString("off"));
+        QVERIFY(!settings.includeSecondary());
+    }
+
+    void automaticSubtitlesFollowSelectedLanguageAndSkipAutoDetection() {
+        QTemporaryDir directory;
+        QFile media(directory.filePath("video.mkv"));
+        QVERIFY(media.open(QIODevice::WriteOnly));
+        media.write(QByteArray(131072, '\0'));
+        media.close();
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        QStringList languages;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            auto *socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                auto bytes = socket->property("request").toByteArray() + socket->readAll();
+                socket->setProperty("request", bytes);
+                if (!bytes.contains("\r\n\r\n") || socket->property("sent").toBool())
+                    return;
+                socket->setProperty("sent", true);
+                const QUrl url("http://localhost" + QString::fromUtf8(bytes.split(' ').value(1)));
+                languages.append(QUrlQuery(url).queryItemValue("languages"));
+                const QByteArray body = R"({"data":[]})";
+                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " +
+                              QByteArray::number(body.size()) + "\r\n\r\n" + body);
+                socket->disconnectFromHost();
+            });
+        });
+        const auto base = QString("http://127.0.0.1:%1").arg(server.serverPort());
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("test-key"); }, nullptr, base);
+        QVERIFY(study.settings()->configure(base, "test", "https://example.org/%s", true));
+        study.subtitles()->setMedia(media.fileName());
+        QTest::qWait(50);
+        QVERIFY(languages.isEmpty());
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "Japanese"}}));
+        study.subtitles()->setMedia(media.fileName());
+        QTRY_COMPARE(languages, QStringList{"ja"});
+        QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "pt-BR"}}));
+        study.subtitles()->setMedia(media.fileName());
+        QTRY_COMPARE(languages, (QStringList{"ja", "pt-br"}));
+        study.subtitles()->findSubtitles("fr", false, "Example film");
+        QTRY_COMPARE(languages, (QStringList{"ja", "pt-br", "fr"}));
+        study.subtitles()->setMedia(media.fileName(), false);
+        study.subtitles()->findSubtitles("invalid", false, "Example film");
+        QTest::qWait(50);
+        QCOMPARE(languages.size(), 3);
+    }
+
     void settingsDraftCommitsAllFieldsOnlyAfterSuccessfulPersistence() {
         QTemporaryDir directory;
         StudyServices services(directory.path(), [](const QString &) { return QByteArray(); });

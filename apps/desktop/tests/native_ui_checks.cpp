@@ -628,6 +628,8 @@ private slots:
     }
 
     void settingsSeparateCloudFromProviderDrafts() {
+        const auto originalLearning = study->settings()->learningSettings();
+        const auto restoreLearning = qScopeGuard([&] { study->settings()->configureLearning(originalLearning); });
         const auto originalMode = study->account()->enabled();
         const auto originalSize = window->size();
         const auto restore = qScopeGuard([&] {
@@ -680,6 +682,33 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(toggle, "clicked"));
         QVERIFY(!wordProvider->isVisible());
         QVERIFY(model->setProperty("text", originalModel));
+        auto *languageToggle = visualItem(window->contentItem(), "languageSettingsToggle");
+        QVERIFY(languageToggle);
+        QVERIFY(QMetaObject::invokeMethod(languageToggle, "clicked"));
+        auto *source = visualItem(window->contentItem(), "sourceLanguageChoice");
+        auto *response = visualItem(window->contentItem(), "explanationLanguageChoice");
+        auto *automatic = visualItem(window->contentItem(), "automaticSubtitlesCheck");
+        QVERIFY(source && response && automatic);
+        QVERIFY(source->isVisible() && response->isVisible());
+        QVERIFY(!source->property("editable").toBool());
+        QVERIFY(!response->property("editable").toBool());
+        const auto choiceIndex = [](const QVariantList &choices, const QString &code) {
+            for (int index = 0; index < choices.size(); ++index) {
+                if (choices[index].toMap().value("id").toString() == code)
+                    return index;
+            }
+            return -1;
+        };
+        QVERIFY(source->setProperty("currentIndex", choiceIndex(study->settings()->sourceLanguages(), "es")));
+        QVERIFY(response->setProperty("currentIndex", choiceIndex(study->settings()->explanationLanguages(), "fr")));
+        QVERIFY(automatic->isEnabled());
+        auto *save = visualItem(window->contentItem(), "saveSettingsButton");
+        QVERIFY(save);
+        QVERIFY(QMetaObject::invokeMethod(save, "clicked"));
+        QCOMPARE(study->settings()->sourceLanguage(), QString("Spanish"));
+        QCOMPARE(study->settings()->explanationLanguage(), QString("French"));
+        QVERIFY(source->setProperty("currentIndex", 0));
+        QVERIFY(!automatic->isEnabled());
         QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
         QTRY_VERIFY(!dialog->property("opened").toBool());
     }

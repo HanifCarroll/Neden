@@ -66,6 +66,13 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
 void LearningSession::setStudyServices(StudyServices *providedStudyServices) {
     studyServices = providedStudyServices;
     studyInteraction.setServices(providedStudyServices);
+    const auto updateSearchLanguage = [this, providedStudyServices] {
+        const auto language = providedStudyServices->settings()->sourceLanguageCode();
+        cueModel()->setSearchLanguage(language == "tr" || language == "az" || language == "azb"
+                                         ? CueModel::Turkish : CueModel::Unicode);
+    };
+    connect(providedStudyServices->settings(), &AppSettings::changed, this, updateSearchLanguage);
+    updateSearchLanguage();
     connect(providedStudyServices->subtitles(), &SubtitleService::subtitlesReady, this,
             [this](const QVector<Cue> &cues, const QString &path) {
                 stopReplay();

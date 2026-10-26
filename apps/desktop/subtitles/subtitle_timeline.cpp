@@ -90,7 +90,7 @@ QVector<Cue> SubtitleTimeline::read(const QUrl &url, const QString &encoding) {
         text = decoder.decode(bytes);
         if (decoder.hasError())
             throw std::runtime_error("This subtitle file is not valid Unicode. Choose its encoding in "
-                                     "Playback options (for Turkish, try Windows-1254), then load it again.");
+                                     "Playback options to match the file, then load it again.");
     }
     return parseSrt(text);
 }

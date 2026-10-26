@@ -30,7 +30,7 @@ Commercial API access does not itself grant ownership of subtitle files. Confirm
 
 ## Implementation boundary
 
-The current desktop SubtitleService handles OpenSubtitles credentials, hash/title search and downloads directly. Automatic lookup currently requests Turkish; manual lookup accepts Turkish or English. Cloud currently covers AI explanations and word lookup only.
+The current desktop SubtitleService handles OpenSubtitles credentials, hash/title search and downloads directly. Automatic lookup uses the selected subtitle language; manual lookup offers a list of provider-supported languages. Auto-detection is available for explanations, while online searches require a concrete language. Cloud currently covers AI explanations and word lookup only.
 
 A future Cloud subtitle implementation should:
 
@@ -39,7 +39,7 @@ A future Cloud subtitle implementation should:
 3. Respect provider rate limits and account quotas, deduplicate concurrent downloads and retry only appropriate transient failures. Local reuse and any provider-approved shared caching should avoid charging for identical retries.
 4. Send only the video fingerprint and necessary title/release metadata for catalogue search. Make audio upload an explicit separate action for hosted transcription.
 5. Keep generated, translated and human-authored subtitles distinguishable. Validate formats, file sizes, encoding and archive contents before loading; protect existing user files.
-6. Replace the fixed Turkish/English acquisition restriction with supported language codes and saved language preferences. Keep explanation language independent from subtitle-search language.
+6. Reuse the desktop language catalogue and saved preferences. Keep explanation language independent from subtitle-search language.
 
 ## Settings shipped with this investigation
 

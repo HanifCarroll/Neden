@@ -189,13 +189,28 @@ Rectangle {
                     }
                 }
                 RowLayout {
-                    ActionButton {
-                        text: "Find Turkish"
-                        onClicked: pane.studyServices.subtitles.findSubtitles("tr", false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
+                    ChoiceBox {
+                        id: subtitleLanguage
+                        objectName: "subtitleSearchLanguageChoice"
+                        Layout.fillWidth: true
+                        model: pane.studyServices.settings.subtitleLanguages
+                        textRole: "name"
+                        valueRole: "id"
+                        currentIndex: {
+                            const preferred = pane.studyServices.settings.subtitleLanguageCode || pane.studyServices.settings.subtitleCodeForLanguage(pane.studyServices.settings.explanationLanguage);
+                            for (let index = 0; index < model.length; ++index) {
+                                if (model[index].id === preferred)
+                                    return index;
+                            }
+                            return -1;
+                        }
+                        displayText: currentIndex < 0 ? "Choose language…" : currentText
+                        Accessible.name: "Subtitle search language"
                     }
                     ActionButton {
-                        text: "Find English"
-                        onClicked: pane.studyServices.subtitles.findSubtitles("en", false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
+                        text: "Find subtitles"
+                        enabled: subtitleLanguage.currentIndex >= 0
+                        onClicked: pane.studyServices.subtitles.findSubtitles(subtitleLanguage.currentValue, false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
                     }
                 }
                 ListView {

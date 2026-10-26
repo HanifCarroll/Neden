@@ -20,9 +20,9 @@ ColumnLayout {
             endpoint: endpointField.text,
             model: modelField.text,
             dictionary: dictionaryField.text,
-            automaticSubtitles: automaticField.checked,
-            sourceLanguage: sourceLanguage.text,
-            explanationLanguage: explanationLanguage.text,
+            automaticSubtitles: automaticField.checked && automaticField.enabled,
+            sourceLanguage: sourceLanguage.currentValue,
+            explanationLanguage: explanationLanguage.currentValue,
             includeSecondary: includeSecondary.checked,
             noKeyRequired: noKeyRequired.checked,
             primaryProvider: primaryProvider.currentValue,
@@ -162,10 +162,13 @@ ColumnLayout {
             text: "Subtitle language"
             color: Theme.muted
         }
-        SearchField {
+        ChoiceBox {
             id: sourceLanguage
-            text: pane.settings.sourceLanguage
-            placeholderText: "Source language"
+            objectName: "sourceLanguageChoice"
+            model: pane.settings.sourceLanguages
+            textRole: "name"
+            valueRole: "id"
+            currentIndex: pane.providerIndex(model, pane.settings.sourceLanguageCode)
             Layout.fillWidth: true
             Accessible.name: "Source language"
         }
@@ -173,10 +176,13 @@ ColumnLayout {
             text: "Explain in"
             color: Theme.muted
         }
-        SearchField {
+        ChoiceBox {
             id: explanationLanguage
-            text: pane.settings.explanationLanguage
-            placeholderText: "Explanation language"
+            objectName: "explanationLanguageChoice"
+            model: pane.settings.explanationLanguages
+            textRole: "name"
+            valueRole: "id"
+            currentIndex: pane.providerIndex(model, pane.settings.explanationLanguageCode)
             Layout.fillWidth: true
             Accessible.name: "Explanation language"
         }
@@ -193,7 +199,16 @@ ColumnLayout {
         CheckBox {
             id: automaticField
             checked: pane.settings.automaticSubtitles
-            text: "Automatically find Turkish subtitles"
+            objectName: "automaticSubtitlesCheck"
+            enabled: pane.settings.subtitleCodeForLanguage(sourceLanguage.currentValue || "").length > 0
+            text: "Find subtitles automatically when opening a video"
+        }
+        Label {
+            visible: !automaticField.enabled
+            text: "Choose a supported subtitle language in Languages and context to enable automatic downloads."
+            color: Theme.muted
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
         Label {
             text: "Uses your OpenSubtitles key and download allowance. Cloud does not include subtitle downloads yet. Changes apply to the next video."

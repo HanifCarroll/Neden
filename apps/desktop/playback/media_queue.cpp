@@ -11,7 +11,7 @@ QList<QUrl> MediaQueue::expand(const QList<QUrl> &urls) {
     QSet<QUrl> seen;
     const QStringList extensions{"mp4",  "mkv", "webm", "mov", "m4v", "avi", "mpg",
                                  "mpeg", "ts",  "m2ts", "wmv", "ogv", "flv"};
-    QCollator collator{QLocale(QLocale::English)};
+    QCollator collator{QLocale::system()};
     collator.setNumericMode(true);
     collator.setCaseSensitivity(Qt::CaseInsensitive);
     for (const auto &url : urls) {

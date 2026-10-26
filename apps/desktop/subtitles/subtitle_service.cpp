@@ -31,8 +31,8 @@ void SubtitleService::setMedia(const QString &path, bool search) {
     cancel();
     results.clear();
     mediaPath = path;
-    if (settings.automaticSubtitles() && search && !path.isEmpty())
-        findSubtitles("tr", true);
+    if (settings.automaticSubtitles() && search && !path.isEmpty() && !settings.subtitleLanguageCode().isEmpty())
+        findSubtitles(settings.subtitleLanguageCode(), true);
     emit changed();
 }
 
@@ -95,10 +95,10 @@ void SubtitleService::findSubtitles(const QString &language, bool autoDownload, 
     // 1. Cancel the previous lookup and fingerprint the current media.
     cancel();
     results.clear();
-    if (mediaPath.isEmpty() || (language != "tr" && language != "en") || title.size() > 200 || season < 0 ||
+    if (mediaPath.isEmpty() || !LanguageCatalog::supportsSubtitleCode(language) || title.size() > 200 || season < 0 ||
         season > 1000 || episode < 0 || episode > 10000 ||
         (title.trimmed().isEmpty() && (season || episode))) {
-        setMessage("Open a local video and choose Turkish or English subtitles.");
+        setMessage("Open a local video and choose a subtitle language from the list.");
         return;
     }
     try {

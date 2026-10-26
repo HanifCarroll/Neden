@@ -7,7 +7,7 @@ import Neden
 Item {
     id: pane
     required property LearningSession session
-    readonly property bool editing: search.activeFocus || language.activeFocus
+    readonly property bool editing: search.activeFocus
     property bool searchOpen: false
     property bool followingPlayback: true
     signal primaryRequested
@@ -109,14 +109,6 @@ Item {
                 placeholderText: "Find a word or phrase…"
                 onTextChanged: pane.session.cueModel.search(text)
                 Accessible.name: "Search transcript"
-            }
-            ChoiceBox {
-                id: language
-                Layout.fillWidth: true
-                model: ["Turkish search", "Other languages"]
-                currentIndex: pane.session.cueModel.searchLanguage === CueModel.Turkish ? 0 : 1
-                onActivated: pane.session.cueModel.searchLanguage = currentIndex === 0 ? CueModel.Turkish : CueModel.Unicode
-                Accessible.name: "Transcript search language"
             }
         }
         Rectangle {
