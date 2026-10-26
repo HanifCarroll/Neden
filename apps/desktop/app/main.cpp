@@ -21,6 +21,7 @@
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QStandardPaths>
 #include <QSurfaceFormat>
 #include <QTimer>
@@ -31,7 +32,9 @@ bool showsWhiteVideoFrame(QQuickWindow *window) {
     const auto *video = window->findChild<QQuickItem *>("videoSurface");
     if (!video || video->width() < 1 || video->height() < 1)
         return false;
-    const auto image = window->grabWindow();
+    // Capture presented screen pixels. QQuickWindow::grabWindow() performs an
+    // extra offscreen render, which is not a faithful check of libmpv's live FBO.
+    const auto image = window->screen()->grabWindow(window->winId()).toImage();
     if (image.isNull())
         return false;
     // Sample the center of the generated white fixture, clear of letterboxing
@@ -185,7 +188,7 @@ int main(int argc, char **argv) {
                 // Only this explicitly requested synthetic-fixture check captures
                 // a failure image, inside its required isolated profile.
                 QDir().mkpath(storage);
-                mainWindow->grabWindow().save(QDir(storage).filePath("smoke-failure.png"));
+                mainWindow->screen()->grabWindow(mainWindow->winId()).save(QDir(storage).filePath("smoke-failure.png"));
             }
             application.exit(4);
         });
