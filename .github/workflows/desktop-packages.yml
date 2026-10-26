@@ -45,9 +45,13 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Collect pinned dependency sources and notices
+        shell: bash
+        run: python3 scripts/release/collect_sources.py linux "$RUNNER_TEMP/release-sources"
       - name: Stage install
         run: |
           cmake --install build/desktop --prefix "$RUNNER_TEMP/Neden"
+          cp -R "$RUNNER_TEMP/release-sources/notices" "$RUNNER_TEMP/Neden/share/licenses/neden/dependencies"
           python3 scripts/release/package_linux.py "$RUNNER_TEMP/Neden" Neden-linux-x86_64-preview.deb
       - name: Verify installed Linux package
         run: |
@@ -58,6 +62,15 @@ jobs:
         with:
           name: linux-package-candidate
           path: Neden-linux-x86_64-preview.deb
+      - name: Preserve corresponding sources
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-corresponding-sources
+          compression-level: 0
+          path: |
+            ${{ runner.temp }}/release-sources
+
   windows:
     if: inputs.platform == 'all' || inputs.platform == 'windows'
     runs-on: windows-2022
@@ -100,6 +113,9 @@ jobs:
           $runtime = "$env:RUNNER_TEMP/runtime"
           ./scripts/release/stage_windows_runtime.ps1 -Runtime $runtime -MsysDirectory "${{ steps.msys2.outputs.msys2-location }}"
           "$runtime/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Collect Windows dependency sources
+        shell: msys2 {0}
+        run: bash scripts/release/collect_windows_dependencies.sh "$RUNNER_TEMP/runtime" "$RUNNER_TEMP/dependency-sources"
       - name: Configure and build
         shell: pwsh
         run: |
@@ -111,11 +127,16 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Collect pinned dependency sources and notices
+        shell: bash
+        run: python3 scripts/release/collect_sources.py windows "$RUNNER_TEMP/release-sources"
       - name: Stage install
         shell: pwsh
         run: |
           cmake --install build/desktop --prefix "$env:RUNNER_TEMP/Neden"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item "$env:RUNNER_TEMP/release-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/dependencies" -Recurse
+          Copy-Item "$env:RUNNER_TEMP/dependency-sources/notices" "$env:RUNNER_TEMP/Neden/share/licenses/neden/msys2" -Recurse
           Copy-Item "$env:RUNNER_TEMP/runtime/bin/*.dll" "$env:RUNNER_TEMP/Neden/bin/"
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DStaging=$env:RUNNER_TEMP/Neden" "/DOutput=$env:GITHUB_WORKSPACE" scripts/release/windows.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -137,6 +158,16 @@ jobs:
         with:
           name: windows-package-candidate
           path: Neden-windows-x86_64-preview-setup.exe
+      - name: Preserve corresponding sources
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-corresponding-sources
+          compression-level: 0
+          path: |
+            ${{ runner.temp }}/release-sources
+            ${{ runner.temp }}/dependency-sources
+
   macos:
     if: inputs.platform == 'all' || inputs.platform == 'macos'
     runs-on: macos-15
@@ -168,9 +199,20 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Collect pinned dependency sources and notices
+        shell: bash
+        run: python3 scripts/release/collect_sources.py macos "$RUNNER_TEMP/release-sources"
       - name: Create and verify disk image
-        run: python3 scripts/release/package_macos.py
+        run: python3 scripts/release/package_macos.py --sources "$RUNNER_TEMP/release-sources"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-package-candidate
           path: dist/desktop/Neden-macos-arm64-preview.dmg
+      - name: Preserve corresponding sources
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-corresponding-sources
+          compression-level: 0
+          path: |
+            ${{ runner.temp }}/release-sources

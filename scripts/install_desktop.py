@@ -92,7 +92,7 @@ def stage_native_qml(bundle):
     return plugins, qt_directory("QT_INSTALL_LIBS")
 
 
-def prepare_bundle(destination):
+def prepare_bundle(destination, release_notices=None):
 
     # 1. Copy only the selected app and its reviewed playback frameworks into staging.
     source = ROOT / "build/desktop/Neden.app"
@@ -144,6 +144,9 @@ def prepare_bundle(destination):
                 raise SystemExit(f"Missing bundled dependency in {binary.name}: {dependency}")
             if dependency.startswith("@loader_path/") and not (binary.parent / dependency.removeprefix("@loader_path/")).exists():
                 raise SystemExit(f"Missing loader-relative dependency in {binary.name}: {dependency}")
+
+    if release_notices is not None:
+        shutil.copytree(release_notices, destination / "Contents/Resources/licenses/dependencies")
 
     # 3. Sign with the configured identity after all binary edits are complete.
     info_path = destination / "Contents/Info.plist"

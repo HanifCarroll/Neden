@@ -1,0 +1,224 @@
+[
+  {
+    "name": "dav1d-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://code.videolan.org/videolan/dav1d/-/archive/1.2.1/dav1d-1.2.1.tar.bz2",
+    "sha256": "a4003623cdc0109dec3aac8435520aa3fb12c4d69454fa227f2658cdb6dab5fa"
+  },
+  {
+    "name": "ffmpeg-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://ffmpeg.org/releases/ffmpeg-6.0.tar.xz",
+    "sha256": "57be87c22d9b49c112b6d24bc67d42508660e6b718b3db89c44e47e289137082"
+  },
+  {
+    "name": "freetype-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://downloads.sourceforge.net/project/freetype/freetype2/2.13.2/freetype-2.13.2.tar.xz",
+    "sha256": "12991c4e55c506dd7f9b765933e62fd2be2e06d421505d7950a132e4f1bb484d"
+  },
+  {
+    "name": "fribidi-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.13/fribidi-1.0.13.tar.xz",
+    "sha256": "7fa16c80c81bd622f7b198d31356da139cc318a63fc7761217af4130903f54a2"
+  },
+  {
+    "name": "harfbuzz-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/harfbuzz/harfbuzz/archive/8.1.1.tar.gz",
+    "sha256": "b16e6bc0fc7e6a218583f40c7d201771f2e3072f85ef6e9217b36c1dc6b2aa25"
+  },
+  {
+    "name": "libass-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/libass/libass/releases/download/0.17.1/libass-0.17.1.tar.xz",
+    "sha256": "f0da0bbfba476c16ae3e1cfd862256d30915911f7abaa1b16ce62ee653192784"
+  },
+  {
+    "name": "libxml2-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://download.gnome.org/sources/libxml2/2.11/libxml2-2.11.5.tar.xz",
+    "sha256": "3727b078c360ec69fa869de14bd6f75d7ee8d36987b071e6928d4720a28df3a6"
+  },
+  {
+    "name": "mbedtls-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/v3.4.1.tar.gz",
+    "sha256": "a420fcf7103e54e775c383e3751729b8fb2dcd087f6165befd13f28315f754f5"
+  },
+  {
+    "name": "mpv-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/mpv-player/mpv/archive/refs/tags/v0.36.0.tar.gz",
+    "sha256": "29abc44f8ebee013bb2f9fe14d80b30db19b534c679056e4851ceadf5a5e8bf6"
+  },
+  {
+    "name": "uchardet-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz",
+    "sha256": "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0"
+  },
+  {
+    "name": "ffmpeg",
+    "platforms": [
+      "linux",
+      "windows"
+    ],
+    "url": "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz",
+    "sha256": "05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41"
+  },
+  {
+    "name": "mpv",
+    "platforms": [
+      "linux",
+      "windows"
+    ],
+    "url": "https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz",
+    "sha256": "ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209"
+  },
+  {
+    "name": "qtbase",
+    "platforms": [
+      "macos",
+      "windows",
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtbase-everywhere-src-6.10.2.tar.xz",
+    "sha256": "aeb78d29291a2b5fd53cb55950f8f5065b4978c25fb1d77f627d695ab9adf21e"
+  },
+  {
+    "name": "qtdeclarative",
+    "platforms": [
+      "macos",
+      "windows",
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtdeclarative-everywhere-src-6.10.2.tar.xz",
+    "sha256": "a249914ff66cdcdbf0df8b5ffad997a2ee6dce01cc17d43c6cc56fdc1d0f4b0f"
+  },
+  {
+    "name": "qtshadertools",
+    "platforms": [
+      "macos",
+      "windows",
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtshadertools-everywhere-src-6.10.2.tar.xz",
+    "sha256": "18d9dbbc4f7e6e96e6ed89a9965dc032e2b58158b65156c035537826216716c9"
+  },
+  {
+    "name": "qtsvg",
+    "platforms": [
+      "macos",
+      "windows",
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtsvg-everywhere-src-6.10.2.tar.xz",
+    "sha256": "f07ff80f38caf235187200345392ca7479445ddf49a36c3694cd52a735dad6e1"
+  },
+  {
+    "name": "qtwebview",
+    "platforms": [
+      "macos",
+      "windows",
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtwebview-everywhere-src-6.10.2.tar.xz",
+    "sha256": "7ec406ff0998900ccef0ff8e4e5b1fbf15e4e18f3b43eb72e8b2aeda0dd0eab4"
+  },
+  {
+    "name": "qtwebchannel",
+    "platforms": [
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtwebchannel-everywhere-src-6.10.2.tar.xz",
+    "sha256": "e31ea59f8e19e0374d54fdc7a8479c840acffc4ba5297ee43564b5158a4f2c27"
+  },
+  {
+    "name": "qtpositioning",
+    "platforms": [
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtpositioning-everywhere-src-6.10.2.tar.xz",
+    "sha256": "7051fa64477c66769840cad396fc3772a01ba5516363c8842a7a513fa0c4cdce"
+  },
+  {
+    "name": "qtwebengine",
+    "platforms": [
+      "linux"
+    ],
+    "url": "https://download.qt.io/official_releases/qt/6.10/6.10.2/submodules/qtwebengine-everywhere-src-6.10.2.tar.xz",
+    "sha256": "856eddf292a69a88618567deea67711b4ec720e69bcb575ed7bb539c9023961e"
+  },
+  {
+    "name": "qtkeychain",
+    "platforms": [
+      "macos",
+      "windows",
+      "linux"
+    ],
+    "url": "https://github.com/frankosterfeld/qtkeychain/archive/875f77d9f61bd97fd84cca47ce3bc71186dfbd09.tar.gz",
+    "sha256": "f367072fdf43551104cc718e43056d218d0c6d81c1b1758603fb3cd87144f8cc"
+  },
+  {
+    "name": "libpng-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/glennrp/libpng/archive/v1.6.40.tar.gz",
+    "sha256": "62d25af25e636454b005c93cae51ddcd5383c40fa14aa3dae8f6576feb5692c2"
+  },
+  {
+    "name": "libpng-macos-patch",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://wrapdb.mesonbuild.com/v2/libpng_1.6.40-1/get_patch",
+    "sha256": "bad558070e0a82faa5c0ae553bcd12d49021fc4b628f232a8e58c3fbd281aae1"
+  },
+  {
+    "name": "zlib-macos",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://zlib.net/fossils/zlib-1.3.tar.gz",
+    "sha256": "ff0ba4c292013dbc27530b3a81e1f9a813cd39de01ca5e0f8bf355702efa593e"
+  },
+  {
+    "name": "zlib-macos-patch",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://wrapdb.mesonbuild.com/v2/zlib_1.3-1/get_patch",
+    "sha256": "ab9d6b8167bb34a7c52b60b0cd6138aa4e0c2d31f997343a5f506f3b97b32008"
+  },
+  {
+    "name": "macos-playback-build-recipes",
+    "platforms": [
+      "macos"
+    ],
+    "url": "https://github.com/media-kit/libmpv-darwin-build/archive/refs/tags/v0.6.0.tar.gz",
+    "sha256": "afade6a15e001700c6d92860bb33eba43020450001e7464595717ab9a222d28a"
+  }
+]
