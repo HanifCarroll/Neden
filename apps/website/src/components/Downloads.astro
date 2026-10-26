@@ -17,13 +17,12 @@ import { releases, releasesUrl } from "../data/releases"
       <div class="platform">
         <h3>{platform.name}</h3>
         <p class="requirement">{platform.requirement}</p>
-        {platform.download ? (
+        {platform.download && (
           <LinkButton href={platform.download}>
             Download for {platform.name}
           </LinkButton>
-        ) : (
-          <p class="status">{platform.status}</p>
         )}
+        <p class="status">{platform.status}</p>
         <a
           class="text-link installation"
           href={`/installation/#${platform.id}`}

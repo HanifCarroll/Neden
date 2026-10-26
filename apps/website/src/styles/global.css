@@ -56,7 +56,11 @@
   .prose-page h2 { font-size: 24px; font-weight: 600; margin: 40px 0 12px; }
   .prose-page p, .prose-page li { font-size: 17px; line-height: 1.75; color: var(--muted-foreground); margin-bottom: 16px; }
   .prose-page a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
-  .prose-page ul { padding-left: 24px; }
+  .prose-page ul, .prose-page ol { padding-left: 24px; }
+  .prose-page ul { list-style: disc; }
+  .prose-page ol { list-style: decimal; }
+  .prose-page pre { padding: 16px; margin-bottom: 16px; overflow-x: auto; background: var(--muted); font-size: 14px; }
+  .prose-page code { font-family: ui-monospace, monospace; }
 }
 @media(max-width: 640px) {
   .site-container { width: calc(100% - 40px); }

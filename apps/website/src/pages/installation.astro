@@ -28,6 +28,51 @@ import { releases } from "../data/releases"
             <a href={platform.download}>Download Neden for {platform.name}</a>
           </p>
         )}
+        {platform.id === "macos" && (
+          <>
+            <p>
+              Open the disk image, drag Neden to Applications, then eject the disk
+              image. This preview is ad-hoc signed and has not been notarized by
+              Apple, so macOS will warn on first launch.
+            </p>
+            <p>
+              If you trust this download, follow Apple's{" "}
+              <a href="https://support.apple.com/en-us/102445">instructions for opening an unnotarized app</a>{" "}
+              in System Settings → Privacy &amp; Security. Intel Macs are not
+              included in this preview.
+            </p>
+          </>
+        )}
+        {platform.id === "windows" && (
+          <>
+            <p>
+              Run the setup file. Neden installs for your Windows account without
+              administrator access and can be removed through Installed apps.
+              This preview is unsigned, so Windows may show a publisher warning.
+            </p>
+            <p>
+              Embedded web content uses Microsoft's{" "}
+              <a href="https://developer.microsoft.com/en-us/microsoft-edge/webview2">
+                WebView2 Runtime
+              </a>. Install the Evergreen Runtime if it is missing on your PC.
+              Hardware playback and system integration are still experimental.
+            </p>
+          </>
+        )}
+        {platform.id === "linux" && (
+          <>
+            <p>
+              The Debian package targets Ubuntu 24.04 on x86-64. From the folder
+              containing the download, install it with:
+            </p>
+            <pre><code>sudo apt install ./Neden-linux-x86_64-preview.deb</code></pre>
+            <p>
+              Open Neden from your application launcher. Remove it with{" "}
+              <code>sudo apt remove neden</code>. Other distributions, Wayland,
+              and hardware playback have not yet been validated.
+            </p>
+          </>
+        )}
       </section>
     ))}
     <h2>Your first video</h2>
