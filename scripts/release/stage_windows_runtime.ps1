@@ -19,6 +19,9 @@ $pending = [System.Collections.Generic.Queue[string]]::new()
 Get-ChildItem "$binaryDirectory/*.dll" | ForEach-Object { $pending.Enqueue($_.FullName) }
 $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $copied = @()
+if (Test-Path "$Runtime/dependency-dlls.txt") {
+    $copied = @(Get-Content "$Runtime/dependency-dlls.txt" | Where-Object { $_.Trim() })
+}
 while ($pending.Count -gt 0) {
     $binary = $pending.Dequeue()
     if (!$visited.Add($binary)) { continue }

@@ -20,7 +20,7 @@ while IFS= read -r package; do
     bsdtar -xOf "$binary_archive" .PKGINFO > "$destination/metadata/$package.PKGINFO"
     package_base="$(sed -n 's/^pkgbase = //p' "$destination/metadata/$package.PKGINFO")"
     [[ "$package_base" =~ ^[a-zA-Z0-9+_.-]+$ ]] || { echo "Invalid package base"; exit 1; }
-    archive="$package_base-$version.src.tar.zst"
+    archive="$package_base-${version#*:}.src.tar.zst"
     source_url="https://repo.msys2.org/mingw/sources/$archive"
     if [[ ! -f "$destination/archives/$archive" ]]; then
         curl --fail --location --retry 4 --retry-all-errors "$source_url" -o "$destination/archives/$archive"

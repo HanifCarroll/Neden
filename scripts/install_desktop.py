@@ -109,7 +109,13 @@ def prepare_bundle(destination, release_notices=None):
     if not deploy:
         raise SystemExit("macdeployqt is required to prepare the installed app")
     plugins, qt_libraries = stage_native_qml(destination)
-    run(deploy, destination, "-no-plugins", "-no-codesign", "-no-strip", f"-libpath={qt_libraries}",
+    # Older Qt versions sign only when requested; newer versions can sign automatically.
+    # macdeployqt returns 1 for help, including on supported Qt versions.
+    deploy_help = subprocess.run([deploy, "-help"], capture_output=True, text=True, check=False)
+    if "Usage: macdeployqt" not in deploy_help.stdout + deploy_help.stderr:
+        raise SystemExit("Could not read macdeployqt deployment options")
+    signing_options = ["-no-codesign"] if "-no-codesign" in deploy_help.stdout + deploy_help.stderr else []
+    run(deploy, destination, "-no-plugins", *signing_options, "-no-strip", f"-libpath={qt_libraries}",
         f"-libpath={runtime}", *[f"-executable={plugin}" for plugin in plugins])
     (destination / "Contents/Resources/qt.conf").write_text(
         "[Paths]\nPrefix=.\nPlugins=PlugIns\nQmlImports=Resources/qml\nLibraries=Frameworks\n")
