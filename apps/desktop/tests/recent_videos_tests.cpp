@@ -30,6 +30,7 @@ private slots:
         QFile savedFile(directory.filePath("recent-videos.json"));
         QVERIFY(savedFile.open(QIODevice::ReadOnly));
         const auto savedBytes = savedFile.readAll();
+        savedFile.close();
         QVERIFY(!savedBytes.contains("language"));
         QVERIFY(restored.recordOpened({first, 1250.5, 4300}));
         QCOMPARE(restored.count(), 2);
