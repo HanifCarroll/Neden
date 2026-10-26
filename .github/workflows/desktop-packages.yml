@@ -126,9 +126,6 @@ jobs:
           $runtime = "$env:RUNNER_TEMP/runtime"
           ./scripts/release/stage_windows_runtime.ps1 -Runtime $runtime -MsysDirectory "${{ steps.msys2.outputs.msys2-location }}"
           "$runtime/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Collect Windows dependency sources
-        shell: msys2 {0}
-        run: bash scripts/release/collect_windows_dependencies.sh "$RUNNER_TEMP/runtime" "$RUNNER_TEMP/dependency-sources"
       - name: Configure and build
         shell: pwsh
         run: |
@@ -140,6 +137,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/desktop --output-on-failure
+      - name: Collect Windows dependency sources
+        shell: msys2 {0}
+        run: bash scripts/release/collect_windows_dependencies.sh "$RUNNER_TEMP/runtime" "$RUNNER_TEMP/dependency-sources"
       - name: Collect pinned dependency sources and notices
         shell: bash
         run: python3 scripts/release/collect_sources.py windows "$RUNNER_TEMP/release-sources"

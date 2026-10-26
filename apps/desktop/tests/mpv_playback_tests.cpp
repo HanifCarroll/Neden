@@ -55,7 +55,8 @@ private slots:
             mpv_get_property(playback.handle(), "secondary-sub-delay", MPV_FORMAT_DOUBLE, &secondaryDelay);
         QCOMPARE(playback.supportsIndependentNativeSubtitleTiming(), result >= 0);
         if (result >= 0)
-            QCOMPARE(secondaryDelay, -0.7);
+            // mpv stores this option as a float even when the API returns a double.
+            QVERIFY(qAbs(secondaryDelay - (-0.7)) < 0.000001);
         int correctPitch = 0;
         QCOMPARE(
             mpv_get_property(playback.handle(), "audio-pitch-correction", MPV_FORMAT_FLAG, &correctPitch), 0);
