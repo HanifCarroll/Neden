@@ -1,6 +1,10 @@
 # Optional Neden subscription
 
-Proposal, October 26, 2026. This service is not implemented or offered for sale.
+Implemented as an invitation-only staging preview, October 26, 2026. It is not
+offered for sale. Better Auth owns identity; Cloudflare hosts the API and storage.
+See the [deployment runbook](../apps/api/README.md) and
+[validation record](hosted/VALIDATION-2026-10-26.md). The pricing below remains a
+hypothesis for a future paid launch.
 
 ## Experience
 

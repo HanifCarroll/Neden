@@ -94,3 +94,21 @@ export async function authenticate(request: Request, env: Env) {
     );
   return { id: subject, subject };
 }
+
+// Test payments must never grant publicly available access to a paid AI provider.
+export function requireSandboxAccess(env: Env, accountId: string) {
+  if (hasSandboxAccess(env, accountId)) return;
+  throw new ServiceError(
+    403,
+    "sandbox_invitation_required",
+    "This test service is available to invited accounts only.",
+  );
+}
+
+export function hasSandboxAccess(env: Env, accountId: string) {
+  if (env.BILLING_LIVE === "true") return true;
+  const permitted = (env.SANDBOX_ACCOUNT_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim());
+  return permitted.includes(accountId);
+}

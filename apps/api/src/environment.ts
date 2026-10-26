@@ -20,7 +20,9 @@ export interface Env {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  STRIPE_PORTAL_CONFIGURATION_ID?: string;
   BILLING_LIVE: string;
+  SANDBOX_ACCOUNT_IDS?: string;
   MONTHLY_WORD_LIMIT: string;
   MONTHLY_EXPLANATION_LIMIT: string;
 }

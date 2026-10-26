@@ -41,7 +41,9 @@ export class AccountUsage extends DurableObject<Env> {
         count: number;
       }>("global-budget");
       const count = previous?.day === day ? previous.count : 0;
-      if (count >= Number(this.env.GLOBAL_DAILY_REQUEST_LIMIT)) return false;
+      const limit = Number(this.env.GLOBAL_DAILY_REQUEST_LIMIT);
+      if (!Number.isSafeInteger(limit) || limit < 1 || count >= limit)
+        return false;
       await this.ctx.storage.put("global-budget", { day, count: count + 1 });
       return true;
     });
@@ -118,7 +120,11 @@ export class AccountUsage extends DurableObject<Env> {
           bucket === "word"
             ? entitlement.wordLimit
             : entitlement.explanationLimit;
-        if (this.counts(entitlement.periodStart)[bucket] >= limit)
+        if (
+          !Number.isSafeInteger(limit) ||
+          limit < 1 ||
+          this.counts(entitlement.periodStart)[bucket] >= limit
+        )
           throw new ServiceError(
             429,
             "allowance_exhausted",

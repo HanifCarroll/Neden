@@ -48,13 +48,14 @@
       "vars": {
         "WEBSITE_ORIGIN": "https://neden-staging.hanifcarroll.com",
         "API_ORIGIN": "https://neden-api-staging.hanifcarroll.com",
-        "AI_ENABLED": "false",
+        "AI_ENABLED": "true",
         "BILLING_LIVE": "false",
         "GLOBAL_DAILY_REQUEST_LIMIT": "2000",
         "MONTHLY_WORD_LIMIT": "1000",
         "MONTHLY_EXPLANATION_LIMIT": "300",
         "STRIPE_PRICE_ID": "price_1UUvDSK7alsSe3q54tjIZBWt",
-        "EMAIL_FROM": "accounts@mail.neden.hanifcarroll.com"
+        "EMAIL_FROM": "accounts@mail.neden.hanifcarroll.com",
+        "STRIPE_PORTAL_CONFIGURATION_ID": "bpc_1UUw5RK7alsSe3q5D5bt2XlG"
       },
       "routes": [
         {

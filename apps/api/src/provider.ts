@@ -50,7 +50,8 @@ export async function callProvider(
     );
   return fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
-    redirect: "error",
+    // Workers supports manual/follow; a 3xx is rejected by the caller like any non-2xx.
+    redirect: "manual",
     signal,
     headers: {
       Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,

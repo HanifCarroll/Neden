@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
-import { checkout, retrieveEntitlement, stripeClient } from "../src/billing";
+import {
+  billingPortal,
+  checkout,
+  retrieveEntitlement,
+  stripeClient,
+} from "../src/billing";
 import type { Env } from "../src/environment";
 
 const settings: Env = {
@@ -122,5 +127,24 @@ describe("billing decisions", () => {
       ),
     ).toEqual({ url: "https://checkout.stripe.com/example" });
     expect(mock).toHaveBeenCalledTimes(2);
+  });
+});
+
+it("does not create a billing customer just to open an empty portal", async () => {
+  const mock = vi.spyOn(globalThis, "fetch");
+  await expect(
+    billingPortal(settings, crypto.randomUUID()),
+  ).rejects.toMatchObject({ code: "billing_account_missing" });
+  expect(mock).not.toHaveBeenCalled();
+});
+
+it("recognizes portal cancellation dates under Stripe flexible billing", async () => {
+  subscriptions([
+    { ...subscription("active"), cancel_at_period_end: false, cancel_at: 180 },
+  ]);
+  expect(await retrieveEntitlement(settings, "cus_test")).toMatchObject({
+    enabled: true,
+    periodEnd: 180,
+    cancelAtPeriodEnd: true,
   });
 });

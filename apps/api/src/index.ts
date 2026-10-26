@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ServiceError } from "./contracts";
-import { authenticate } from "./auth";
+import { authenticate, hasSandboxAccess, requireSandboxAccess } from "./auth";
 import { identity, desktopClientId } from "./identity";
 import { billingPortal, stripeClient } from "./billing";
 import { boundedText } from "./http";
@@ -43,7 +43,7 @@ app.get("/v1/config", (c) =>
       !!c.env.STRIPE_PRICE_ID &&
       !!c.env.STRIPE_SECRET_KEY &&
       !!c.env.DEEPSEEK_API_KEY &&
-    !!c.env.STRIPE_WEBHOOK_SECRET &&
+      !!c.env.STRIPE_WEBHOOK_SECRET &&
       c.env.AI_ENABLED === "true",
     sandbox: c.env.BILLING_LIVE !== "true",
   }),
@@ -125,13 +125,16 @@ app.get("/v1/account", async (c) => {
   return c.json({
     ...(await usage.summary()),
     hasBillingAccount: !!billing?.stripe_customer_id,
+    canSubscribe: hasSandboxAccess(c.env, accountId),
   });
 });
-app.post("/v1/study", (c) =>
-  study(c.req.raw, c.env, c.get("account").id, c.executionCtx),
-);
+app.post("/v1/study", (c) => {
+  requireSandboxAccess(c.env, c.get("account").id);
+  return study(c.req.raw, c.env, c.get("account").id, c.executionCtx);
+});
 app.post("/v1/billing/checkout", async (c) => {
   const id = c.get("account").id;
+  requireSandboxAccess(c.env, id);
   return c.json(
     await c.env.ACCOUNT_USAGE.get(
       c.env.ACCOUNT_USAGE.idFromName(id),

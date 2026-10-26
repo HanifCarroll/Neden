@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { registerDesktopClient } from "../src/desktop-registration";
 import { identity } from "../src/identity";
-import { authenticate } from "../src/auth";
+import { authenticate, requireSandboxAccess } from "../src/auth";
 import type { Env } from "../src/environment";
 const emails: { text: string }[] = [];
 const settings: Env = {
@@ -311,4 +311,19 @@ describe("account lifecycle", () => {
       ).status,
     ).toBeGreaterThanOrEqual(400);
   });
+});
+
+it("keeps fake payments from granting public access to real AI", () => {
+  expect(() =>
+    requireSandboxAccess({ ...settings, BILLING_LIVE: "false" }, "uninvited"),
+  ).toThrow();
+  expect(() =>
+    requireSandboxAccess(
+      { ...settings, BILLING_LIVE: "false", SANDBOX_ACCOUNT_IDS: "invited" },
+      "invited",
+    ),
+  ).not.toThrow();
+  expect(() =>
+    requireSandboxAccess({ ...settings, BILLING_LIVE: "true" }, "customer"),
+  ).not.toThrow();
 });

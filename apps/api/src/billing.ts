@@ -48,18 +48,21 @@ export async function retrieveEntitlement(
   env: Env,
   customerId: string,
 ): Promise<Entitlement> {
-  const subscriptions = await stripeClient(env).subscriptions.list({
+  let subscription: Stripe.Subscription | undefined;
+  // Stripe returns newest first. Iterate pages so old active grants remain visible.
+  for await (const candidate of stripeClient(env).subscriptions.list({
     customer: customerId,
     status: "all",
     limit: 100,
-  });
-  const subscription = subscriptions.data
-    .filter(
-      (s) =>
-        s.status === "active" &&
-        s.items.data.some((item) => item.price.id === env.STRIPE_PRICE_ID),
-    )
-    .sort((a, b) => b.created - a.created)[0];
+  })) {
+    if (
+      candidate.status === "active" &&
+      candidate.items.data.some((item) => item.price.id === env.STRIPE_PRICE_ID)
+    ) {
+      subscription = candidate;
+      break;
+    }
+  }
   const item = subscription?.items.data.find(
     (item) => item.price.id === env.STRIPE_PRICE_ID,
   );
@@ -67,8 +70,14 @@ export async function retrieveEntitlement(
     subscriptionId: subscription?.id ?? "",
     enabled: !!subscription && !!item,
     periodStart: item?.current_period_start ?? 0,
-    periodEnd: item?.current_period_end ?? 0,
-    cancelAtPeriodEnd: subscription?.cancel_at_period_end ?? false,
+    periodEnd: Math.min(
+      item?.current_period_end ?? 0,
+      subscription?.cancel_at ?? Number.POSITIVE_INFINITY,
+    ),
+    // Flexible billing uses cancel_at even for a portal period-end cancellation.
+    cancelAtPeriodEnd: !!(
+      subscription?.cancel_at_period_end || subscription?.cancel_at
+    ),
     wordLimit: Number(env.MONTHLY_WORD_LIMIT),
     explanationLimit: Number(env.MONTHLY_EXPLANATION_LIMIT),
   };
@@ -87,13 +96,12 @@ export async function checkout(env: Env, accountId: string) {
     );
   const stripe = stripeClient(env);
   const customer = await customerForAccount(env, accountId);
-  const existing = await stripe.subscriptions.list({
+  for await (const existing of stripe.subscriptions.list({
     customer,
     status: "all",
     limit: 100,
-  });
-  if (
-    existing.data.some((s) =>
+  })) {
+    if (
       [
         "active",
         "trialing",
@@ -101,14 +109,14 @@ export async function checkout(env: Env, accountId: string) {
         "unpaid",
         "incomplete",
         "paused",
-      ].includes(s.status),
+      ].includes(existing.status)
     )
-  )
-    throw new ServiceError(
-      409,
-      "subscription_exists",
-      "Manage your existing subscription in Billing.",
-    );
+      throw new ServiceError(
+        409,
+        "subscription_exists",
+        "Manage your existing subscription in Billing.",
+      );
+  }
   const pending = await stripe.checkout.sessions.list({
     customer,
     status: "open",
@@ -137,9 +145,20 @@ export async function checkout(env: Env, accountId: string) {
   return { url: session.url };
 }
 export async function billingPortal(env: Env, accountId: string) {
-  const customer = await customerForAccount(env, accountId);
+  const account = await env.DB.prepare(
+    "SELECT stripe_customer_id FROM billing_accounts WHERE account_id = ? AND deletion_requested_at IS NULL",
+  )
+    .bind(accountId)
+    .first<{ stripe_customer_id: string | null }>();
+  if (!account?.stripe_customer_id)
+    throw new ServiceError(
+      404,
+      "billing_account_missing",
+      "No billing account exists yet.",
+    );
   const session = await stripeClient(env).billingPortal.sessions.create({
-    customer,
+    customer: account.stripe_customer_id,
+    configuration: env.STRIPE_PORTAL_CONFIGURATION_ID,
     return_url: `${env.WEBSITE_ORIGIN}/account`,
   });
   return { url: session.url };

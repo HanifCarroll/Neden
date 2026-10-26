@@ -1,8 +1,8 @@
 import { env, runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { studyRequest } from "../src/contracts";
-import { providerBody } from "../src/provider";
+import { callProvider, providerBody } from "../src/provider";
 import type { Env } from "../src/environment";
 const bindings = env as unknown as Env;
 const context = {
@@ -150,5 +150,29 @@ describe("atomic allowance", () => {
     });
     // Recent abandoned reservations remain charged.
     expect((await stub.summary()).words.used).toBe(1);
+  });
+});
+
+describe("hosted provider transport", () => {
+  afterEach(() => vi.restoreAllMocks());
+  it("uses a redirect mode accepted by Workers and never follows redirects with credentials", async () => {
+    const mocked = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const request = new Request(input, init);
+        expect(request.redirect).toBe("manual");
+        expect(request.headers.get("Authorization")).toBe("Bearer test-only");
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "https://other.example.com" },
+        });
+      });
+    const response = await callProvider(
+      { ...bindings, AI_ENABLED: "true", DEEPSEEK_API_KEY: "test-only" },
+      { operation: "word", word: "Eyvallah", context },
+      new AbortController().signal,
+    );
+    expect(response.ok).toBe(false);
+    expect(mocked).toHaveBeenCalledTimes(1);
   });
 });

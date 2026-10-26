@@ -2,7 +2,7 @@
 
 Experimental Cloudflare Worker for Better Auth accounts, Stripe subscriptions,
 and metered DeepSeek requests. The desktop player remains free and independent.
-**This is a staging foundation, not a launched subscription service.**
+**This is an invitation-only staging preview, not a launched subscription service.**
 
 ## Current coverage
 
@@ -10,10 +10,17 @@ Implemented: verified email/password sign-in, recovery, sign-out, account deleti
 OAuth authorization code with PKCE for a registered native client, sandbox billing
 routes, bounded AI requests, streaming responses, and atomic allowances.
 
-Not yet validated: actual account email delivery, real Stripe Checkout/Portal and
-webhook delivery, real hosted DeepSeek responses, and a native desktop sign-in flow.
-The desktop app is not wired to this service yet. `AI_ENABLED=false` blocks both
-provider calls and new subscriptions; missing credentials also fail closed.
+Validated against the deployed staging service: verification email delivery,
+Stripe sandbox Checkout and Portal, signed subscription/cancellation webhooks,
+hosted DeepSeek word lookups, streamed explanations and follow-ups, and the native
+client's browser authorization and refresh-token flow. See
+[the validation record](../../docs/hosted/VALIDATION-2026-10-26.md) for limits.
+
+Sandbox accounts require an explicit `SANDBOX_ACCOUNT_IDS` invitation for checkout
+and AI. Fake payments never grant arbitrary accounts access to real provider spend.
+`AI_ENABLED=false` blocks provider calls and new subscriptions; missing credentials
+also fail closed. The desktop connection is optional; local playback and existing
+API-key mode remain independent.
 
 ## Architecture
 
@@ -57,7 +64,7 @@ Email and provider/payment calls are mocked. No credentials or paid calls are
 needed for the tests. Tests exercise verification, recovery, deletion, PKCE,
 code reuse, scope boundaries, quota concurrency, and billing state decisions.
 
-For interactive local development, copy `.env.example` to ignored `.dev.vars`,
+For interactive local development, copy `.env.example` to ignored `.env` or `.dev.vars`,
 set a fresh local auth secret, and run `bun run dev` here. Local email needs a
 configured delivery binding or a development-only mail adapter. Do not return
 verification links from public endpoints or log their contents.
@@ -77,10 +84,12 @@ secrets into test fixtures.
 4. Store `BETTER_AUTH_SECRET` (at least 32 random characters), `STRIPE_SECRET_KEY`,
    `STRIPE_WEBHOOK_SECRET`, and `DEEPSEEK_API_KEY` using Worker secrets. Never put
    them in tracked configuration or browser environment variables.
-5. Register the desktop client using `src/desktop-registration.ts` from a trusted
-   deployment process. It is a public native client with PKCE, no client secret,
+5. Register the desktop client with `bun scripts/register-desktop.ts staging`
+   from this directory. This trusted deployment command is idempotent. It is a public native client with PKCE, no client secret,
    and only the loopback callback `http://127.0.0.1/oauth/callback`. Better Auth
    permits an ephemeral loopback port. Registration is not a public API route.
+   Set `SANDBOX_ACCOUNT_IDS` as a Worker secret containing invited account IDs
+   separated by commas. Keep the invitation list out of source control.
 6. Deploy with `bun run deploy:staging`. Build the website with `PUBLIC_API_URL`
    pointing to that API; `bun run build:staging` in `apps/website` uses the checked-in
    staging origin. Then deploy its `staging` environment.
@@ -93,7 +102,7 @@ secrets into test fixtures.
    login/refresh/logout lifecycle before opening subscriptions. The sandbox price
    is an experiment, not an approved public offer. Live launch needs separate live
    secrets and prices, accurate public privacy/terms, monitoring, recovery drills,
-   and completed desktop integration.
+   and native credential-store and platform release validation.
 
 Worker logs deliberately exclude request payloads and raw SDK errors. Unexpected
 failures expose a correlation ID only. Add error-rate monitoring before production;
@@ -115,13 +124,17 @@ Authenticated routes:
 
 Web requests use credentialed cookies and an exact allowed Origin for writes.
 Native clients use an OAuth bearer token; tokens never enter application preferences.
-Refresh tokens belong in the OS credential store. The native integration is pending.
+Refresh tokens are saved through QtKeychain with insecure fallback disabled. Access
+tokens stay in memory. Each API origin has a separate credential-store namespace.
 
 ## Staging setup record
 
-On 2026-10-26 the D1 schema, auth secret, email binding, API custom domain, and
-account website were deployed. Automated identity/allowance/billing tests pass.
-Stripe has a sandbox pilot product and price. Its connector cannot issue the
-Worker's API key. Stripe Projects provisioning requires a separately authenticated
-CLI session. The existing DeepSeek key could not be read without macOS interaction.
-No payment or AI provider credential was copied, and checkout remains disabled.
+On 2026-10-26 the D1 schema, email sender, API and account website were deployed.
+Stripe sandbox billing uses a dedicated restricted key, signed webhook and configured
+Customer Portal. The provider key and billing secrets are Worker secrets; ignored
+local copies have owner-only permissions. No live payment was made.
+
+The test subscription was canceled through Stripe Portal. Its webhook preserved
+access through the paid test period and correctly changed the account's renewal
+label to an end date. Flexible billing can use `cancel_at` without setting
+`cancel_at_period_end`; the entitlement code and regression test cover both.
