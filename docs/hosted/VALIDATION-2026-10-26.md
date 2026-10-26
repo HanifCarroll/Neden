@@ -19,7 +19,8 @@ kept in ignored local audit files, not in this repository.
 - A headless native check used the actual StudyServices, word-card parser and
   explanation session: browser PKCE authorization, saved-token refresh, word lookup,
   streamed explanation and contextual follow-up all passed. Sign-out requested
-  token revocation. The check uses an in-memory credential store, not the OS keychain.
+  token revocation. Repeating the complete flow from a signed-out browser also
+  passed. The check uses an in-memory credential store, not the OS keychain.
 - Thirteen desktop test suites and QML lint passed. API tests cover identity,
   allowances and billing with mocked external services; the real checks above
   supplement them. Unit tests isolate local secret files from the test runtime.
@@ -32,6 +33,13 @@ Pass an ignored owner-only output path for its authorization link; open that lin
 in a browser with an invited, verified, subscribed staging account. It performs real
 provider requests and consumes test allowance. It never prints tokens or passwords.
 Its exit code is zero on success. It is deliberately excluded from unattended CI.
+
+## Native runtime finding
+
+The Pro launch check caught a read-only `Flow.implicitHeight` assignment in the
+new settings component. Unit tests and QML lint did not catch it. Commit `14ca4d4`
+removes that assignment so Qt supplies the flow layout height. Actual native launch
+is therefore required in addition to the checks above.
 
 ## Remaining launch gates
 
