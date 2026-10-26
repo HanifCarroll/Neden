@@ -20,4 +20,5 @@ The reference and rendered workflow were opened together with the image viewer.
 
 Verified navigation to walkthrough/downloads and installation/privacy pages,
 FAQ expansion, all image loads, and website type/lint/build checks. Download
-buttons remain absent until their exact platform artifacts are verified.
+buttons are supplied by the release manifest only after their exact platform
+artifacts pass installer validation.

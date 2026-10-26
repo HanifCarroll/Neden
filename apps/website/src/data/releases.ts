@@ -6,24 +6,29 @@ export interface PlatformRelease {
   download?: string
   status: string
 }
+const downloadBase = "https://github.com/HanifCarroll/Neden/releases/download/v0.2.0-preview.1"
+
 export const releases: PlatformRelease[] = [
   {
     name: "macOS",
     id: "macos",
-    requirement: "Apple silicon",
-    status: "Installer validation in progress",
+    requirement: "macOS 13+ · Apple silicon",
+    download: `${downloadBase}/Neden-macos-arm64-preview.dmg`,
+    status: "Preview · not notarized",
   },
   {
     name: "Windows",
     id: "windows",
-    requirement: "64-bit PC",
-    status: "Installer validation in progress",
+    requirement: "Windows 10 / 11 · 64-bit",
+    download: `${downloadBase}/Neden-windows-x86_64-preview-setup.exe`,
+    status: "Experimental preview · unsigned",
   },
   {
     name: "Linux",
     id: "linux",
-    requirement: "64-bit PC",
-    status: "Installer validation in progress",
+    requirement: "Ubuntu 24.04 · 64-bit",
+    download: `${downloadBase}/Neden-linux-x86_64-preview.deb`,
+    status: "Experimental preview · .deb",
   },
 ]
 export const releasesUrl = "https://github.com/HanifCarroll/Neden/releases"
