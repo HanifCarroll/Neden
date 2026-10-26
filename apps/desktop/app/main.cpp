@@ -178,7 +178,17 @@ int main(int argc, char **argv) {
             });
             pixelCheck->start(100);
         }
-        QTimer::singleShot(20000, &application, [&application] { application.exit(4); });
+        QTimer::singleShot(20000, &application, [&application, &session, mainWindow, storage, verifyPixels] {
+            qWarning() << "Smoke check timed out; playback state:" << session.playbackState()
+                       << "position:" << session.position() << "duration:" << session.duration();
+            if (verifyPixels) {
+                // Only this explicitly requested synthetic-fixture check captures
+                // a failure image, inside its required isolated profile.
+                QDir().mkpath(storage);
+                mainWindow->grabWindow().save(QDir(storage).filePath("smoke-failure.png"));
+            }
+            application.exit(4);
+        });
         mainWindow->update();
     }
     mainWindow->raise();

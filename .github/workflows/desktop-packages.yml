@@ -70,7 +70,7 @@ jobs:
       - name: Verify installed Linux package
         run: |
           sudo apt-get install -y ./Neden-linux-x86_64-preview.deb
-          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH QTWEBENGINE_DISABLE_SANDBOX=1 xvfb-run -a /usr/bin/neden --smoke-test --smoke-test-white-frame --profile "$RUNNER_TEMP/package-profile" "$GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white.mp4"
+          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH QTWEBENGINE_DISABLE_SANDBOX=1 xvfb-run -a /usr/bin/neden --smoke-test --smoke-test-white-frame --profile "$RUNNER_TEMP/package-profile" "$GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4"
           sudo apt-get remove -y neden
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -78,6 +78,12 @@ jobs:
           path: |
             Neden-linux-x86_64-preview.deb
             ${{ runner.temp }}/release-record.json
+      - name: Preserve installed smoke failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-smoke-failure
+          path: ${{ runner.temp }}/package-profile/smoke-failure.png
       - name: Preserve corresponding sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -185,7 +191,7 @@ jobs:
           Remove-Item Env:QT_PLUGIN_PATH, Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
           $env:QT_OPENGL = 'software'
           $env:QT_FORCE_STDERR_LOGGING = '1'
-          $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white.mp4") -PassThru
+          $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -PassThru
           if (!$app.WaitForExit(30000)) { $app.Kill(); throw 'Packaged application did not exit' }
           $app.Refresh()
           Write-Output "Installed application exit code: $($app.ExitCode)"
@@ -198,6 +204,12 @@ jobs:
           path: |
             Neden-windows-x86_64-preview-setup.exe
             ${{ runner.temp }}/release-record.json
+      - name: Preserve installed smoke failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-smoke-failure
+          path: ${{ runner.temp }}/package-profile/smoke-failure.png
       - name: Preserve corresponding sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
