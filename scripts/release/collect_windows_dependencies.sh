@@ -7,6 +7,7 @@ mkdir -p "$destination/archives" "$destination/notices" "$destination/metadata"
 # The disposable MSYS2 runner can install packages before initializing its GPG home.
 pacman-key --init
 pacman-key --populate msys2
+keyring_directory="$(pacman-conf GPGDir)"
 packages=()
 while IFS= read -r dll; do
     dll="${dll//$'\r'/}"
@@ -28,7 +29,14 @@ while IFS= read -r package; do
     if [[ ! -f "$destination/archives/$archive" ]]; then
         curl --fail --location --retry 4 --retry-all-errors "$source_url" -o "$destination/archives/$archive"
         curl --fail --location --retry 4 --retry-all-errors "$source_url.sig" -o "$destination/archives/$archive.sig"
-        pacman-key --verify "$destination/archives/$archive.sig"
+        # pacman-key's Unix UID/locking guard rejects verification on Windows.
+        # Use its initialized keyring directly and require both a valid signature
+        # and the same fully/ultimately trusted signer that pacman-key requires.
+        verification="$destination/metadata/$archive.verification"
+        gpg --homedir "$keyring_directory" --batch --status-fd 1 \
+            --verify "$destination/archives/$archive.sig" "$destination/archives/$archive" \
+            > "$verification"
+        grep -E '^\[GNUPG:\] TRUST_(FULLY|ULTIMATE)( |$)' "$verification" >/dev/null
     fi
     printf '%s\t%s\t%s\n' "$package" "$version" "$source_url" >> "$destination/metadata/dependencies.tsv"
     # Copy license files from the actual installed package, preserving paths.
