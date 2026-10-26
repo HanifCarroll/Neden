@@ -43,7 +43,7 @@ ColumnLayout {
         }
     }
     Label {
-        text: pane.account.message
+        text: (!pane.account.connected && !pane.account.busy ? "Not connected. " : "") + pane.account.message
         color: Theme.muted
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
@@ -54,6 +54,7 @@ ColumnLayout {
         text: {
             const allowance = pane.account.allowance;
             if (!allowance.words || !allowance.explanations) return "Checking allowance…";
+            if (!allowance.canSubscribe) return "This preview is available to invited accounts only.";
             if (!allowance.subscribed) return "Subscribe on your account page to use hosted AI.";
             return allowance.words.used + " / " + allowance.words.limit + " word lookups · "
                 + allowance.explanations.used + " / " + allowance.explanations.limit + " explanations and follow-ups";
@@ -63,8 +64,8 @@ ColumnLayout {
         Layout.fillWidth: true
     }
     ActionButton {
-        text: "Sign out"
-        visible: pane.account.enabled || pane.account.connected || pane.account.busy
+        text: pane.account.connected ? "Sign out" : "Cancel connection"
+        visible: pane.account.connected || pane.account.busy
         onClicked: pane.account.signOut()
     }
 }
