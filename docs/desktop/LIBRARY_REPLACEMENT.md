@@ -23,6 +23,10 @@ The macOS playback sources include the upstream media-kit builder at v0.6.0, its
 Qt's source modules are unmodified. Qt's own configure/build documentation is
 included with its sources. The macOS native WebView metadata adjustment is in
 `scripts/install_desktop.py`; it selects WKWebView instead of optional Chromium.
+Windows makes the equivalent WebView2 selection in
+`scripts/release/finalize_windows_package.ps1`. Microsoft release CRT DLLs are
+installed app-locally for per-user installations; Neden updates must carry their
+security updates. Linux stages the Chromium helper and resources explicitly.
 
 ## Replacing libraries
 
