@@ -34,6 +34,26 @@ export const studyRequest = z
     }),
     z.object({ operation: z.literal("explain"), context }),
     z.object({
+      operation: z.literal("translate"),
+      targetLanguage: z
+        .string()
+        .trim()
+        .min(2)
+        .max(80)
+        .regex(/^[\p{L}\p{M} ()-]+$/u),
+      cues: z
+        .array(
+          z.object({
+            id: z.number().int().min(0).max(49999),
+            text: z.string().trim().min(1).max(4000),
+          }),
+        )
+        .min(1)
+        .max(8),
+      contextBefore: z.array(z.string().max(1000)).max(2).default([]),
+      contextAfter: z.array(z.string().max(1000)).max(2).default([]),
+    }),
+    z.object({
       operation: z.literal("followup"),
       context,
       question: z.string().trim().min(1).max(2000),
@@ -41,6 +61,19 @@ export const studyRequest = z
     }),
   ])
   .superRefine((value, check) => {
+    if (value.operation === "translate") {
+      if (
+        value.cues.reduce((length, cue) => length + cue.text.length, 0) >
+          4000 ||
+        value.cues.some((cue, index) => cue.id !== value.cues[0].id + index)
+      )
+        check.addIssue({
+          code: "custom",
+          message:
+            "Translation needs a bounded, consecutive batch of subtitle lines.",
+        });
+      return;
+    }
     if (
       !(
         value.operation === "word"

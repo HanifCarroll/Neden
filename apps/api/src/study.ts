@@ -71,7 +71,7 @@ export async function study(
       "AI is unavailable. Your allowance was restored.",
     );
   }
-  if (parsed.data.operation === "word") {
+  if (parsed.data.operation === "word" || parsed.data.operation === "translate") {
     try {
       const text = await boundedText(upstream, 64000);
       const result = JSON.parse(text);
@@ -83,7 +83,7 @@ export async function study(
       throw new ServiceError(
         502,
         "invalid_answer",
-        "The word answer was interrupted. Please try again.",
+        "The AI answer was interrupted. Please try again.",
       );
     } finally {
       clearTimeout(timeout);

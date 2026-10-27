@@ -1,20 +1,27 @@
 import type { StudyRequest } from "./contracts";
 import { ServiceError } from "./contracts";
-import { wordPrompt, explanationPrompt } from "./prompts";
+import { wordPrompt, explanationPrompt, translationPrompt } from "./prompts";
 import type { Env } from "./environment";
 
 export function providerBody(request: StudyRequest) {
   const messages: { role: string; content: string }[] = [
     {
       role: "system",
-      content: request.operation === "word" ? wordPrompt : explanationPrompt,
+      content:
+        request.operation === "translate"
+          ? translationPrompt
+          : request.operation === "word"
+            ? wordPrompt
+            : explanationPrompt,
     },
     {
       role: "user",
       content: JSON.stringify(
-        request.operation === "word"
-          ? { ...request.context, word: request.word }
-          : request.context,
+        request.operation === "translate"
+          ? request
+          : request.operation === "word"
+            ? { ...request.context, word: request.word }
+            : request.context,
       ),
     },
   ];
@@ -30,9 +37,14 @@ export function providerBody(request: StudyRequest) {
     model: "deepseek-flash",
     messages,
     thinking: { type: "disabled" },
-    max_tokens: request.operation === "word" ? 900 : 1600,
-    stream: request.operation !== "word",
-    ...(request.operation === "word"
+    max_tokens:
+      request.operation === "translate"
+        ? 4096
+        : request.operation === "word"
+          ? 900
+          : 1600,
+    stream: request.operation !== "word" && request.operation !== "translate",
+    ...(request.operation === "word" || request.operation === "translate"
       ? { response_format: { type: "json_object" } }
       : { stream_options: { include_usage: true } }),
   };

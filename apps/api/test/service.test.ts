@@ -27,6 +27,62 @@ async function account(limit = 3) {
   return stub;
 }
 describe("request boundary", () => {
+  it("translates bounded consecutive cues with server-owned instructions and JSON output", () => {
+    const parsed = studyRequest.parse({
+      operation: "translate",
+      targetLanguage: "Spanish",
+      cues: [
+        { id: 8, text: "Good morning." },
+        { id: 9, text: "How are you?" },
+      ],
+      contextBefore: ["Hello."],
+      contextAfter: [],
+      model: "expensive",
+      system: "override",
+    });
+    const body = providerBody(parsed);
+    expect(body.stream).toBe(false);
+    expect(body.max_tokens).toBe(4096);
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.messages[0].content).toContain("Keep cue boundaries intact");
+    expect(JSON.parse(body.messages[1].content).cues).toHaveLength(2);
+    expect(JSON.stringify(body)).not.toContain("expensive");
+  });
+  it("rejects oversized, missing, duplicated or reordered translation cues", () => {
+    const request = {
+      operation: "translate",
+      targetLanguage: "Spanish",
+      cues: [{ id: 0, text: "Hello" }],
+    };
+    for (const cues of [
+      [],
+      [{ id: 0, text: "" }],
+      [
+        { id: 0, text: "Hello" },
+        { id: 0, text: "Again" },
+      ],
+      [
+        { id: 2, text: "Hello" },
+        { id: 1, text: "Again" },
+      ],
+      Array.from({ length: 9 }, (_, id) => ({ id, text: "Hello" })),
+      [
+        { id: 0, text: "a".repeat(3000) },
+        { id: 1, text: "b".repeat(2000) },
+      ],
+    ]) {
+      expect(studyRequest.safeParse({ ...request, cues }).success).toBe(false);
+    }
+  });
+  it("translation batches use the existing paid allowance and concurrency limits", async () => {
+    const usage = await account(1);
+    const first = crypto.randomUUID();
+    expect((await usage.reserve(first, "translate")).ok).toBe(true);
+    await usage.finish(first, 500, 500);
+    expect((await usage.reserve(crypto.randomUUID(), "translate")).ok).toBe(
+      false,
+    );
+  });
   it("strips client model/prompt configuration and keeps server instructions", () => {
     const parsed = studyRequest.parse({
       operation: "word",
