@@ -16,6 +16,11 @@ on:
         type: choice
         default: 26.2.4
         options: [26.2.4, 25.2.8]
+      gl_version:
+        description: Mesa OpenGL capability diagnostic
+        type: choice
+        default: native
+        options: [native, "3.3"]
       attempts:
         description: Fresh launches per driver and render loop (1–10)
         type: number
@@ -64,6 +69,7 @@ jobs:
         shell: pwsh
         env:
           ATTEMPTS: ${{ inputs.attempts }}
+          GL_VERSION: ${{ inputs.gl_version }}
         run: |
           $attempts = [int]$env:ATTEMPTS
           if ($attempts -lt 1 -or $attempts -gt 10) { throw 'Expected 1–10 attempts' }
@@ -72,6 +78,8 @@ jobs:
           $env:QT_LOGGING_RULES = 'neden.video.debug=true'
           $env:QSG_INFO = '1'
           $env:GALLIUM_DRIVER = 'llvmpipe'
+          if ($env:GL_VERSION -eq '3.3') { $env:MESA_GL_VERSION_OVERRIDE = '3.3' }
+          else { Remove-Item Env:MESA_GL_VERSION_OVERRIDE -ErrorAction SilentlyContinue }
           $driverDirectory = "$env:RUNNER_TEMP/mesa/x64"
           $results = @()
           foreach ($driver in @('bundled', 'modern')) {
