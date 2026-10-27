@@ -1,4 +1,5 @@
 #include "word_lookup.h"
+#include "word_boundaries.h"
 #include "hosted_account.h"
 #include "network_error.h"
 #include <QJsonArray>
@@ -11,31 +12,48 @@ WordLookup::WordLookup(CredentialReader credentialReader, QObject *parent)
     : QObject(parent), aiClient(std::move(credentialReader)) {}
 
 namespace {
-QRegularExpressionMatch wordMatchAt(const QString &text, int offset) {
-    if (offset < 0 || offset > text.size())
-        return {};
-
+const QRegularExpression &lexicalWordPattern() {
     static const QRegularExpression words("[\\p{L}\\p{M}\\p{N}]+(?:['’\\x{200C}\\x{200D}-][\\p{L}\\p{M}\\p{N}]+)*",
                                           QRegularExpression::UseUnicodePropertiesOption);
-    auto matches = words.globalMatch(text);
+    return words;
+}
+WordSpan wordSpanAt(const QString &text, int offset) {
+    if (offset < 0 || offset > text.size())
+        return {};
+    auto matches = lexicalWordPattern().globalMatch(text);
     while (matches.hasNext()) {
         const auto match = matches.next();
-        if (offset >= match.capturedStart() && offset <= match.capturedEnd())
-            return match;
+        if (offset < match.capturedStart() || offset > match.capturedEnd())
+            continue;
+        const auto candidate = match.captured();
+        static const QRegularExpression unspacedScripts(
+            "[\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Thai}\\p{Lao}\\p{Khmer}\\p{Myanmar}]");
+        if (candidate.contains(unspacedScripts)) {
+            // Segment the complete sentence so the dictionary has surrounding context.
+            const int character = qMin(offset, static_cast<int>(match.capturedEnd()) - 1);
+            for (const auto &span : dictionaryWordBoundaries(text)) {
+                if (span.start <= character && character < span.end &&
+                    span.start >= match.capturedStart() && span.end <= match.capturedEnd())
+                    return span;
+            }
+            return {};
+        }
+        return {static_cast<int>(match.capturedStart()), static_cast<int>(match.capturedEnd())};
     }
     return {};
 }
 } // namespace
 
 QString WordLookup::wordAt(const QString &text, int offset) {
-    return wordMatchAt(text, offset).captured();
+    const auto span = wordSpanAt(text, offset);
+    return text.mid(span.start, span.end - span.start);
 }
 
 QVariantMap WordLookup::wordRangeAt(const QString &text, int offset) const {
-    const auto match = wordMatchAt(text, offset);
-    if (!match.hasMatch())
+    const auto span = wordSpanAt(text, offset);
+    if (span.end <= span.start)
         return {};
-    return {{"start", match.capturedStart()}, {"end", match.capturedEnd()}};
+    return {{"start", span.start}, {"end", span.end}};
 }
 
 QVariantMap WordLookup::parseContextMeaning(const QByteArray &body) {
@@ -111,7 +129,7 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
     cancel();
     selectedWord = word;
     try {
-        if (word.isEmpty() || word.size() > 100 || wordAt(word, 0) != word)
+        if (word.isEmpty() || word.size() > 100 || lexicalWordPattern().match(word).captured() != word)
             throw std::runtime_error("Select one word of at most 100 characters.");
         if (context.value("clickedSubtitle").toString().isEmpty() ||
             QJsonDocument(context).toJson().size() > 32000)

@@ -328,7 +328,15 @@ private slots:
     }
     void wordExtractionSupportsUnicode() {
         QCOMPARE(WordLookup::wordAt("Bir ışık gördüm.", 5), QString("ışık"));
-        QCOMPARE(WordLookup::wordAt("日本語 العربية", 1), QString("日本語"));
+        QCOMPARE(WordLookup::wordAt("東京 العربية", 1), QString("東京"));
+        QCOMPARE(WordLookup::wordAt("私は勉強しています", 3), QString("勉強"));
+        QCOMPARE(WordLookup::wordAt("我喜欢学习中文", 3), QString("学习"));
+        QCOMPARE(WordLookup::wordAt("ภาษาไทยเป็นภาษาที่สวยงาม", 8), QString("เป็น"));
+        const QString chineseWithEmoji = QString::fromUtf8("🎬我喜欢学习中文");
+        WordLookup lookup([](const QString &) { return QByteArray(); });
+        const auto range = lookup.wordRangeAt(chineseWithEmoji, 5);
+        QCOMPARE(range.value("start").toInt(), 5);
+        QCOMPARE(range.value("end").toInt(), 7);
         QCOMPARE(WordLookup::wordAt("I don't know.", 5), QString("don't"));
         QCOMPARE(WordLookup::wordAt("C'est l’homme.", 10), QString("l’homme"));
         QCOMPARE(WordLookup::wordAt("un porte-monnaie", 9), QString("porte-monnaie"));

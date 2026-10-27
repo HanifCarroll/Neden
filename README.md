@@ -20,7 +20,7 @@ Bring your own media and subtitles. AI explanations require a configured provide
 
 ## Project status
 
-The desktop player is under active development. **macOS is the primary tested platform.** Preview installers target macOS 13+ on Apple silicon, Windows 10 (1809)+ / 11 on x86-64, and Ubuntu 24.04 on x86-64. Windows and Linux remain experimental: installer/startup checks and portable tests do not establish physical GPU, audio, or desktop-integration coverage. See [platform support](docs/desktop/PLATFORMS.md) and the [preview validation record](docs/desktop/releases/0.2.0-preview.1.md).
+The desktop player is under active development. **macOS is the primary tested platform.** Preview installers target macOS 13+ on Apple silicon, Windows 10 (1809)+ / 11 on x86-64 (new source builds require 1903+), and Ubuntu 24.04 on x86-64. Windows and Linux remain experimental: installer/startup checks and portable tests do not establish physical GPU, audio, or desktop-integration coverage. See [platform support](docs/desktop/PLATFORMS.md) and the [preview validation record](docs/desktop/releases/0.2.0-preview.1.md).
 
 Downloads, checksums, matching dependency sources, and validation records are published together on [GitHub Releases](https://github.com/HanifCarroll/Neden/releases). The macOS preview is ad-hoc signed and unnotarized; the Windows installer is unsigned. See the [installation guide](https://neden.hanifcarroll.com/installation/) and [dependency and distribution requirements](docs/desktop/DEPENDENCIES.md).
 

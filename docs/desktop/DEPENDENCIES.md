@@ -37,3 +37,23 @@ QtKeychain 0.17.0 is pinned to commit `875f77d9f61bd97fd84cca47ce3bc71186dfbd09`
 Explicit Connect and Save actions use asynchronous QtKeychain jobs with insecure fallback disabled. macOS retains the existing IINA endpoint service and `api-key` / `login` account names. A small native, noninteractive read adapter preserves already-approved background access; it never prompts. Windows/Linux use the same QtKeychain interface and require explicit Connect after launch. Missing/locked backends produce a status message, never plaintext preferences. Windows and Linux credential backends are not covered by the preview’s installer/startup validation; those integrations remain experimental.
 
 Embedded text decoding links the existing reviewed FFmpeg libraries directly. On macOS, CMake fetches checksum-pinned FFmpeg 6.0 source headers to match the bundled runtime and generates `avconfig.h`; no new codec binary is downloaded or shipped. Linux and Windows use headers and libraries from `AUDITED_MPV_PREFIX`.
+
+## Dictionary word boundaries
+
+Unspaced-script word selection uses Apple's Core Foundation tokenizer on macOS,
+Windows' system ICU C API on Windows 10 1903+ / 11, and the distribution's ICU
+on Linux (`libicu-dev` when building). No dictionary data or personal language
+configuration is embedded in Neden. Linux packages declare the discovered ICU
+runtime dependency. Windows uses `icu.dll` supplied by the operating system.
+
+## Windows software OpenGL
+
+New builds replace Qt's older software fallback with the checksum-pinned Mesa
+26.2.4 MSVC distribution from `pal1000/mesa-dist-win`. Only `opengl32sw.dll`
+(renamed from the distribution's `opengl32.dll`) and `libgallium_wgl.dll` are
+shipped. Hardware OpenGL remains the default. Windows defaults to Qt's basic
+render loop; an explicit `QSG_RENDER_LOOP` override remains available for diagnosis.
+The package test forces the software path and checks actual white video pixels
+on three fresh starts, with a system-only PATH and no driver/loop override.
+Mesa, LLVM, their component licenses, and upstream build recipes are collected
+from the pinned archives in `scripts/release/sources/upstream.json`.

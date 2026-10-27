@@ -18,6 +18,7 @@ AppPublisherURL=https://neden.hanifcarroll.com
 DefaultDirName={localappdata}\Programs\Neden
 DefaultGroupName=Neden
 PrivilegesRequired=lowest
+MinVersion=10.0.18362
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#Output}

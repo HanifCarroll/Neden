@@ -12,7 +12,10 @@ The table describes the published `v0.2.0-preview.1` artifacts. See the
 [October 26 development acceptance pass](validation-2026-10-26.md) for newer checks
 and unresolved findings; these do not retroactively qualify the published binaries.
 
-Windows and Linux are experimental. OS requirements follow Qt 6.10; the actual test
+New source builds require Windows 10 1903+ for the system ICU API; the table above
+retains the requirements of the already-published preview.
+
+Windows and Linux are experimental. OS requirements otherwise follow Qt 6.10; the actual test
 machines and limitations are recorded with each release. These checks do not
 establish physical GPU, audio, accessibility, Wayland, credential-backend, or
 fullscreen behavior across those platforms. Intel Macs and ARM Windows/Linux are
