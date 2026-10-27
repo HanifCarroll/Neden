@@ -83,6 +83,12 @@ int main(int argc, char **argv) {
     // Keep an explicit override available for driver diagnostics.
     if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
         qputenv("QSG_RENDER_LOOP", "basic");
+    // Qt loads the bundled Mesa DLL only for its software OpenGL fallback.
+    // Use Mesa's CPU rasterizer there: its default D3D12/WARP path can render
+    // mpv's framebuffer correctly while presenting a black window in Windows CI.
+    // Vendor OpenGL drivers do not use this Mesa-specific setting.
+    if (!qEnvironmentVariableIsSet("GALLIUM_DRIVER"))
+        qputenv("GALLIUM_DRIVER", "llvmpipe");
 #endif
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);

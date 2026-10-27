@@ -199,7 +199,7 @@ jobs:
           $env:QT_FORCE_STDERR_LOGGING = '1'
           $env:QT_LOGGING_RULES = 'neden.video.debug=true'
           $env:QSG_INFO = '1'
-          Remove-Item Env:QSG_RENDER_LOOP, Env:QT_OPENGL_DLL -ErrorAction SilentlyContinue
+          Remove-Item Env:QSG_RENDER_LOOP, Env:QT_OPENGL_DLL, Env:GALLIUM_DRIVER -ErrorAction SilentlyContinue
           # Repeated fresh starts exercise the installed driver's real fallback
           # path. No development DLL directory or render-loop override is allowed.
           foreach ($attempt in 1..3) {
