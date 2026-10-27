@@ -53,7 +53,7 @@ void SubtitleCatalog::get(const QUrl &url, ResponseHandler completed, bool subdl
         }
         auto key = credentials(dlOrigin);
         if (key.isEmpty() || key.size() > 512 || key.contains('\r') || key.contains('\n')) {
-            emit messageChanged("Connect your SubDL key in Settings → Services → Subtitle downloads.");
+            emit messageChanged("Connect your SubDL key in Settings → AI & accounts → Subtitle downloads.");
             return;
         }
         request.setRawHeader("X-API-Key", key);

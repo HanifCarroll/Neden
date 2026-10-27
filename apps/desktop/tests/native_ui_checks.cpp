@@ -732,6 +732,9 @@ private slots:
 
     void subtitleCatalogUiOffersSourcesAndValidatedLanguages() {
         QVERIFY(QMetaObject::invokeMethod(window, "openStudy", Q_ARG(QVariant, 2)));
+        auto *drawer = window->findChild<QObject *>("studyDrawer");
+        QVERIFY(drawer);
+        const auto closeDrawer = qScopeGuard([&] { QMetaObject::invokeMethod(drawer, "close"); });
         auto *provider = visualItem(window->contentItem(), "subtitleSearchProviderChoice");
         QTRY_VERIFY(provider && provider->isVisible());
         auto *language = visualItem(window->contentItem(), "subtitleSearchLanguageChoice");
@@ -750,6 +753,8 @@ private slots:
         QVERIFY(title->property("placeholderText").toString().contains("fingerprint"));
         QVERIFY(provider->setProperty("currentIndex", 0));
         QVERIFY(search->height() >= 24);
+        QVERIFY(QMetaObject::invokeMethod(drawer, "close"));
+        QTRY_VERIFY(!drawer->property("visible").toBool());
     }
 
     void playbackOptionsPresentGroupedControlsAndReadableDetails() {
