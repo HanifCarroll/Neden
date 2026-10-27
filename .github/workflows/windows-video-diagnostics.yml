@@ -11,6 +11,11 @@ on:
         type: choice
         default: windows-package-candidate
         options: [windows-package-candidate, windows-smoke-failure]
+      mesa_version:
+        description: Pinned comparison Mesa release
+        type: choice
+        default: 26.2.4
+        options: [26.2.4, 25.2.8]
       attempts:
         description: Fresh launches per driver and render loop (1–10)
         type: number
@@ -42,10 +47,17 @@ jobs:
           if ($install.ExitCode) { throw "Installer failed: $($install.ExitCode)" }
       - name: Fetch a pinned comparison driver
         shell: pwsh
+        env:
+          MESA_VERSION: ${{ inputs.mesa_version }}
         run: |
+          $checksums = @{
+            '26.2.4' = '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695'
+            '25.2.8' = 'e47cfe0be35f0c40c3d488c0e965d10656154ed55cfdfe4f4d79d4395672dc02'
+          }
+          if (!$checksums.ContainsKey($env:MESA_VERSION)) { throw 'Unsupported comparison driver' }
           $archive = "$env:RUNNER_TEMP/mesa.7z"
-          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z' -OutFile $archive
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') { throw 'Mesa archive checksum mismatch' }
+          Invoke-WebRequest "https://github.com/pal1000/mesa-dist-win/releases/download/$env:MESA_VERSION/mesa3d-$env:MESA_VERSION-release-msvc.7z" -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $checksums[$env:MESA_VERSION]) { throw 'Mesa archive checksum mismatch' }
           7z x $archive "-o$env:RUNNER_TEMP/mesa" -y
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Compare visible video with both drivers
