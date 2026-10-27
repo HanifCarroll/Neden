@@ -18,6 +18,9 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
+#include <QScreen>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
 #include <QNetworkReply>
@@ -30,6 +33,7 @@
 #include <QtTest>
 #include <QtWebView/QtWebView>
 #include <cmath>
+#include <atomic>
 #include <memory>
 
 #ifdef Q_OS_MACOS
@@ -985,6 +989,49 @@ private slots:
         QCOMPARE(search->property("text").toString(), QString("f"));
         QVERIFY(!fullscreen->active());
         click("transcriptSearchButton");
+    }
+
+    void videoRenderingIgnoresInheritedFaceCulling() {
+        const auto fixture = QFINDTESTDATA("fixtures/white-smoke.mp4");
+        QVERIFY(!fixture.isEmpty());
+        session->openVideo(QUrl::fromLocalFile(fixture));
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 0);
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 10000);
+        session->setPaused(false);
+
+        // Reproduce graphics state left by another scene-graph renderer. The
+        // video must survive it regardless of triangle winding or render loop.
+        const auto injectedFrames = std::make_shared<std::atomic<int>>(0);
+        const auto injection = connect(window, &QQuickWindow::beforeSynchronizing, window,
+            [injectedFrames] {
+                auto *context = QOpenGLContext::currentContext();
+                if (!context)
+                    return;
+                context->functions()->glEnable(GL_CULL_FACE);
+                context->functions()->glCullFace(GL_FRONT_AND_BACK);
+                ++*injectedFrames;
+            }, Qt::DirectConnection);
+        const auto cleanup = qScopeGuard([&] {
+            disconnect(injection);
+            session->setPaused(true);
+        });
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(video);
+        QTRY_VERIFY_WITH_TIMEOUT(injectedFrames->load() >= 3, 5000);
+        for (int sample = 0; sample < 6; ++sample) {
+            QTest::qWait(250);
+            const auto image = window->screen()->grabWindow(window->winId()).toImage();
+            QVERIFY(!image.isNull());
+            const auto center = video->mapToScene(QPointF(video->width() / 2, video->height() / 2));
+            const QPoint pixel(qRound(center.x() * image.width() / window->width()),
+                               qRound(center.y() * image.height() / window->height()));
+            QVERIFY(image.rect().contains(pixel));
+            const auto color = image.pixelColor(pixel);
+            QVERIFY2(color.red() >= 220 && color.green() >= 220 && color.blue() >= 220,
+                     "Presented video became black under inherited face culling");
+        }
+        QVERIFY(injectedFrames->load() >= 6);
     }
 
     void singleClickVideoTogglesPlaybackAndClosesPausedSidebar() {
