@@ -197,13 +197,16 @@ private slots:
         });
         QSignalSpy published(&tools, &SubtitleTools::trackReady);
         tools.extract("video", 1, false);
+        tools.extract("video", 2, true);
         tools.invalidate();
-        QTest::qWait(30);
+        // Queue replacement tracks before the cancelled workers deliver their completion events.
         QCOMPARE(published.size(), 0);
         tools.setDecoder([](const QString &, int, const std::atomic_bool &) { return track(); });
         tools.extract("video", 1, false);
         tools.extract("video", 2, true);
         QTRY_COMPARE(published.size(), 2);
+        QVERIFY(!tools.busy());
+        QVERIFY(published[0][1].toBool() != published[1][1].toBool());
     }
     void repairRequiresExplicitApply() {
         QTemporaryDir directory;

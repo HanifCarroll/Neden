@@ -45,6 +45,12 @@ private:
         QThread *thread;
         std::shared_ptr<std::atomic_bool> cancelled;
     };
+    struct Extraction {
+        QString path;
+        int stream;
+        bool secondary;
+    };
+    void startQueuedExtractions();
     void launch(std::function<QVector<Cue>(const std::atomic_bool &)> work,
                 std::function<void(QVector<Cue>)> accept);
     void publish(const QVector<Cue> &cues, const QString &label, bool secondary, bool preserveDelay = false);
@@ -53,6 +59,7 @@ private:
     quint64 generation = 0;
     QVector<Cue> source, reference, proposed;
     QVector<Job> jobs;
+    QList<Extraction> queuedExtractions;
     Decoder decoder;
     SubtitleTranslation translation;
 };

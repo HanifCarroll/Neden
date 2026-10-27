@@ -30,7 +30,7 @@ SubtitleTools::~SubtitleTools() {
     }
 }
 bool SubtitleTools::busy() const {
-    if (translating)
+    if (translating || !queuedExtractions.isEmpty())
         return true;
     for (const auto &job : jobs)
         if (!*job.cancelled)
@@ -41,6 +41,7 @@ void SubtitleTools::cancel() {
     ++generation;
     translation.cancel();
     translating = false;
+    queuedExtractions.clear();
     for (const auto &job : jobs)
         *job.cancelled = true;
     proposed.clear();
@@ -101,13 +102,14 @@ void SubtitleTools::launch(std::function<QVector<Cue>(const std::atomic_bool &)>
                         break;
                     }
                 thread->deleteLater();
-                if (*cancelled || requestGeneration != generation)
-                    return;
-                if (result->error.isEmpty()) {
-                    accept(std::move(result->cues));
-                } else {
-                    status = result->error;
+                if (!*cancelled && requestGeneration == generation) {
+                    if (result->error.isEmpty()) {
+                        accept(std::move(result->cues));
+                    } else {
+                        status = result->error;
+                    }
                 }
+                startQueuedExtractions();
                 emit changed();
             });
     thread->start();
@@ -130,16 +132,30 @@ void SubtitleTools::extract(const QString &path, int stream, bool secondary) {
         emit changed();
         return;
     }
-    // Two roles may be restored together; both imports share the media generation.
-    if (jobs.size() >= 2 || translating) {
+    int activeJobs = 0;
+    for (const auto &job : jobs)
+        if (!*job.cancelled)
+            ++activeJobs;
+    // Allow both roles to wait for cancelled workers to finish without starting more threads.
+    if (activeJobs + queuedExtractions.size() >= 2 || translating) {
         status = "Wait for the current subtitle operation.";
         emit changed();
         return;
     }
-    const auto read = decoder;
     status = "Reading embedded subtitles…";
-    launch([read, path, stream](const std::atomic_bool &cancelled) { return read(path, stream, cancelled); },
-           [this, secondary](QVector<Cue> cues) { publish(cues, "Embedded", secondary, true); });
+    queuedExtractions.append({path, stream, secondary});
+    startQueuedExtractions();
+    emit changed();
+}
+void SubtitleTools::startQueuedExtractions() {
+    while (jobs.size() < 2 && !queuedExtractions.isEmpty()) {
+        const auto request = queuedExtractions.takeFirst();
+        const auto read = decoder;
+        launch([read, request](const std::atomic_bool &cancelled) {
+                   return read(request.path, request.stream, cancelled);
+               },
+               [this, request](QVector<Cue> cues) { publish(cues, "Embedded", request.secondary, true); });
+    }
 }
 void SubtitleTools::translate(const QString &language) {
     if (busy() || source.isEmpty())
