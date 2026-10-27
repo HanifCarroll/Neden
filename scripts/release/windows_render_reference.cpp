@@ -72,9 +72,13 @@ bool isWhite(COLORREF pixel) {
 }
 
 int main(int argc, char **argv) try {
-    if (argc != 5)
-        throw std::runtime_error("Usage: reference.exe MPV_DLL OPENGL_DLL WHITE_VIDEO MODE");
+    if (argc != 6)
+        throw std::runtime_error("Usage: reference.exe MPV_DLL OPENGL_DLL WHITE_VIDEO MODE LAYOUT");
     const std::string mode = argv[4];
+    const std::string layout = argv[5];
+    if (layout != "fixed" && layout != "app-resize")
+        throw std::runtime_error("Unknown reference layout");
+    const bool emulateAppResize = layout == "app-resize";
     if (mode != "default" && mode != "rgb" && mode != "simple"
         && mode != "chroma-bilinear" && mode != "fbo32")
         throw std::runtime_error("Unknown reference mode");
@@ -102,8 +106,14 @@ int main(int argc, char **argv) try {
     windowClass.lpszClassName = L"NedenRenderReference";
     if (!RegisterClassW(&windowClass))
         throw std::runtime_error("Could not register window");
+    RECT windowBounds{0, 0, 745, 677};
+    if (!AdjustWindowRect(&windowBounds, WS_OVERLAPPEDWINDOW, FALSE))
+        throw std::runtime_error("Could not calculate window bounds");
     const auto window = CreateWindowW(windowClass.lpszClassName, L"libmpv reference diagnostic",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE, 50, 50, 800, 600, nullptr, nullptr, windowClass.hInstance, nullptr);
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE, 50, 50,
+        emulateAppResize ? windowBounds.right - windowBounds.left : 800,
+        emulateAppResize ? windowBounds.bottom - windowBounds.top : 600,
+        nullptr, nullptr, windowClass.hInstance, nullptr);
     const auto device = GetDC(window);
     PIXELFORMATDESCRIPTOR pixelFormat{};
     pixelFormat.nSize = sizeof(pixelFormat);
@@ -145,10 +155,12 @@ int main(int argc, char **argv) try {
     RECT bounds{};
     GetClientRect(window, &bounds);
     const int width = bounds.right, height = bounds.bottom;
+    int renderWidth = emulateAppResize ? 64 : width;
+    int renderHeight = emulateAppResize ? 64 : height;
     GLuint texture = 0, framebuffer = 0;
     genTextures(1, &texture);
     bindTexture(GL_TEXTURE_2D, texture);
-    textureImage(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    textureImage(GL_TEXTURE_2D, 0, GL_RGBA8, renderWidth, renderHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     bindTexture(GL_TEXTURE_2D, 0);
     genFramebuffers(1, &framebuffer);
     bindFramebuffer(framebufferTarget, framebuffer);
@@ -209,19 +221,33 @@ int main(int argc, char **argv) try {
     SetForegroundWindow(window);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     int whiteFrames = 0, frames = 0;
+    bool resizePending = false;
     while (std::chrono::steady_clock::now() < deadline && whiteFrames < 10) {
         MSG message{};
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
-        while (waitEvent(playback, 0)->event_id != MPV_EVENT_NONE) {}
+        for (auto *event = waitEvent(playback, 0); event->event_id != MPV_EVENT_NONE;
+             event = waitEvent(playback, 0)) {
+            if (emulateAppResize && event->event_id == MPV_EVENT_VIDEO_RECONFIG)
+                resizePending = true;
+        }
         if (!frameRequested.exchange(false)) {
             Sleep(5);
             continue;
         }
         updateRender(renderer);
-        mpv_opengl_fbo target{static_cast<int>(framebuffer), width, height, GL_RGBA8};
+        if (resizePending) {
+            renderWidth = width;
+            renderHeight = height;
+            bindTexture(GL_TEXTURE_2D, texture);
+            textureImage(GL_TEXTURE_2D, 0, GL_RGBA8, renderWidth, renderHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            bindTexture(GL_TEXTURE_2D, 0);
+            resizePending = false;
+            std::printf("Resized render target: %dx%d\n", renderWidth, renderHeight);
+        }
+        mpv_opengl_fbo target{static_cast<int>(framebuffer), renderWidth, renderHeight, GL_RGBA8};
         int flip = 1, block = 0;
         mpv_render_param renderParameters[] = {
             {MPV_RENDER_PARAM_OPENGL_FBO, &target}, {MPV_RENDER_PARAM_FLIP_Y, &flip},
@@ -230,10 +256,10 @@ int main(int argc, char **argv) try {
             throw std::runtime_error("Render failed");
         bindFramebuffer(framebufferTarget, framebuffer);
         std::array<GLubyte, 4> pixel{};
-        readPixels(width / 2, height / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+        readPixels(renderWidth / 2, renderHeight / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
         bindFramebuffer(readFramebuffer, framebuffer);
         bindFramebuffer(drawFramebuffer, 0);
-        blitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        blitFramebuffer(0, 0, renderWidth, renderHeight, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         bindFramebuffer(framebufferTarget, 0);
         swapBuffers(device);
         reportSwap(renderer);
