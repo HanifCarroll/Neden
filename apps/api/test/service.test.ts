@@ -49,6 +49,16 @@ describe("request boundary", () => {
       expect(studyRequest.safeParse({ operation: "word", word, context }).success).toBe(false);
     }
   });
+  it("opts new clients into aligned explanations while preserving legacy Markdown", () => {
+    const legacy = providerBody(studyRequest.parse({operation: "explain", context: {...context, selection: "Bonne chance"}}));
+    expect(legacy.response_format).toBeUndefined();
+    const aligned = providerBody(studyRequest.parse({operation: "explain", explanationFormat: "aligned", context: {...context, selection: "Bonne chance"}}));
+    expect(aligned.response_format).toEqual({type: "json_object"});
+    expect(aligned.stream).toBe(true);
+    expect(aligned.stream_options).toEqual({include_usage: true});
+    expect(aligned.messages[0].content).toContain("alignment");
+    expect(aligned.max_tokens).toBe(2500);
+  });
   it("translates bounded consecutive cues with server-owned instructions and JSON output", () => {
     const parsed = studyRequest.parse({
       operation: "translate",

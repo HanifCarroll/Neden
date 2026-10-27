@@ -32,7 +32,7 @@ export const studyRequest = z
         .regex(/^[\p{L}\p{M}\p{N}]+(?:['’\u200C\u200D-][\p{L}\p{M}\p{N}]+)*$/u),
       context,
     }),
-    z.object({ operation: z.literal("explain"), context }),
+    z.object({ operation: z.literal("explain"), context, explanationFormat: z.literal("aligned").optional() }),
     z.object({
       operation: z.literal("translate"),
       targetLanguage: z

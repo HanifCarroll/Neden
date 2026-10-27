@@ -1,9 +1,12 @@
 import type { StudyRequest } from "./contracts";
 import { ServiceError } from "./contracts";
-import { wordPrompt, explanationPrompt, translationPrompt } from "./prompts";
+import { wordPrompt, explanationPrompt, legacyExplanationPrompt, translationPrompt } from "./prompts";
 import type { Env } from "./environment";
 
 export function providerBody(request: StudyRequest) {
+  const aligned = request.operation === "explain" && request.explanationFormat === "aligned";
+  const jsonResponse = request.operation === "word" || request.operation === "translate" || aligned;
+  const streaming = request.operation === "explain" || request.operation === "followup";
   const messages: { role: string; content: string }[] = [
     {
       role: "system",
@@ -12,7 +15,7 @@ export function providerBody(request: StudyRequest) {
           ? translationPrompt
           : request.operation === "word"
             ? wordPrompt
-            : explanationPrompt,
+            : aligned ? explanationPrompt : legacyExplanationPrompt,
     },
     {
       role: "user",
@@ -42,11 +45,10 @@ export function providerBody(request: StudyRequest) {
         ? 4096
         : request.operation === "word"
           ? 900
-          : 1600,
-    stream: request.operation !== "word" && request.operation !== "translate",
-    ...(request.operation === "word" || request.operation === "translate"
-      ? { response_format: { type: "json_object" } }
-      : { stream_options: { include_usage: true } }),
+          : aligned ? 2500 : 1600,
+    stream: streaming,
+    ...(jsonResponse ? { response_format: { type: "json_object" } } : {}),
+    ...(streaming ? { stream_options: { include_usage: true } } : {}),
   };
 }
 export async function callProvider(
