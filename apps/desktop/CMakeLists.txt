@@ -39,6 +39,7 @@ set(NEDEN_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/app" "${CMAKE_CURRENT_SOURCE
 include_directories(${NEDEN_INCLUDE_DIRS})
 set(NEDEN_STUDY_SOURCES subtitles/subtitle_catalog.cpp subtitles/subtitle_catalog.h subtitles/subtitle_document.cpp subtitles/subtitle_tools.cpp subtitles/subtitle_tools.h subtitles/subtitle_translation.cpp subtitles/subtitle_translation.h account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h app/language_catalog.cpp app/language_catalog.h study/ai_client.cpp study/ai_client.h
     study/flashcard_deck.cpp study/flashcard_deck.h study/explanation_session.cpp study/explanation_session.h subtitles/subtitle_service.cpp subtitles/subtitle_service.h
+    study/explanation_response.cpp study/explanation_response.h
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/conversation.cpp study/conversation.h study/study_target.h)
 set(NEDEN_SESSION_SOURCES app/media_history.cpp app/media_history.h playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
     subtitles/subtitle_timeline.cpp subtitles/subtitle_timeline.h app/recent_videos.cpp app/recent_videos.h playback/playback_engine.h subtitles/cues.cpp subtitles/cues.h)
@@ -91,7 +92,7 @@ if(NEDEN_CORE_ONLY)
 endif()
 include(cmake/QtKeychain.cmake)
 find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 OpenGL WebView Svg)
-qt_add_executable(explanation_tests tests/explanation_tests.cpp study/explanation_format.cpp study/explanation_format.h)
+qt_add_executable(explanation_tests tests/explanation_tests.cpp study/explanation_response.cpp study/explanation_response.h study/explanation_format.cpp study/explanation_format.h)
 target_link_libraries(explanation_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Qml)
 add_test(NAME explanation_tests COMMAND explanation_tests)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -124,7 +125,7 @@ set(NEDEN_UI_SOURCES app/release_check.cpp app/release_check.h app/support_diagn
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
     playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp platform/hosted_credentials.h platform/hosted_credentials.cpp)
 set(NEDEN_QML_FILES ui/SubtitleToolsPane.qml ui/SettingsDisclosure.qml ui/ServiceCredentials.qml ui/ServicesSettings.qml ui/HostedAccountSettings.qml ui/GettingStarted.qml ui/SupportDialog.qml ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
-        ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/ExplanationPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
+        ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/ExplanationPane.qml ui/ExplanationText.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
     SOURCES ${NEDEN_UI_SOURCES}

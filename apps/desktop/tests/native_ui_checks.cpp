@@ -320,6 +320,7 @@ private slots:
                                          "savingFlashcardShowsResultAndOpensCollection",
                                          "recentHistoryKeepsFinishedVideosAccessible",
                                          "sidebarSlidesWithoutResizingVideoPerFrame",
+                                         "translatedWordsRevealTheirSourceBreakdown",
                                          "explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
@@ -1700,6 +1701,56 @@ private slots:
         QVERIFY(QFile::exists(latest));
         recent->clear();
         window->setProperty("showRecent", false);
+    }
+
+    void translatedWordsRevealTheirSourceBreakdown() {
+        QQmlComponent component(engine.get());
+        component.setData(R"(
+            import QtQuick
+            import Neden
+            ExplanationText { width: 340; height: 420; x: 100; y: 100; z: 100 }
+        )", QUrl());
+        std::unique_ptr<QObject> fixture(component.create());
+        QVERIFY2(fixture, qPrintable(component.errorString()));
+        auto *answer = qobject_cast<QQuickItem *>(fixture.get());
+        QVERIFY(answer);
+        answer->setParentItem(window->contentItem());
+        answer->setProperty("markdown", "### Translation\n[Good](neden-breakdown:Bonne,chance) [luck](neden-breakdown:Bonne,chance)!\n\n"
+            "### Breakdown\n- **Bonne** — good; feminine adjective.\n- **chance** — luck. Together: good luck.");
+        QTest::qWait(80);
+        QPoint wordPosition;
+        for (int y = 0; y < 120 && wordPosition.isNull(); y += 3) {
+            for (int x = 0; x < 220; x += 3) {
+                QString link;
+                QVERIFY(QMetaObject::invokeMethod(answer, "linkAt", Q_RETURN_ARG(QString, link),
+                    Q_ARG(qreal, x), Q_ARG(qreal, y)));
+                if (!link.isEmpty()) { wordPosition = QPoint(x + 15, y + 8); break; }
+            }
+        }
+        QVERIFY(!wordPosition.isNull());
+        auto *popup = fixture->findChild<QObject *>("translationBreakdownPopup");
+        auto *label = fixture->findChild<QObject *>("translationBreakdownText");
+        QVERIFY(popup && label);
+        QTest::mouseMove(window, answer->mapToScene(wordPosition).toPoint());
+        QTRY_VERIFY(popup->property("visible").toBool());
+        QVERIFY(label->property("text").toString().contains("Bonne"));
+        QVERIFY(label->property("text").toString().contains("chance"));
+        QVERIFY(popup->property("x").toDouble() >= 0);
+        QVERIFY(popup->property("y").toDouble() >= 0);
+        const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
+        if (!artifacts.isEmpty()) {
+            QDir().mkpath(artifacts);
+            QVERIFY(window->grabWindow().save(artifacts + "/translation-hover.png"));
+        }
+        QTest::mouseMove(window, QPoint(20, 20));
+        QTRY_VERIFY(!popup->property("visible").toBool());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, answer->mapToScene(wordPosition).toPoint());
+        QTRY_VERIFY(popup->property("visible").toBool());
+        answer->setProperty("scrolling", true);
+        QTRY_VERIFY(!popup->property("visible").toBool());
+        answer->setProperty("scrolling", false);
+        answer->setProperty("markdown", "### Translation\nOld saved answer\n### Breakdown\n- **Old** — readable.");
+        QVERIFY(!answer->property("text").toString().contains("href="));
     }
 
     void sidebarSlidesWithoutResizingVideoPerFrame() {

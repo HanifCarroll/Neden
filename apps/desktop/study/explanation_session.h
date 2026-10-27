@@ -1,5 +1,6 @@
 #pragma once
 #include "conversation.h"
+#include "explanation_response.h"
 #include "study_target.h"
 #include <optional>
 #include "app_settings.h"
@@ -19,7 +20,7 @@ public:
     ExplanationSession(AppSettings &settings, AiClient::CredentialReader credentialReader,
                        QObject *parent = nullptr, QString alternateApiEndpoint = "https://api.openai.com/v1");
     ~ExplanationSession() override { stop(); }
-    QString answer() const { return answerText; }
+    QString answer() const { return ExplanationResponse::markdown(answerText, false); }
     QString subject() const { return subjectText; }
     QString sourceCue() const { return subjectContext; }
     QVariantList turns() const { return conversation.turns(); }

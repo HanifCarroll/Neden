@@ -48,6 +48,37 @@ public:
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void alignedExplanationKeepsReadableCardsAndNormalFollowUps() {
+        QTemporaryDir directory;
+        CatalogServer server;
+        const QJsonObject answer{{"translation", "Hello!"},
+            {"breakdown", QJsonArray{QJsonObject{{"word", "Bonjour"}, {"text", "Hello; a greeting."}}}},
+            {"alignment", QJsonArray{QJsonObject{{"text", "Hello"}, {"source", QJsonArray{"Bonjour"}}}}}};
+        const auto stream = [](const QString &text) {
+            return "data: " + QJsonDocument(QJsonObject{{"choices", QJsonArray{
+                QJsonObject{{"delta", QJsonObject{{"content", text}}}}}}}).toJson(QJsonDocument::Compact)
+                + "\n\ndata: [DONE]\n\n";
+        };
+        server.responses = {stream(QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact))),
+                            stream("A normal follow-up."), stream("{\"translation\":\"Hello\"")};
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray("synthetic-test-key"); });
+        QVERIFY(study.settings()->configure(server.origin(), "mock", "https://example.org/%s", false));
+        study.explanation()->explain("Bonjour", "Bonjour");
+        QTRY_COMPARE(study.explanation()->state(), QString("complete"));
+        const auto readable = study.explanation()->answer();
+        QVERIFY(readable.contains("Hello"));
+        QVERIFY(!readable.contains("\"alignment\""));
+        QVERIFY(!readable.contains("neden-breakdown:"));
+        const auto saved = study.deck()->saveCard("Bonjour", "Bonjour", readable, 0);
+        QVERIFY(saved.success);
+        QVERIFY(study.explanation()->followUp("Is it formal?"));
+        QTRY_COMPARE(study.explanation()->state(), QString("complete"));
+        QCOMPARE(study.explanation()->answer(), QString("A normal follow-up."));
+        study.explanation()->explain("Bonjour", "Bonjour");
+        QTRY_COMPARE(study.explanation()->state(), QString("incomplete"));
+        QVERIFY(!study.explanation()->answer().contains("{\"translation"));
+    }
+
     void subtitleCatalogSubvaultChoosesTitleAndReleaseWithoutCredentials() {
         CatalogServer server;
         int credentialReads = 0;

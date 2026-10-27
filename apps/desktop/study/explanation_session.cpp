@@ -88,6 +88,8 @@ void ExplanationSession::launchConversation(bool fallback) {
         request.endpoint = endpoint;
         request.model = model;
         request.messages = conversation.messages();
+        request.requireJsonResponse = conversation.turns().size() == 1;
+        if (request.requireJsonResponse) request.maxTokens = 2500;
         if (aiClient.usesHostedAccount()) request.hostedBody = conversation.hostedRequest();
         request.noKeyRequired = !luna && settings.learning().noKeyRequired;
         conversation.setProvider(aiClient.usesHostedAccount() ? "Neden Cloud" : model, fallback);
@@ -114,7 +116,8 @@ void ExplanationSession::launchConversation(bool fallback) {
             if (reply->error() != QNetworkReply::NoError || code != 200) {
                 requestState = answerText.isEmpty() ? "failed" : "incomplete";
                 statusText = hostedFailureMessage(reply, pendingEvents, networkFailureMessage(code, reply->error(), "Explanation failed"));
-            } else if (!sawDone || truncated || answerText.isEmpty()) {
+            } else if (!sawDone || truncated || answerText.isEmpty() ||
+                       (conversation.turns().size() == 1 && !ExplanationResponse::isComplete(answerText))) {
                 requestState = "incomplete";
                 statusText = "The response ended before a complete answer arrived.";
             } else {

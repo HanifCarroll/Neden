@@ -17,6 +17,7 @@ CHECKS = [
     "savingFlashcardShowsResultAndOpensCollection",
     "recentHistoryKeepsFinishedVideosAccessible",
     "streamingRepliesStayAnchoredToTheLatestQuestion",
+    "translatedWordsRevealTheirSourceBreakdown",
 ]
 
 def main():

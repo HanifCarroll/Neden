@@ -166,20 +166,13 @@ Item {
                         font.weight: Font.DemiBold
                         Layout.fillWidth: true
                     }
-                    TextArea {
+                    ExplanationText {
                         objectName: "explanationAnswerText"
                         Layout.preferredHeight: contentHeight
                         Layout.minimumHeight: contentHeight
-                        text: ExplanationFormat.render(turn.modelData.answer)
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextEdit.Wrap
-                        textFormat: TextEdit.RichText
-                        color: Theme.ink
-                        font.pixelSize: Theme.body
                         Layout.fillWidth: true
-                        padding: 0
-                        background: Item {}
+                        markdown: turn.modelData.answer
+                        scrolling: conversation.moving
                     }
                     Label {
                         visible: turn.modelData.status === "failed" || turn.modelData.status === "incomplete"
