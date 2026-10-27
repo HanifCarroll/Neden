@@ -202,7 +202,8 @@ jobs:
           Remove-Item Env:QSG_RENDER_LOOP, Env:QT_OPENGL_DLL, Env:GALLIUM_DRIVER -ErrorAction SilentlyContinue
           # Repeated fresh starts exercise the installed driver's real fallback
           # path. No development DLL directory or render-loop override is allowed.
-          foreach ($attempt in 1..3) {
+          # Require every fresh launch to pass; retries must not conceal intermittent black video.
+          foreach ($attempt in 1..10) {
             $log = "$env:RUNNER_TEMP/video-smoke-$attempt.log"
             $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile/$attempt", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError $log -PassThru
             if (!$app.WaitForExit(45000)) { $app.Kill(); throw 'Packaged application did not exit' }

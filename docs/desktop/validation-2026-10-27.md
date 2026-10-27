@@ -146,7 +146,7 @@ The bundled columns always use the installer's Mesa 26.2.4. The explicit columns
 use `QT_OPENGL_DLL` to select the comparison driver. These are diagnostic samples,
 not estimates of failure rates on users' hardware. Neither an older driver nor
 limiting the advertised OpenGL version eliminates the observed failure. The
-Windows software-rendering issue remains **unresolved**.
+Windows software-rendering issue remained **unresolved at this stage**.
 
 On the MacBook Pro, ten fresh processes with isolated profiles all passed the
 presented-white-frame check (1.53–2.07 seconds). Successful starts also logged
@@ -225,3 +225,23 @@ reproducer, not a claim to have repaired or conclusively identified an upstream
 Mesa/mpv defect. Bilinear chroma reconstruction can make color edges softer than
 the default Lanczos reconstruction; luma sharpness and the normal processing
 features are preserved. Installed-application validation is recorded below.
+
+The application change builds locally and passes all 15 desktop CTest suites.
+[General GitHub checks at `9572aa1`](https://github.com/HanifCarroll/Neden/actions/runs/40525343987)
+also pass. The local Mac application was installed from clean source `9572aa1`,
+its deep/strict signature verification passed, and it was left closed. The new
+rendering branch is Windows-only; the Mac install does not validate that branch.
+
+[Installed Windows check at `b1ff51f`](https://github.com/HanifCarroll/Neden/actions/runs/40525135897)
+failed on its second fresh launch. Logs confirm that the bilinear chroma option
+was applied successfully. Frames 60, 120 and 180 were black in the application's
+745×677 video target, with culling disabled, no GL error and successful mpv render
+returns. The standalone result therefore does **not** establish an application
+fix. The Windows software-rendering failure remains unresolved.
+
+The diagnostic now separately tests the application's initial 64×64 target and
+subsequent 745×677 resize outside Qt, and can disable LLVMpipe raster threads
+using [Mesa's documented `LP_NUM_THREADS=0`](https://docs.mesa3d.org/envvars.html#lp-num-threads).
+These are explicit diagnostic inputs, not application defaults. The installed
+package gate now requires ten fresh successful starts, failing on the first bad
+start rather than retrying until a passing result is obtained.
