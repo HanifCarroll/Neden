@@ -53,13 +53,19 @@ public:
     }
     void render() override {
 
+        QQuickOpenGLUtils::resetOpenGLState();
+        auto *functions = QOpenGLContext::currentContext()->functions();
+        const bool inheritedFaceCulling = videoRendering().isDebugEnabled() && functions->glIsEnabled(GL_CULL_FACE);
+        // Qt's RHI can enable face culling, but resetOpenGLState does not
+        // restore it. libmpv requires its standard disabled state; otherwise
+        // Qt's winding/cull mode can discard the video quad entirely.
+        functions->glDisable(GL_CULL_FACE);
+
         // 1. Allocate mpv's GPU resources only when a media request needs them.
         if (!context && outputRequested)
             initializeContext();
 
-        QQuickOpenGLUtils::resetOpenGLState();
         if (!context) {
-            auto *functions = QOpenGLContext::currentContext()->functions();
             functions->glClearColor(0, 0, 0, 1);
             functions->glClear(GL_COLOR_BUFFER_BIT);
             QQuickOpenGLUtils::resetOpenGLState();
@@ -83,7 +89,6 @@ public:
         if (videoRendering().isDebugEnabled() && (++renderedFrames == 1 || renderedFrames % 60 == 0)) {
             // Opt-in diagnostics separate decoder/FBO failures from presentation
             // failures. Never read back pixels during normal playback.
-            auto *functions = QOpenGLContext::currentContext()->functions();
             GLint previousFramebuffer = 0;
             functions->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
             functions->glBindFramebuffer(GL_FRAMEBUFFER, target->handle());
@@ -94,7 +99,8 @@ public:
             functions->glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
             qCDebug(videoRendering) << "Frame" << renderedFrames << "FBO" << target->size()
                 << "center RGBA" << center[0] << center[1] << center[2] << center[3]
-                << "GL error" << error << "mpv result" << result;
+                << "GL error" << error << "mpv result" << result
+                << "inherited face culling" << inheritedFaceCulling;
         }
         QQuickOpenGLUtils::resetOpenGLState();
     }
