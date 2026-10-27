@@ -322,6 +322,8 @@ ApplicationWindow {
                             root.closeSelection();
                             root.inspectorMode = Main.Hidden;
                             root.session.setPlaying();
+                        } else {
+                            root.session.toggle();
                         }
                     }
                     windowDragEnabled: Qt.platform.os === "osx" && !root.fullscreenController.active

@@ -987,6 +987,29 @@ private slots:
         click("transcriptSearchButton");
     }
 
+    void singleClickVideoTogglesPlaybackAndClosesPausedSidebar() {
+        chooseFile("videoPicker", qEnvironmentVariable("NEDEN_CHECK_VIDEO"));
+        QTRY_VERIFY(session->duration() > 0);
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 0);
+        session->setPaused(true);
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(video && video->isVisible());
+        const auto clickPicture = [&] {
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
+        };
+        clickPicture();
+        QTRY_VERIFY(!session->paused());
+        clickPicture();
+        QTRY_VERIFY(session->paused());
+        window->setProperty("inspectorMode", 1);
+        clickPicture();
+        QTRY_VERIFY(!session->paused());
+        QCOMPARE(window->property("inspectorMode").toInt(), 0);
+        session->setPaused(true);
+    }
+
     void doubleClickVideoTogglesFullscreenWithoutChangingPlayback() {
         window->setProperty("showRecent", false);
         session->setPaused(true);
