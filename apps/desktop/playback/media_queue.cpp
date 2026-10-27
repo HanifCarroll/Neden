@@ -11,7 +11,10 @@ QList<QUrl> MediaQueue::expand(const QList<QUrl> &urls) {
     QSet<QUrl> seen;
     const QStringList extensions{"mp4",  "mkv", "webm", "mov", "m4v", "avi", "mpg",
                                  "mpeg", "ts",  "m2ts", "wmv", "ogv", "flv"};
-    QCollator collator{QLocale::system()};
+    // The C locale does not implement numeric collation on Linux.
+    const auto locale = QLocale::system();
+    QCollator collator{locale.language() == QLocale::C ? QLocale(QLocale::English, QLocale::UnitedStates)
+                                                      : locale};
     collator.setNumericMode(true);
     collator.setCaseSensitivity(Qt::CaseInsensitive);
     for (const auto &url : urls) {
