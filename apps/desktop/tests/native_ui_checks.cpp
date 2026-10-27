@@ -1254,15 +1254,13 @@ private slots:
         QTest::keyClick(window, Qt::Key_Space);
         QTRY_VERIFY(session->paused());
 
-        // 6. Clicking the picture returns focus to playback without changing its state.
+        // 6. Clicking the picture returns focus to playback and resumes the paused video.
         editor->forceActiveFocus();
         auto *video = visualItem(window->contentItem(), "videoSurface");
         QVERIFY(video);
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           video->mapToScene(QPointF(video->width() / 2, video->height() / 3)).toPoint());
         QVERIFY(!editor->hasActiveFocus());
-        QVERIFY(session->paused());
-        QTest::keyClick(window, Qt::Key_Space);
         QTRY_VERIFY(!session->paused());
         QTest::keyClick(window, Qt::Key_Space);
         QTRY_VERIFY(session->paused());
@@ -1332,7 +1330,7 @@ private slots:
         QRectF glyph;
         QVERIFY(QMetaObject::invokeMethod(editor, "positionToRectangle", Q_RETURN_ARG(QRectF, glyph),
                                           Q_ARG(int, cue.indexOf("dalmışım") + 2)));
-        const auto point = editor->mapToScene(glyph.center() + QPointF(3, 0)).toPoint();
+        auto point = editor->mapToScene(glyph.center() + QPointF(3, 0)).toPoint();
         const auto originalSubject = study->explanation()->subject();
         QSignalSpy wordRequested(subtitle, SIGNAL(wordRequested(int)));
         QTest::mouseMove(window, point);
@@ -1375,6 +1373,12 @@ private slots:
         QCOMPARE(requests, 2);
         QCOMPARE(wordRequests, 1);
         session->closeDefinition();
+        // Opening an explanation changes the picture width. Wait for the
+        // sidebar transition, then locate the word in its current layout.
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        QVERIFY(sidebar);
+        QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
+        point = wordPoint(subtitle, cue.indexOf("dalmışım") + 2);
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QCOMPARE(requests, 3);
@@ -1943,7 +1947,9 @@ private slots:
         auto *video = visualItem(window->contentItem(), "videoSurface");
         auto *button = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
         QVERIFY(primary && secondary && video && button);
-        QTest::qWait(80);
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        QVERIFY(sidebar);
+        QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
         auto *primaryEditor = primary->property("editor").value<QQuickItem *>();
         auto *secondaryEditor = secondary->property("editor").value<QQuickItem *>();
         QVERIFY(primaryEditor && secondaryEditor);
@@ -1979,6 +1985,7 @@ private slots:
 
         for (const int mode : {0, 1, 2}) {
             window->setProperty("inspectorMode", mode);
+            QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), mode == 0 ? 0.0 : 1.0);
             for (const int selectedTracks : {1, 2, 3}) {
                 session->closeDefinition();
                 if (selectedTracks & 1)
