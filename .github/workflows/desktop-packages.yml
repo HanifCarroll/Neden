@@ -21,7 +21,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build meson nasm pkg-config libass-dev libplacebo-dev libegl1-mesa-dev libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libpulse-dev libasound2-dev libsecret-1-dev gnome-keyring dbus-x11 xvfb patchelf
+          sudo apt-get install -y ninja-build meson nasm pkg-config libass-dev libplacebo-dev libegl1-mesa-dev libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libpulse-dev libasound2-dev libsecret-1-dev libicu-dev gnome-keyring dbus-x11 xvfb patchelf
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.10.2'
@@ -199,20 +199,16 @@ jobs:
           $env:QT_FORCE_STDERR_LOGGING = '1'
           $env:QT_LOGGING_RULES = 'neden.video.debug=true'
           $env:QSG_INFO = '1'
-          $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$env:RUNNER_TEMP/video-smoke.log" -PassThru
-          if (!$app.WaitForExit(30000)) { $app.Kill(); throw 'Packaged application did not exit' }
-          $app.Refresh()
-          Get-Content "$env:RUNNER_TEMP/video-smoke.log"
-          Write-Output "Installed application exit code: $($app.ExitCode)"
-          if ($app.ExitCode -ne 0) {
-            # A diagnostic comparison only: this does not turn a failed default
-            # configuration into an accepted package.
-            $env:QSG_RENDER_LOOP = 'basic'
-            $comparison = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile/basic", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -PassThru
-            if (!$comparison.WaitForExit(30000)) { $comparison.Kill(); throw 'Basic-loop comparison timed out' }
-            $comparison.Refresh()
-            Write-Output "Basic-loop comparison exit code: $($comparison.ExitCode)"
-            throw "Packaged application failed in its default configuration: $($app.ExitCode)"
+          Remove-Item Env:QSG_RENDER_LOOP, Env:QT_OPENGL_DLL -ErrorAction SilentlyContinue
+          # Repeated fresh starts exercise the installed driver's real fallback
+          # path. No development DLL directory or render-loop override is allowed.
+          foreach ($attempt in 1..3) {
+            $log = "$env:RUNNER_TEMP/video-smoke-$attempt.log"
+            $app = Start-Process "$destination/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', "$env:RUNNER_TEMP/package-profile/$attempt", "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError $log -PassThru
+            if (!$app.WaitForExit(45000)) { $app.Kill(); throw 'Packaged application did not exit' }
+            $app.Refresh()
+            Get-Content $log
+            if ($app.ExitCode -ne 0) { throw "Installed visible-video check $attempt failed: $($app.ExitCode)" }
           }
           $uninstaller = Start-Process "$destination/unins000.exe" -ArgumentList '/VERYSILENT' -Wait -PassThru
           if ($uninstaller.ExitCode -ne 0) { throw 'Uninstall failed' }

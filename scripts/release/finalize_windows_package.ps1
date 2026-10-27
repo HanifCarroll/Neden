@@ -30,6 +30,29 @@ Redistribution list: https://learn.microsoft.com/en-us/visualstudio/releases/202
 App-local runtime updates are delivered with Neden releases.
 '@ | Set-Content "$noticeDirectory/Microsoft-CRT.txt" -Encoding utf8
 
+# Qt's bundled Mesa 11 driver produces black mpv video on the software path.
+# Replace only its fallback name; system GPU drivers remain the default.
+# Provenance/build recipes and component notices are pinned in sources/upstream.json.
+$mesaArchive = "$env:RUNNER_TEMP/neden-mesa-26.2.4.7z"
+Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z' -OutFile $mesaArchive
+if ((Get-FileHash $mesaArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') {
+    throw 'Software OpenGL archive checksum mismatch'
+}
+$mesaDirectory = "$env:RUNNER_TEMP/neden-mesa-26.2.4"
+7z x $mesaArchive "-o$mesaDirectory" 'x64/opengl32.dll' 'x64/libgallium_wgl.dll' -y
+if ($LASTEXITCODE) { throw 'Cannot extract software OpenGL runtime' }
+Copy-Item "$mesaDirectory/x64/opengl32.dll" "$Staging/bin/opengl32sw.dll" -Force
+Copy-Item "$mesaDirectory/x64/libgallium_wgl.dll" "$Staging/bin/libgallium_wgl.dll" -Force
+@'
+Software OpenGL fallback: Mesa 26.2.4, MSVC x64 distribution by pal1000.
+https://github.com/pal1000/mesa-dist-win/releases/tag/26.2.4
+Archive SHA-256: 351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695
+opengl32.dll is distributed as opengl32sw.dll for Qt's software fallback.
+libgallium_wgl.dll is unchanged. Hardware OpenGL remains the default.
+Component source archives and licenses accompany the release; see dependencies/.
+Build environment, patches and recipes: dependencies/mesa-windows-build-recipes/.
+'@ | Set-Content "$noticeDirectory/Mesa-runtime.txt" -Encoding utf8
+
 # Reject missing DLLs before packaging, including optional Qt plugins. Windows
 # system/API-set libraries are supplied by the supported Windows installation.
 $bundledLibraries = @{}

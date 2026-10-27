@@ -78,6 +78,11 @@ int main(int argc, char **argv) {
     // 1. Configure the OpenGL video surface and native text before creating windows.
 #ifdef Q_OS_MACOS
     qputenv("QSG_RENDER_LOOP", "basic");
+#elif defined(Q_OS_WIN)
+    // The shared mpv/Qt OpenGL surface is verified with the basic render loop.
+    // Keep an explicit override available for driver diagnostics.
+    if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
+        qputenv("QSG_RENDER_LOOP", "basic");
 #endif
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);

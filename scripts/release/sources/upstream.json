@@ -228,5 +228,69 @@
     ],
     "url": "https://github.com/unicode-org/icu/releases/download/release-73-2/icu4c-73_2-src.tgz",
     "sha256": "818a80712ed3caacd9b652305e01afc7fa167e6f2e94996da44b90c2ab604ce1"
+  },
+  {
+    "name": "mesa-windows",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://archive.mesa3d.org/mesa-26.2.4.tar.xz",
+    "sha256": "bce5f7fbebb934373b86c999a064d52fb5065878dc57f287f95346648ec832e9"
+  },
+  {
+    "name": "mesa-windows-build-recipes",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://github.com/pal1000/mesa-dist-win/archive/refs/tags/26.2.4.tar.gz",
+    "sha256": "216a40d763f79e11299604b1dc68986bc24ab5478c410280847648c3a7a4d263"
+  },
+  {
+    "name": "llvm-windows",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-23.1.2.tar.gz",
+    "sha256": "75788d759e6987a910975b902f554dc77c08b076b945b2cebde54116d8e831ca"
+  },
+  {
+    "name": "zlib-windows-mesa",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://zlib.net/fossils/zlib-1.3.2.tar.gz",
+    "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+  },
+  {
+    "name": "zstd-windows-mesa",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://github.com/facebook/zstd/archive/refs/tags/v1.5.7.tar.gz",
+    "sha256": "37d7284556b20954e56e1ca85b80226768902e2edabd3b649e9e72c0c9012ee3"
+  },
+  {
+    "name": "directx-headers-windows-mesa",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://github.com/microsoft/DirectX-Headers/archive/refs/tags/v1.619.5.tar.gz",
+    "sha256": "24a0b7d8079a2dbbc90753c0d8bc812040d052acce2302e69a97c5d873b313b8"
+  },
+  {
+    "name": "spirv-tools-windows-mesa",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/vulkan-sdk-1.4.363.0.tar.gz",
+    "sha256": "e6c83a215538fbfd265ccf398d3877985055df1273dbed73912bd05307664688"
+  },
+  {
+    "name": "spirv-headers-windows-mesa",
+    "platforms": [
+      "windows"
+    ],
+    "url": "https://github.com/KhronosGroup/SPIRV-Headers/archive/496543121ce6419f23d6fa5d7194ba66c36212d2.tar.gz",
+    "sha256": "a9bb9c48713245eacf97cc539b6f1d45405a92d8813f8b82e635f0a085ee9898"
   }
 ]
