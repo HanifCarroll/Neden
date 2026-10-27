@@ -21,6 +21,10 @@ on:
         type: choice
         default: native
         options: [native, "3.3"]
+      reference_only:
+        description: Test installed libraries without Qt or Neden UI
+        type: boolean
+        default: false
       attempts:
         description: Fresh launches per driver and render loop (1–10)
         type: number
@@ -65,11 +69,27 @@ jobs:
           if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $checksums[$env:MESA_VERSION]) { throw 'Mesa archive checksum mismatch' }
           7z x $archive "-o$env:RUNNER_TEMP/mesa" -y
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        if: inputs.reference_only
+      - name: Build standalone renderer reference
+        if: inputs.reference_only
+        shell: pwsh
+        run: |
+          $source = Get-Content scripts/release/sources/upstream.json | ConvertFrom-Json | Where-Object { $_.url -match '/mpv/archive/refs/tags/v0.41.0' }
+          if (@($source).Count -ne 1) { throw 'Expected one pinned mpv header source' }
+          $archive = "$env:RUNNER_TEMP/mpv-headers.tar.gz"
+          Invoke-WebRequest $source.url -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $source.sha256) { throw 'mpv header checksum mismatch' }
+          tar -xf $archive -C $env:RUNNER_TEMP
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /std:c++20 /EHsc /W4 "scripts/release/windows_render_reference.cpp" "/I$env:RUNNER_TEMP/mpv-0.41.0/include" "/Fe:$env:RUNNER_TEMP/installed-neden/bin/render-reference.exe" /link user32.lib gdi32.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Compare visible video with both drivers
         shell: pwsh
         env:
           ATTEMPTS: ${{ inputs.attempts }}
           GL_VERSION: ${{ inputs.gl_version }}
+          REFERENCE_ONLY: ${{ inputs.reference_only }}
         run: |
           $attempts = [int]$env:ATTEMPTS
           if ($attempts -lt 1 -or $attempts -gt 10) { throw 'Expected 1–10 attempts' }
@@ -90,15 +110,24 @@ jobs:
               Remove-Item Env:QT_OPENGL_DLL -ErrorAction SilentlyContinue
               $env:PATH = "$env:WINDIR/System32;$env:WINDIR"
             }
-            foreach ($loop in @('threaded', 'basic')) {
+            $loops = if ($env:REFERENCE_ONLY -eq 'true') { @('standalone') } else { @('threaded', 'basic') }
+            foreach ($loop in $loops) {
               $env:QSG_RENDER_LOOP = $loop
               foreach ($attempt in 1..$attempts) {
                 $profile = "$env:RUNNER_TEMP/diagnostics/$driver-$loop-$attempt"
                 New-Item $profile -ItemType Directory -Force | Out-Null
-                $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', $profile, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -PassThru
+                if ($env:REFERENCE_ONLY -eq 'true') {
+                  $library = @(Get-ChildItem "$env:RUNNER_TEMP/installed-neden/bin/*mpv*.dll")
+                  if ($library.Count -ne 1) { throw 'Expected one installed mpv DLL' }
+                  $graphics = if ($driver -eq 'modern') { "$driverDirectory/opengl32.dll" } else { "$env:RUNNER_TEMP/installed-neden/bin/opengl32sw.dll" }
+                  $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/render-reference.exe" -ArgumentList @($library[0].FullName, $graphics, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -RedirectStandardOutput "$profile/reference.log" -PassThru
+                } else {
+                  $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', $profile, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -PassThru
+                }
                 if (!$app.WaitForExit(45000)) { $app.Kill(); throw "Timed out: $driver $loop" }
                 $app.Refresh()
                 Get-Content "$profile/render.log"
+                if (Test-Path "$profile/reference.log") { Get-Content "$profile/reference.log" }
                 $results += [PSCustomObject]@{ driver = $driver; loop = $loop; attempt = $attempt; exitCode = $app.ExitCode }
               }
             }
