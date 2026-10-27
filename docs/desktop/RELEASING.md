@@ -27,7 +27,8 @@ platforms independently; signing does not substitute for behavioral acceptance.
   losing user-owned videos or silently destroying study data.
 - Real video and audible audio; common codecs/containers; hardware decoding and
   software fallback; seek/replay/frame step; chapters; queue; sleep/wake and unplug.
-- Dual subtitles, Turkish search, word cards, line explanation, streaming follow-up,
+- Dual subtitles, multilingual search and word selection (including right-to-left
+  and unspaced scripts), word cards, line explanation, streaming follow-up,
   cancellation/retry/failure, and durable flashcards/history.
 - Fullscreen, one-pixel cursor wake, idle controls, multiple displays and scaling.
 - Real OS credential backend: save, fresh-process reconnect, locked/missing store,
@@ -54,6 +55,9 @@ Installed CI checks also pass `--smoke-test-white-frame` with the generated
 30-second `white-smoke.mp4` fixture. Nine central samples must contain white
 video pixels. A timed-out pixel check saves `smoke-failure.png` in its disposable
 profile for diagnosis; ordinary app use does not capture these images.
+The Windows installed-package check requires ten consecutive fresh-process
+launches with separate profiles. Every launch must pass; failed attempts are
+retained and are not retried to turn the run green.
 
 Signing certificates, paid accounts and physical hardware are external prerequisites;
 absence must remain explicit in the release record. The app's manual checker offers

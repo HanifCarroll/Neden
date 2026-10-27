@@ -9,7 +9,7 @@ Preview downloads target the following environments:
 | Ubuntu 24.04, x86-64 | Debian package | 11 test suites, dependency audit, installation/startup/uninstallation under Xvfb |
 
 The table describes the published `v0.2.0-preview.1` artifacts. See the
-[October 26 development acceptance pass](validation-2026-10-26.md) for newer checks
+[October 27 development acceptance pass](validation-2026-10-27.md) for newer checks
 and unresolved findings; these do not retroactively qualify the published binaries.
 
 New source builds require Windows 10 1903+ for the system ICU API; the table above
@@ -34,6 +34,6 @@ synthetic-key save/read/delete against Windows Credential Manager; real-desktop
 and upgrade behavior remain unqualified. Portable core tests can be built using
 `NEDEN_CORE_ONLY=ON` on a compatible Qt toolchain.
 
-Before promoting Windows or Linux beyond experimental previews, verify a reviewed runtime and distributable package, hardware decoding and software fallback, actual visible playback, dual Turkish/English subtitles, Turkish search, dictionary navigation and cleanup, explanation streaming/cancellation with mock credentials, settings shortcuts, fullscreen and focus, and local card persistence. Containers can validate builds and pure logic; they cannot establish representative GPU, display, or fullscreen performance.
+Before promoting Windows or Linux beyond experimental previews, verify a reviewed runtime and distributable package, hardware decoding and software fallback, actual visible playback, dual subtitles in user-selected languages, multilingual search and word selection (including right-to-left and unspaced scripts), word-card navigation and cleanup, explanation streaming/cancellation with mock credentials, settings shortcuts, fullscreen and focus, and local card persistence. Containers can validate builds and pure logic; they cannot establish representative GPU, display, or fullscreen performance.
 
 Platform media adapters now exist for macOS MediaPlayer/IOKit, Linux MPRIS/desktop portal, and Windows SMTC. Their presence does not establish release support: consult the [feature validation ledger](PLAYER_FEATURES.md), particularly native subtitle timing and untested platform/hardware cases.

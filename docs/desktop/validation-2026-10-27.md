@@ -263,3 +263,21 @@ and custom shaders. Hardware OpenGL and other platforms retain the usual pipelin
 The option's future availability must be checked when upgrading mpv. The actual
 installed application must pass repeated visible-pixel checks before this can be
 accepted as a working fallback; standalone passes alone remain insufficient.
+
+### Accepted Windows CPU compatibility path
+
+[Windows package validation at `71093aa`](https://github.com/HanifCarroll/Neden/actions/runs/40529298138)
+passed compilation, portable behavior, QML UI checks, credential backend,
+dependency/license closure, installer, ten fresh installed visible-video launches,
+and uninstall. A [separate run of that same installer](https://github.com/HanifCarroll/Neden/actions/runs/40531973103)
+passed **40/40** fresh launches across both Qt render loops and bundled/explicit
+Mesa loading. Every attempt checks visible pixels; failed attempts are not retried
+to obtain a pass. The installed result now supports this as a working CPU fallback.
+It does not identify or repair the upstream normal-renderer defect, nor substitute
+for physical Windows GPU/audio testing. Public preview downloads are unchanged.
+
+Local build and all 15 desktop CTest suites passed. General GitHub checks at
+`71093aa` passed. The redundant transcript heading was removed separately; current
+QML lint, build, dropdown layout checks at 900/1280 widths, and the independent
+settings/search shortcut check pass. Combining UI scenarios exposed existing state
+carryover; the acceptance runner runs each scenario independently.
