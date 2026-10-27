@@ -4,7 +4,11 @@
 #include <QOpenGLFramebufferObject>
 #include <QQuickOpenGLUtils>
 #include <QQuickWindow>
+#include <QLoggingCategory>
+#include <array>
 #include <mpv/render_gl.h>
+
+Q_LOGGING_CATEGORY(videoRendering, "neden.video", QtWarningMsg)
 
 class VideoRenderer : public QQuickFramebufferObject::Renderer {
 public:
@@ -73,7 +77,25 @@ public:
                                          {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &blockForTargetTime},
                                          {MPV_RENDER_PARAM_INVALID, nullptr}};
         mpv_render_context_update(context);
-        mpv_render_context_render(context, parameters);
+        const int result = mpv_render_context_render(context, parameters);
+        if (result < 0)
+            qCWarning(videoRendering) << "Video rendering failed:" << mpv_error_string(result);
+        if (videoRendering().isDebugEnabled() && (++renderedFrames == 1 || renderedFrames % 60 == 0)) {
+            // Opt-in diagnostics separate decoder/FBO failures from presentation
+            // failures. Never read back pixels during normal playback.
+            auto *functions = QOpenGLContext::currentContext()->functions();
+            GLint previousFramebuffer = 0;
+            functions->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+            functions->glBindFramebuffer(GL_FRAMEBUFFER, target->handle());
+            std::array<GLubyte, 4> center{};
+            functions->glReadPixels(target->width() / 2, target->height() / 2, 1, 1,
+                                    GL_RGBA, GL_UNSIGNED_BYTE, center.data());
+            const auto error = functions->glGetError();
+            functions->glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+            qCDebug(videoRendering) << "Frame" << renderedFrames << "FBO" << target->size()
+                << "center RGBA" << center[0] << center[1] << center[2] << center[3]
+                << "GL error" << error << "mpv result" << result;
+        }
         QQuickOpenGLUtils::resetOpenGLState();
     }
 
@@ -110,6 +132,7 @@ private:
     VideoRenderLifetime::Token renderToken = 0;
     bool outputRequested = false;
     bool hasVideo = false;
+    quint64 renderedFrames = 0;
     mpv_render_context *context = nullptr;
     QMetaObject::Connection swapConnection;
 };
