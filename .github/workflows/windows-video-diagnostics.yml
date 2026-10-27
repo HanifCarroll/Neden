@@ -29,7 +29,7 @@ on:
         description: Isolate shader stages in standalone reference
         type: choice
         default: default
-        options: [default, rgb, simple]
+        options: [default, rgb, simple, chroma-bilinear, fbo32]
       attempts:
         description: Fresh launches per driver and render loop (1–10)
         type: number

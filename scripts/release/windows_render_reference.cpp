@@ -75,7 +75,8 @@ int main(int argc, char **argv) try {
     if (argc != 5)
         throw std::runtime_error("Usage: reference.exe MPV_DLL OPENGL_DLL WHITE_VIDEO MODE");
     const std::string mode = argv[4];
-    if (mode != "default" && mode != "rgb" && mode != "simple")
+    if (mode != "default" && mode != "rgb" && mode != "simple"
+        && mode != "chroma-bilinear" && mode != "fbo32")
         throw std::runtime_error("Unknown reference mode");
     GraphicsLibrary graphics{std::filesystem::path(argv[2])};
     auto playbackLibrary = LoadLibraryA(argv[1]);
@@ -186,6 +187,10 @@ int main(int argc, char **argv) try {
         throw std::runtime_error("Could not request CPU color conversion");
     if (mode == "simple" && setOption(playback, "gpu-dumb-mode", "yes") < 0)
         throw std::runtime_error("Could not request single-pass rendering");
+    if (mode == "chroma-bilinear" && setOption(playback, "cscale", "bilinear") < 0)
+        throw std::runtime_error("Could not request bilinear chroma scaling");
+    if (mode == "fbo32" && setOption(playback, "fbo-format", "rgba32f") < 0)
+        throw std::runtime_error("Could not request full-precision intermediate buffers");
     std::printf("Reference mode: %s\n", mode.c_str());
     if (initialize(playback) < 0)
         throw std::runtime_error("Could not initialize playback");
