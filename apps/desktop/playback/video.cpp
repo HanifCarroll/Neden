@@ -1,4 +1,5 @@
 #include "video.h"
+#include <QByteArray>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QOpenGLFramebufferObject>
@@ -107,6 +108,20 @@ public:
 
 private:
     void initializeContext() {
+#ifdef Q_OS_WIN
+        const auto *renderer = QOpenGLContext::currentContext()->functions()->glGetString(GL_RENDERER);
+        if (renderer && QByteArray(reinterpret_cast<const char *>(renderer)).contains("llvmpipe")) {
+            // Windows LLVMpipe intermittently returns black video with mpv's
+            // multi-pass chroma scaler, including in the standalone reference.
+            // Keep luma scaling and other processing; simplify only chroma.
+            // Configure before creating the render context or loading media.
+            const int result = mpv_set_property_string(playback->handle(), "cscale", "bilinear");
+            if (result < 0)
+                qCWarning(videoRendering) << "Could not configure software chroma scaling:" << mpv_error_string(result);
+            else
+                qCDebug(videoRendering) << "Using bilinear chroma scaling with Windows LLVMpipe.";
+        }
+#endif
 
         // 1. Bind libmpv to the scene graph's current OpenGL context.
         mpv_opengl_init_params initialization{[](void *, const char *name) -> void * {
