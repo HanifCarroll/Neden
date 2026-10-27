@@ -3,9 +3,18 @@ on:
   workflow_dispatch:
     inputs:
       package_run:
-        description: Desktop packages run containing windows-smoke-failure
+        description: Desktop packages run to validate
         required: true
         type: string
+      artifact:
+        description: Installer artifact name
+        type: choice
+        default: windows-package-candidate
+        options: [windows-package-candidate, windows-smoke-failure]
+      attempts:
+        description: Fresh launches per driver and render loop (1–10)
+        type: number
+        default: 3
 permissions:
   contents: read
   actions: read
@@ -22,9 +31,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_RUN: ${{ inputs.package_run }}
+          PACKAGE_ARTIFACT: ${{ inputs.artifact }}
         run: |
           if ($env:PACKAGE_RUN -notmatch '^\d+$') { throw 'Expected a numeric workflow run ID' }
-          gh run download $env:PACKAGE_RUN --name windows-smoke-failure --dir "$env:RUNNER_TEMP/package"
+          gh run download $env:PACKAGE_RUN --name $env:PACKAGE_ARTIFACT --dir "$env:RUNNER_TEMP/package"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $setup = Get-ChildItem "$env:RUNNER_TEMP/package" -Recurse -Filter '*setup.exe' | Select-Object -First 1
           if (!$setup) { throw 'Installer artifact is missing' }
@@ -40,7 +50,11 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Compare visible video with both drivers
         shell: pwsh
+        env:
+          ATTEMPTS: ${{ inputs.attempts }}
         run: |
+          $attempts = [int]$env:ATTEMPTS
+          if ($attempts -lt 1 -or $attempts -gt 10) { throw 'Expected 1–10 attempts' }
           $env:QT_OPENGL = 'software'
           $env:QT_FORCE_STDERR_LOGGING = '1'
           $env:QT_LOGGING_RULES = 'neden.video.debug=true'
@@ -58,18 +72,20 @@ jobs:
             }
             foreach ($loop in @('threaded', 'basic')) {
               $env:QSG_RENDER_LOOP = $loop
-              $profile = "$env:RUNNER_TEMP/diagnostics/$driver-$loop"
-              New-Item $profile -ItemType Directory -Force | Out-Null
-              $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', $profile, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -PassThru
-              if (!$app.WaitForExit(45000)) { $app.Kill(); throw "Timed out: $driver $loop" }
-              $app.Refresh()
-              Get-Content "$profile/render.log"
-              $results += [PSCustomObject]@{ driver = $driver; loop = $loop; exitCode = $app.ExitCode }
+              foreach ($attempt in 1..$attempts) {
+                $profile = "$env:RUNNER_TEMP/diagnostics/$driver-$loop-$attempt"
+                New-Item $profile -ItemType Directory -Force | Out-Null
+                $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', $profile, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -PassThru
+                if (!$app.WaitForExit(45000)) { $app.Kill(); throw "Timed out: $driver $loop" }
+                $app.Refresh()
+                Get-Content "$profile/render.log"
+                $results += [PSCustomObject]@{ driver = $driver; loop = $loop; attempt = $attempt; exitCode = $app.ExitCode }
+              }
             }
           }
           $results | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/diagnostics/results.json"
           $results | Format-Table
-          if ($results.Where({ $_.driver -eq 'modern' -and $_.exitCode -ne 0 }).Count) { throw 'Modern driver still fails visible video checks' }
+          if ($results.Where({ $_.exitCode -ne 0 }).Count) { throw 'A driver/render-loop combination failed visible video checks' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
