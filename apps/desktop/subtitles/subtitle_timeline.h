@@ -17,6 +17,7 @@ public:
     QString path(SubtitleRole role) const;
     QString name(SubtitleRole role) const;
     QVariantList tracks() const;
+    QVector<Cue> snapshot(SubtitleRole role) const { return entries(role); }
     void load(const QUrl &url, SubtitleRole role, const QString &encoding = "auto");
     void setDelay(qint64 milliseconds, SubtitleRole role);
     void publish(QVector<Cue> cues, const QString &path, SubtitleRole role);

@@ -80,3 +80,5 @@ polls in the background nor installs binaries. `SupportDiagnostics` constructs a
 allowlisted report from app/OS versions, playback state, and numeric media dimensions;
 it does not copy raw metadata or logs. `GettingStarted` and `SupportDialog` provide the
 Help menu flows and share the existing dialog focus/shortcut boundaries.
+
+Subtitle extraction, repair and translation are owned by `SubtitleTools` and three focused modules: `EmbeddedSubtitles`, `SubtitleDocument`, and `SubtitleTranslation`. See [Subtitle tools](SUBTITLE_TOOLS.md) for operation boundaries, failure behavior and verification.

@@ -1,3 +1,4 @@
+#include "embedded_subtitles.h"
 #include "playback_environment.h"
 #include "subtitle_appearance.h"
 #include "playback_pointer.h"
@@ -113,6 +114,7 @@ private:
             return QUrl(endpoint).host() == "127.0.0.1" ? QByteArray("synthetic-test-key") : QByteArray();
         });
         session = std::make_unique<LearningSession>(playback.get());
+        study->subtitleTools()->setDecoder(EmbeddedSubtitles::read);
         session->setStudyServices(study.get());
         session->setRecentVideos(recent.get());
         fullscreen = std::make_unique<FullscreenController>();
@@ -303,7 +305,16 @@ private slots:
     }
 
     void init() {
-        const QStringList headlessChecks{"helpDialogsKeepShortcutsIsolated","wordCardSeparatesSensesFormsAndUses", "menusOpenOwnedDialogsAndBlockShortcuts", "followUpComposerGrowsWithoutMovingSendButton", "followUpSupportsMacDeleteToLineStart", "savingFlashcardShowsResultAndOpensCollection", "recentHistoryKeepsFinishedVideosAccessible", "sidebarSlidesWithoutResizingVideoPerFrame","explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
+        const QStringList headlessChecks{"subtitleToolsRequireExplicitApply",
+                                         "helpDialogsKeepShortcutsIsolated",
+                                         "wordCardSeparatesSensesFormsAndUses",
+                                         "menusOpenOwnedDialogsAndBlockShortcuts",
+                                         "followUpComposerGrowsWithoutMovingSendButton",
+                                         "followUpSupportsMacDeleteToLineStart",
+                                         "savingFlashcardShowsResultAndOpensCollection",
+                                         "recentHistoryKeepsFinishedVideosAccessible",
+                                         "sidebarSlidesWithoutResizingVideoPerFrame",
+                                         "explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
                                          "explainButtonFootprintAndStationaryCueChanges",
@@ -2443,6 +2454,68 @@ private slots:
         session->setPaused(true);
     }
 
+    void embeddedTextReachesTheInteractiveTranscript() {
+        const auto fixture = QFINDTESTDATA("fixtures/subtitles/text.mkv");
+        QVERIFY(!fixture.isEmpty());
+        session->openVideo(QUrl::fromLocalFile(fixture));
+        window->setProperty("showRecent", false);
+        QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 4, 10000);
+        session->setPaused(true);
+        QString embeddedId;
+        for (const auto &entry : session->mediaTracks()) {
+            const auto track = entry.toMap();
+            if (track.value("type") == "sub") {
+                embeddedId = track.value("id").toString();
+                QCOMPARE(track.value("ff-index").toInt(), 1);
+            }
+        }
+        QVERIFY(!embeddedId.isEmpty());
+        session->selectNativeSubtitle(embeddedId, false);
+        QTRY_COMPARE_WITH_TIMEOUT(session->cueModel()->rowCount(), 2, 10000);
+        QVERIFY(session->primaryNativeTrack().isEmpty());
+        session->seek(0.75);
+        QTRY_COMPARE(session->subtitle(), QString("Hello, world."));
+    }
+
+    void subtitleToolsRequireExplicitApply() {
+        session->openSubtitles(QUrl::fromLocalFile(QFINDTESTDATA("fixtures/subtitles/source.srt")));
+        window->setProperty("showRecent", false);
+        auto *options = window->findChild<QObject *>("playerOptions");
+        QVERIFY(options);
+        QVERIFY(QMetaObject::invokeMethod(options, "subtitleToolsRequested", Q_ARG(bool, false)));
+        auto *dialog = window->findChild<QObject *>("subtitleToolsDialog");
+        QVERIFY(dialog);
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        QTest::qWait(200);
+        auto *language = visualItem(window->contentItem(), "trackTranslationLanguage");
+        QVERIFY(language && language->isVisible());
+        QVERIFY(language->property("count").toInt() > 10);
+        QVERIFY(!language->property("currentText").toString().isEmpty());
+        click("translateTrackButton");
+        auto *confirmation = window->findChild<QObject *>("trackTranslationConfirmation");
+        QVERIFY(confirmation);
+        QTRY_VERIFY(confirmation->property("opened").toBool());
+        QVERIFY(confirmation->property("height").toDouble() > 100);
+        QVERIFY(confirmation->property("height").toDouble() < window->height());
+        QVERIFY(QMetaObject::invokeMethod(confirmation, "close"));
+        QTRY_VERIFY(!confirmation->property("visible").toBool());
+        auto *tools = study->subtitleTools();
+        QVERIFY(!tools->busy());
+        QCOMPARE(tools->lineCount(), 2);
+        QSignalSpy published(tools, &SubtitleTools::trackReady);
+        tools->matchLines(0, 1.5);
+        QVERIFY(tools->hasRepair());
+        QCOMPARE(published.size(), 0);
+        QCOMPARE(session->cueModel()->rowCount(), 2);
+        click("applyTimingRepairButton");
+        QCOMPARE(published.size(), 1);
+        const auto saved = SubtitleTimeline::read(QUrl::fromLocalFile(published.first()[0].toString()));
+        QCOMPARE(saved.first().startMs, 1500);
+        QCOMPARE(saved.last().endMs, 5500);
+        QCOMPARE(session->primaryDelay(), 0.0);
+        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+    }
+
     void pausedNativeSubtitleSelectionDisplaysCurrentCue() {
         // 1. Establish a stable paused frame before selecting the embedded ASS track.
         const auto videoPath = qEnvironmentVariable("NEDEN_CHECK_ASS_VIDEO");
@@ -2470,23 +2543,10 @@ private slots:
         const auto beforePixels = beforeFrame.copy(pixelBounds);
         const double beforePosition = session->position();
         QSignalSpy pauseChanges(session.get(), &LearningSession::pausedChanged);
-        auto subtitleText = [this] {
-            char *raw = mpv_get_property_string(playback->handle(), "sub-text");
-            const auto text = QString::fromUtf8(raw ? raw : "");
-            mpv_free(raw);
-            return text;
-        };
-
-        // 2. Select the track, then require the active cue without a test-issued seek.
+        // Embedded text is promoted into the interactive timeline, without a seek.
         session->selectNativeSubtitle("2", false);
-        QTRY_VERIFY_WITH_TIMEOUT(([&] {
-                                     qint64 selected = -1;
-                                     return mpv_get_property(playback->handle(), "sid", MPV_FORMAT_INT64,
-                                                             &selected) == 0 &&
-                                            selected == 2;
-                                 })(),
-                                 2000);
-        QTRY_VERIFY_WITH_TIMEOUT(subtitleText().contains("STYLED EMBEDDED TEST"), 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(session->subtitle().contains("STYLED EMBEDDED TEST"), 10000);
+        QVERIFY(session->primaryNativeTrack().isEmpty());
         QTRY_VERIFY_WITH_TIMEOUT(window->grabWindow().copy(pixelBounds) != beforePixels, 2000);
         // The new subtitle may change its glyph pixels, but the paused video
         // must remain intact. This catches a cue rendered over a corrupt frame.

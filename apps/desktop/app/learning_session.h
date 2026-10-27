@@ -98,6 +98,7 @@ public:
     QVariantList subtitleTracks() const;
     Q_INVOKABLE void chooseTrack(const QString &path, bool secondary);
     Q_INVOKABLE void clearTrack(bool secondary);
+    Q_INVOKABLE void prepareSubtitleTools(bool secondary);
     Q_INVOKABLE void checkpoint();
     explicit LearningSession(PlaybackEngine *playbackEngine, QObject *parent = nullptr);
     Q_PROPERTY(CueModel *cueModel READ cueModel CONSTANT)
@@ -192,6 +193,9 @@ private:
     SubtitleTimeline subtitleTimeline;
     StudyInteraction studyInteraction;
     StudyServices *studyServices = nullptr;
+    bool publishingSubtitle = false, restoringSubtitleTracks = false;
+    QHash<QString, QString> embeddedTrackPaths;
+    void invalidateSubtitleTools();
     QString currentMediaPath;
     QString rememberedSourceSubtitlePath;
     QString rememberedTranslationSubtitlePath;

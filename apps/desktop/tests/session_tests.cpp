@@ -54,6 +54,41 @@ public:
 class SessionTests : public QObject {
     Q_OBJECT
 private slots:
+    void embeddedTextBecomesInteractiveAndGeneratedTracksKeepTheirTiming() {
+        QTemporaryDir directory;
+        QFile video(directory.filePath("video.mkv"));
+        QVERIFY(video.open(QIODevice::WriteOnly));
+        video.write("fixture");
+        video.close();
+        StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });
+        study.subtitleTools()->setDecoder([](const QString &, int stream, const std::atomic_bool &) {
+            return QVector<Cue>{{1000, 3000, QString("Stream %1").arg(stream), {}}};
+        });
+        FakePlayback playback;
+        LearningSession session(&playback);
+        session.setStudyServices(&study);
+        session.openVideo(QUrl::fromLocalFile(video.fileName()));
+        playback.setTracks(
+            {QVariantMap{{"type", "sub"}, {"id", "1"}, {"ff-index", 2}, {"label", "English"}}});
+        session.setSubtitleDelay(1.5, false);
+        session.chooseTrack("embedded:1", false);
+        QTRY_COMPARE(session.cueModel()->rowCount(), 1);
+        QCOMPARE(session.cueModel()->entries().first().startMs, 2500LL);
+        QCOMPARE(session.cueModel()->entries().first().text, QString("Stream 2"));
+        QCOMPARE(playback.options[PlaybackEngine::Option::PrimarySubtitle].toString(), QString("no"));
+        QCOMPARE(session.subtitleTracks().size(), 1);
+        QCOMPARE(session.subtitleTracks().first().toMap().value("name").toString(), QString("English"));
+        session.prepareSubtitleTools(false);
+        study.subtitleTools()->matchLines(0, 4.0);
+        study.subtitleTools()->applyRepair();
+        QCOMPARE(session.primaryDelay(), 0.0);
+        QCOMPARE(session.cueModel()->entries().first().startMs, 4000LL);
+        session.prepareSubtitleTools(false);
+        study.subtitleTools()->matchLines(0, 5.0);
+        QVERIFY(study.subtitleTools()->hasRepair());
+        session.clearTrack(false);
+        QVERIFY(!study.subtitleTools()->hasRepair());
+    }
     void transcriptSearchFollowsLanguagePreferences() {
         QTemporaryDir directory;
         StudyServices study(directory.path(), [](const QString &) { return QByteArray(); });

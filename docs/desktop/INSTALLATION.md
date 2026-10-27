@@ -61,7 +61,7 @@ ffmpeg -f lavfi -i 'color=c=black:s=640x360:r=24:d=12' \
   -disposition:s 0 /tmp/neden-paused-ass.mkv
 ```
 
-Set `NEDEN_CHECK_ASS_VIDEO=/tmp/neden-paused-ass.mkv` when running `NedenNativeChecks`. The regression selects subtitle ID 2 while paused at two seconds and requires the current cue and changed video pixels without a test-issued seek, pause-state change, or position drift. It skips explicitly when the fixture is not supplied.
+Set `NEDEN_CHECK_ASS_VIDEO=/tmp/neden-paused-ass.mkv` when running `NedenNativeChecks`. The regression selects subtitle ID 2 while paused at two seconds and requires the extracted interactive cue and changed video pixels without a test-issued seek, pause-state change, or position drift. It skips explicitly when the fixture is not supplied.
 
 ### Off-screen subtitle interaction checks
 
@@ -88,3 +88,5 @@ This uses the actual QML with software rendering, a temporary profile and placeh
 ### Language preferences
 
 Settings → AI & accounts → Languages and context offers language lists for **Subtitle language** and **Explain in**. New profiles detect the language from the subtitle text and use the system language for explanations. Choose a specific subtitle language when enabling automatic OpenSubtitles downloads. Online search has its own language picker for any provider-supported language; it does not impose a primary/secondary language pair. Recognized preferences saved by older versions are retained; unrecognized free-text values fall back individually to these defaults. Language choices do not guarantee a subtitle match or equal AI quality for every language.
+
+For embedded subtitle extraction, timing repair and translation, see [Subtitle tools](SUBTITLE_TOOLS.md).

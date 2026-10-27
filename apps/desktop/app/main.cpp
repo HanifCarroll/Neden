@@ -2,6 +2,7 @@
 #include "shortcut_map.h"
 #include "subtitle_appearance.h"
 #include "credentials.h"
+#include "embedded_subtitles.h"
 #include "hosted_credentials.h"
 #include <QDesktopServices>
 #include <QSettings>
@@ -123,6 +124,7 @@ int main(int argc, char **argv) {
     RecentVideos recentVideos(storage);
     CredentialStore credentials;
     StudyServices study(storage, [&](const QString &endpoint) { return credentials.read(endpoint); });
+    study.subtitleTools()->setDecoder(EmbeddedSubtitles::read);
     QSettings cloudPreferences(storage + "/cloud.ini", QSettings::IniFormat);
     study.account()->setEnabled(cloudPreferences.value("enabled", false).toBool());
     configureHostedCredentials(*study.account());

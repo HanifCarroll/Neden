@@ -25,7 +25,7 @@ set(NEDEN_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/app" "${CMAKE_CURRENT_SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/subtitles" "${CMAKE_CURRENT_SOURCE_DIR}/playback"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform" "${CMAKE_CURRENT_SOURCE_DIR}/account")
 include_directories(${NEDEN_INCLUDE_DIRS})
-set(NEDEN_STUDY_SOURCES account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h app/language_catalog.cpp app/language_catalog.h study/ai_client.cpp study/ai_client.h
+set(NEDEN_STUDY_SOURCES subtitles/subtitle_document.cpp subtitles/subtitle_tools.cpp subtitles/subtitle_tools.h subtitles/subtitle_translation.cpp subtitles/subtitle_translation.h account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h app/language_catalog.cpp app/language_catalog.h study/ai_client.cpp study/ai_client.h
     study/flashcard_deck.cpp study/flashcard_deck.h study/explanation_session.cpp study/explanation_session.h subtitles/subtitle_service.cpp subtitles/subtitle_service.h
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/conversation.cpp study/conversation.h study/study_target.h)
 set(NEDEN_SESSION_SOURCES app/media_history.cpp app/media_history.h playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
@@ -65,6 +65,11 @@ add_test(NAME shortcut_map_tests COMMAND shortcut_map_tests)
 qt_add_executable(support_tests tests/support_tests.cpp app/release_check.cpp app/release_check.h app/support_diagnostics.cpp app/support_diagnostics.h)
 target_link_libraries(support_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Network Qt6::Qml)
 add_test(NAME support_tests COMMAND support_tests)
+qt_add_executable(subtitle_processing_check EXCLUDE_FROM_ALL tests/subtitle_processing_check.cpp ${NEDEN_STUDY_SOURCES} subtitles/cues.cpp subtitles/subtitle_timeline.cpp)
+target_link_libraries(subtitle_processing_check PRIVATE Qt6::Qml Qt6::Network)
+qt_add_executable(subtitle_tools_tests tests/subtitle_tools_tests.cpp ${NEDEN_STUDY_SOURCES} subtitles/cues.cpp subtitles/subtitle_timeline.cpp)
+target_link_libraries(subtitle_tools_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Network)
+add_test(NAME subtitle_tools_tests COMMAND subtitle_tools_tests)
 if(NEDEN_CORE_ONLY)
     return()
 endif()
@@ -102,7 +107,7 @@ set_source_files_properties(ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set(NEDEN_UI_SOURCES app/release_check.cpp app/release_check.h app/support_diagnostics.cpp app/support_diagnostics.h app/playback_pointer.cpp app/playback_pointer.h platform/motion_preferences.h app/shortcut_map.cpp app/shortcut_map.h playback/thumbnail_service.cpp playback/thumbnail_service.h ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h
     app/media_path.h study/explanation_format.cpp study/explanation_format.h playback/mpv_playback.cpp playback/mpv_playback.h playback/video_render_lifetime.h
     playback/video.cpp playback/video.h playback/video_geometry.h platform/fullscreen_controller.h ${PLATFORM_SOURCES} platform/credentials.h platform/credentials.cpp platform/hosted_credentials.h platform/hosted_credentials.cpp)
-set(NEDEN_QML_FILES ui/SettingsDisclosure.qml ui/ServiceCredentials.qml ui/ServicesSettings.qml ui/HostedAccountSettings.qml ui/GettingStarted.qml ui/SupportDialog.qml ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
+set(NEDEN_QML_FILES ui/SubtitleToolsPane.qml ui/SettingsDisclosure.qml ui/ServiceCredentials.qml ui/ServicesSettings.qml ui/HostedAccountSettings.qml ui/GettingStarted.qml ui/SupportDialog.qml ui/WordUsageSection.qml ui/PlayerMenuBar.qml ui/PlayerDialogs.qml ui/SlidingSidebar.qml ui/MenuAction.qml ui/ShortcutEditor.qml ui/SegmentBar.qml ui/OptionsDialog.qml ui/SettingsGroup.qml ui/SettingsRow.qml ui/TimingControl.qml ui/PlaybackPreferences.qml ui/MediaDetails.qml ui/PlayerOptions.qml ui/PlayerShortcuts.qml ui/RecentVideosPane.qml ui/Main.qml ui/Theme.qml ui/ActionButton.qml ui/SearchField.qml
         ui/VideoStage.qml ui/PlaybackControls.qml ui/SubtitleText.qml ui/InspectorTab.qml ui/IconButton.qml ui/ExplanationPane.qml ui/ChoiceBox.qml ui/ControlSlider.qml ui/SegmentButton.qml ui/TranscriptPane.qml ui/SubtitleTrackPicker.qml
         ui/StudyPane.qml ui/SettingsPane.qml ui/DictionaryPane.qml)
 qt_add_qml_module(NedenQt URI Neden VERSION 1.0
@@ -155,7 +160,8 @@ elseif(UNIX AND NOT APPLE AND AUDITED_MPV_PREFIX)
 else()
     message(FATAL_ERROR "Provide NEDEN_MPV_FRAMEWORKS on macOS or AUDITED_MPV_PREFIX on Linux/Windows; do not fall back to system mpv.")
 endif()
-target_link_libraries(NedenQt PRIVATE "${REVIEWED_MPV_LIBRARY}")
+include(cmake/SubtitleDecoder.cmake)
+target_link_libraries(NedenQt PRIVATE "${REVIEWED_MPV_LIBRARY}" neden_subtitle_decoder)
 qt_add_executable(mpv_playback_tests tests/mpv_playback_tests.cpp playback/mpv_playback.cpp playback/mpv_playback.h playback/playback_engine.h)
 target_include_directories(mpv_playback_tests PRIVATE ${MPV_INCLUDE_DIR})
 target_link_libraries(mpv_playback_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Gui "${REVIEWED_MPV_LIBRARY}")
@@ -167,6 +173,10 @@ target_include_directories(thumbnail_tests PRIVATE ${MPV_INCLUDE_DIR})
 target_link_libraries(thumbnail_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Gui "${REVIEWED_MPV_LIBRARY}")
 set_target_properties(thumbnail_tests PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
 add_test(NAME thumbnail_tests COMMAND thumbnail_tests)
+qt_add_executable(embedded_subtitle_tests tests/embedded_subtitle_tests.cpp subtitles/cues.cpp)
+target_link_libraries(embedded_subtitle_tests PRIVATE Qt6::Test neden_subtitle_decoder)
+set_target_properties(embedded_subtitle_tests PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
+add_test(NAME embedded_subtitle_tests COMMAND embedded_subtitle_tests)
 
 set_target_properties(NedenQt PROPERTIES
     OUTPUT_NAME Neden
@@ -210,7 +220,7 @@ if(NEDEN_NATIVE_UI_CHECKS)
     qt_add_resources(NedenNativeChecks check_branding PREFIX "/branding" BASE "../../shared/branding" FILES ../../shared/branding/neden.png)
     target_include_directories(NedenNativeChecks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${MPV_INCLUDE_DIR})
     target_link_libraries(NedenNativeChecks PRIVATE qt6keychain Qt6::Test Qt6::Network Qt6::Quick
-        Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView "${REVIEWED_MPV_LIBRARY}")
+        Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView "${REVIEWED_MPV_LIBRARY}" neden_subtitle_decoder)
     set_target_properties(NedenNativeChecks PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
     if(APPLE)
         target_link_libraries(NedenNativeChecks PRIVATE "-framework AppKit" "-framework Security"

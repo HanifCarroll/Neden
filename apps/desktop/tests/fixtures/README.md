@@ -17,3 +17,15 @@ deadline, including on software-rendered CI desktops. It uses the same license.
 ```sh
 ffmpeg -f lavfi -i color=c=white:s=160x90:r=10:d=30 -c:v mpeg4 -q:v 5 -an white-smoke.mp4
 ```
+
+## Embedded subtitle fixtures
+
+`subtitles/source.srt` contains two original test lines, covered by this repository's MIT license.
+The small black-video fixtures test embedded SRT, ASS, and MP4 mov_text using the bundled decoder.
+No show footage or downloaded subtitles are included. Regenerate from this folder:
+
+```sh
+ffmpeg -f lavfi -i color=c=black:s=64x64:d=5 -i subtitles/source.srt -map 0:v -map 1:s -c:v mpeg4 -c:s srt subtitles/text.mkv
+ffmpeg -i subtitles/text.mkv -map 0 -c:v copy -c:s ass subtitles/styled.mkv
+ffmpeg -i subtitles/text.mkv -map 0 -c:v copy -c:s mov_text subtitles/text.mp4
+```

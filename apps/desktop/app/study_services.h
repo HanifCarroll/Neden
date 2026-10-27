@@ -4,6 +4,7 @@
 #include "flashcard_deck.h"
 #include "explanation_session.h"
 #include "subtitle_service.h"
+#include "subtitle_tools.h"
 #include "word_lookup.h"
 #include "hosted_account.h"
 class StudyServices : public QObject {
@@ -14,6 +15,7 @@ class StudyServices : public QObject {
     Q_PROPERTY(AppSettings *settings READ settings CONSTANT)
     Q_PROPERTY(ExplanationSession *explanation READ explanation CONSTANT)
     Q_PROPERTY(SubtitleService *subtitles READ subtitles CONSTANT)
+    Q_PROPERTY(SubtitleTools *subtitleTools READ subtitleTools CONSTANT)
     Q_PROPERTY(FlashcardDeck *deck READ deck CONSTANT)
     Q_PROPERTY(WordLookup *words READ words CONSTANT)
 public:
@@ -23,15 +25,18 @@ public:
                   QString alternateApi = "https://api.openai.com/v1")
         : QObject(parent), profile(directory), preferences(profile, this), flashcards(profile, this),
           explanations(preferences, reader, this, alternateApi),
-          subtitleAcquisition(directory, preferences, reader, this, subtitleApi), wordLookup(reader, this) {
+          subtitleAcquisition(directory, preferences, reader, this, subtitleApi), wordLookup(reader, this),
+          trackTools(directory, preferences, reader, this) {
         connect(&preferences, &AppSettings::changed, &wordLookup, &WordLookup::cancel);
         explanations.setHostedAccount(&hostedAccount);
         wordLookup.setHostedAccount(&hostedAccount);
+        trackTools.setHostedAccount(&hostedAccount);
         connect(&hostedAccount, &HostedAccount::changed, this, [this] {
             if (previousHostedMode == hostedAccount.enabled()) return;
             previousHostedMode = hostedAccount.enabled();
             explanations.stop();
             wordLookup.cancel();
+            trackTools.invalidate();
         });
     }
     HostedAccount *account() { return &hostedAccount; }
@@ -40,6 +45,7 @@ public:
     ExplanationSession *explanation() { return &explanations; }
     SubtitleService *subtitles() { return &subtitleAcquisition; }
     FlashcardDeck *deck() { return &flashcards; }
+    SubtitleTools *subtitleTools() { return &trackTools; }
     WordLookup *words() { return &wordLookup; }
 
 private:
@@ -51,4 +57,5 @@ private:
     ExplanationSession explanations;
     SubtitleService subtitleAcquisition;
     WordLookup wordLookup;
+    SubtitleTools trackTools;
 };

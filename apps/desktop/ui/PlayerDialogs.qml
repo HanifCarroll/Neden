@@ -17,10 +17,19 @@ Item {
     property bool screenshotWithSubtitles: true
     property int settingsPage: 0
     readonly property bool settingsOpen: settingsDialog.opened
-    readonly property bool blocksShortcuts: guideDialog.opened || supportDialog.opened || settingsDialog.opened || playerOptionsDialog.opened || timeDialog.opened || urlDialog.opened
+    readonly property bool blocksShortcuts: subtitleToolsDialog.opened || guideDialog.opened || supportDialog.opened || settingsDialog.opened || playerOptionsDialog.opened || timeDialog.opened || urlDialog.opened
     signal focusRequested
     signal subtitleScreenshotRequested(string path)
 
+    OptionsDialog {
+        id: subtitleToolsDialog
+        objectName: "subtitleToolsDialog"
+        anchors.centerIn: parent
+        width: Math.min(dialogs.width - 40, 720)
+        height: Math.min(dialogs.height - 40, 680)
+        contentItem: SubtitleToolsPane { session: dialogs.session }
+        onClosed: dialogs.focusRequested()
+    }
     function openGuide() { guideDialog.open(); }
     function openSupport(updates) {
         supportDialog.updates = updates;
@@ -148,6 +157,12 @@ Item {
         width: Math.min(dialogs.width - 40, 820)
         height: Math.min(dialogs.height - 40, 660)
         contentItem: PlayerOptions {
+            onSubtitleToolsRequested: secondary => {
+                dialogs.session.prepareSubtitleTools(secondary);
+                playerOptionsDialog.close();
+                subtitleToolsDialog.title = secondary ? "Secondary subtitle tools" : "Primary subtitle tools";
+                subtitleToolsDialog.open();
+            }
             id: playerOptions
             objectName: "playerOptions"
             onLoadSubtitles: secondary => secondary ? translationDialog.open() : subtitleDialog.open()

@@ -17,6 +17,7 @@ Item {
     }
     signal addFiles
     signal loadSubtitles(bool secondary)
+    signal subtitleToolsRequested(bool secondary)
     ColumnLayout {
         anchors.fill: parent
         spacing: Theme.space5
@@ -237,6 +238,11 @@ Item {
                                         Accessible.name: "Open " + subtitleGroup.title.toLowerCase()
                                         onClicked: pane.loadSubtitles(subtitleGroup.modelData)
                                     }
+                                }
+                                ActionButton {
+                                    text: "Translate or repair…"
+                                    Accessible.name: "Translate or repair " + subtitleGroup.title.toLowerCase()
+                                    onClicked: pane.subtitleToolsRequested(subtitleGroup.modelData)
                                 }
                                 SettingsRow {
                                     title: "Delay"

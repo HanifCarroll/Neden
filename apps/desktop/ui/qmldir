@@ -1,2 +1,4 @@
 # Directory-import metadata for editors. CMake generates the packaged module manifest.
 singleton Theme Theme.qml
+
+SubtitleToolsPane 1.0 SubtitleToolsPane.qml

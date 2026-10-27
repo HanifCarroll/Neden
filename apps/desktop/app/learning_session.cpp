@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <QStringDecoder>
+#include <QScopedValueRollback>
 #include <QDesktopServices>
 #include <QRegularExpression>
 
@@ -66,6 +67,18 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
 void LearningSession::setStudyServices(StudyServices *providedStudyServices) {
     studyServices = providedStudyServices;
     studyInteraction.setServices(providedStudyServices);
+    connect(providedStudyServices->subtitleTools(), &SubtitleTools::trackReady, this,
+            [this](const QString &path, bool secondary, bool preserveDelay) {
+                QScopedValueRollback<bool> publishing(publishingSubtitle, true);
+                if (preserveDelay)
+                    embeddedTrackPaths.insert(secondary ? nativeSecondary : nativePrimary, path);
+                else
+                    setSubtitleDelay(0, secondary);
+                if (secondary)
+                    openTranslation(QUrl::fromLocalFile(path));
+                else
+                    openSubtitles(QUrl::fromLocalFile(path));
+            });
     const auto updateSearchLanguage = [this, providedStudyServices] {
         const auto language = providedStudyServices->settings()->sourceLanguageCode();
         cueModel()->setSearchLanguage(language == "tr" || language == "az" || language == "azb"
@@ -75,6 +88,9 @@ void LearningSession::setStudyServices(StudyServices *providedStudyServices) {
     updateSearchLanguage();
     connect(providedStudyServices->subtitles(), &SubtitleService::subtitlesReady, this,
             [this](const QVector<Cue> &cues, const QString &path) {
+                invalidateSubtitleTools();
+                nativePrimary.clear();
+                playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitle, "no");
                 stopReplay();
                 resetInteraction(true);
                 subtitleTimeline.publish(cues, path, SubtitleRole::Primary);
@@ -165,6 +181,7 @@ void LearningSession::finishOpening(const QString &path) {
 }
 
 QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
+    QScopedValueRollback<bool> restoring(restoringSubtitleTracks, true);
     QStringList unavailable;
     setSubtitleDelay(saved.primaryDelay, false);
     setSubtitleDelay(saved.secondaryDelay, true);
@@ -221,6 +238,7 @@ void LearningSession::openTranslation(const QUrl &url) {
         return;
     try {
         subtitleTimeline.load(url, SubtitleRole::Secondary, playerPreferences.subtitleEncoding());
+        invalidateSubtitleTools();
         nativeSecondary.clear();
         playbackEngine->configure(PlaybackEngine::Option::SecondarySubtitle,
                                   "no"); // Validation completes before replacing the track.
@@ -244,6 +262,7 @@ void LearningSession::setPaused(bool value) {
     playbackEngine->setPaused(value);
 }
 void LearningSession::replaceCues(QVector<Cue> next) {
+    invalidateSubtitleTools();
     stopReplay();
     resetInteraction(true);
     if (studyServices)
@@ -276,6 +295,8 @@ void LearningSession::openVideo(const QUrl &url) {
     // 2. Checkpoint the old video before clearing its interaction and subtitle state.
     checkpoint();
     mediaReady = false;
+    invalidateSubtitleTools();
+    embeddedTrackPaths.clear();
     pendingDroppedSubtitles.clear();
     previousSeekPosition = scrubStart = -1;
     clearLoop();
@@ -319,6 +340,7 @@ void LearningSession::openSubtitles(const QUrl &url) {
         return;
     try {
         subtitleTimeline.load(url, SubtitleRole::Primary, playerPreferences.subtitleEncoding());
+        invalidateSubtitleTools();
         nativePrimary.clear();
         playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitle, "no");
         stopReplay();
@@ -524,6 +546,16 @@ QVariantList LearningSession::subtitleTracks() const {
             if (alreadyImported)
                 continue;
             const QString id = track.value("id").toString();
+            if (embeddedTrackPaths.contains(id)) {
+                for (auto &entry : tracks) {
+                    auto imported = entry.toMap();
+                    if (imported.value("path").toString() == embeddedTrackPaths.value(id)) {
+                        imported.insert("name", track.value("label"));
+                        entry = imported;
+                    }
+                }
+                continue;
+            }
             tracks.append(QVariantMap{
                 {"path", "embedded:" + id},
                 {"name", track.value("label")},
@@ -555,6 +587,7 @@ void LearningSession::chooseTrack(const QString &path, bool secondary) {
 }
 
 void LearningSession::clearTrack(bool secondary) {
+    invalidateSubtitleTools();
     if (secondary)
         nativeSecondary.clear();
     else
@@ -658,6 +691,7 @@ bool LearningSession::loadNativeSubtitle(const QUrl &url, bool secondary) {
 }
 void LearningSession::selectNativeSubtitle(const QString &id, bool secondary) {
     bool found = id == "no";
+    int streamIndex = -1;
     for (const auto &entry : playbackEngine->tracks()) {
         const auto track = entry.toMap();
         if (track.value("type") == "sub" && track.value("id").toString() == id) {
@@ -670,6 +704,7 @@ void LearningSession::selectNativeSubtitle(const QString &id, bool secondary) {
                 return;
             }
             found = true;
+            streamIndex = track.value("ff-index", -1).toInt();
         }
     }
     if (!found)
@@ -687,10 +722,13 @@ void LearningSession::selectNativeSubtitle(const QString &id, bool secondary) {
     applyNativeSubtitleTiming();
     emit tracksChanged();
     checkpoint();
+    if (id != "no" && streamIndex >= 0 && studyServices)
+        studyServices->subtitleTools()->extract(currentMediaPath, streamIndex, secondary);
 }
 void LearningSession::setSubtitleDelay(double seconds, bool secondary) {
     if (!std::isfinite(seconds))
         return;
+    invalidateSubtitleTools();
     seconds = qBound(-600.0, seconds, 600.0);
     if (secondary)
         secondaryDelaySeconds = seconds;
@@ -834,4 +872,16 @@ void LearningSession::applyNativeSubtitleTiming() {
             secondaryDelaySeconds = primaryDelaySeconds;
         playbackEngine->configure(PlaybackEngine::Option::PrimarySubtitleDelay, delay);
     }
+}
+
+void LearningSession::invalidateSubtitleTools() {
+    if (studyServices && !publishingSubtitle && !restoringSubtitleTracks)
+        studyServices->subtitleTools()->invalidate();
+}
+void LearningSession::prepareSubtitleTools(bool secondary) {
+    if (!studyServices)
+        return;
+    studyServices->subtitleTools()->prepare(
+        subtitleTimeline.snapshot(secondary ? SubtitleRole::Secondary : SubtitleRole::Primary),
+        subtitleTimeline.snapshot(secondary ? SubtitleRole::Primary : SubtitleRole::Secondary), secondary);
 }
