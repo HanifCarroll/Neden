@@ -49,6 +49,28 @@ struct GraphicsLibrary {
     }
 };
 
+COLORREF presentedPixel(HWND window, int x, int y) {
+    POINT position{x, y};
+    if (!ClientToScreen(window, &position))
+        return CLR_INVALID;
+    const auto screen = GetDC(nullptr);
+    const auto copy = CreateCompatibleDC(screen);
+    const auto bitmap = CreateCompatibleBitmap(screen, 1, 1);
+    const auto previous = SelectObject(copy, bitmap);
+    const bool captured = BitBlt(copy, 0, 0, 1, 1, screen, position.x, position.y, SRCCOPY | CAPTUREBLT);
+    const auto pixel = captured ? GetPixel(copy, 0, 0) : CLR_INVALID;
+    SelectObject(copy, previous);
+    DeleteObject(bitmap);
+    DeleteDC(copy);
+    ReleaseDC(nullptr, screen);
+    return pixel;
+}
+
+bool isWhite(COLORREF pixel) {
+    return pixel != CLR_INVALID && GetRValue(pixel) >= 220
+        && GetGValue(pixel) >= 220 && GetBValue(pixel) >= 220;
+}
+
 int main(int argc, char **argv) try {
     if (argc != 4)
         throw std::runtime_error("Usage: reference.exe MPV_DLL OPENGL_DLL WHITE_VIDEO");
@@ -131,6 +153,20 @@ int main(int argc, char **argv) try {
         throw std::runtime_error("Incomplete framebuffer");
     bindFramebuffer(framebufferTarget, 0);
 
+    // Validate the probe's own presentation/capture path before testing mpv.
+    SetForegroundWindow(window);
+    const auto clearColor = graphics.function<void (APIENTRY *)(GLfloat, GLfloat, GLfloat, GLfloat)>("glClearColor");
+    const auto clear = graphics.function<void (APIENTRY *)(GLbitfield)>("glClear");
+    clearColor(1, 1, 1, 1);
+    clear(GL_COLOR_BUFFER_BIT);
+    swapBuffers(device);
+    Sleep(100);
+    const auto controlPixel = presentedPixel(window, width / 2, height / 2);
+    std::printf("Presentation control: %u,%u,%u\n", GetRValue(controlPixel), GetGValue(controlPixel), GetBValue(controlPixel));
+    if (!isWhite(controlPixel))
+        throw std::runtime_error("Probe presentation/capture control failed before mpv initialization");
+    clearColor(0, 0, 0, 1);
+
     auto *playback = create();
     if (!playback)
         throw std::runtime_error("Could not create playback");
@@ -186,10 +222,9 @@ int main(int argc, char **argv) try {
         bindFramebuffer(framebufferTarget, 0);
         swapBuffers(device);
         reportSwap(renderer);
-        const auto visiblePixel = GetPixel(device, width / 2, height / 2);
+        const auto visiblePixel = presentedPixel(window, width / 2, height / 2);
         const bool white = pixel[0] >= 220 && pixel[1] >= 220 && pixel[2] >= 220
-            && visiblePixel != CLR_INVALID && GetRValue(visiblePixel) >= 220
-            && GetGValue(visiblePixel) >= 220 && GetBValue(visiblePixel) >= 220;
+            && isWhite(visiblePixel);
         whiteFrames = white ? whiteFrames + 1 : 0;
         if (++frames <= 3 || frames % 60 == 0)
             std::printf("Frame %d: framebuffer=%u,%u,%u screen=%u,%u,%u\n", frames,
