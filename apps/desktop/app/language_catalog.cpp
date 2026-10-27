@@ -113,6 +113,13 @@ QString LanguageCatalog::subtitleCode(const QString &value) {
     const auto *entry = findLanguage(value);
     return entry ? entry->subtitleCode : QString();
 }
+QString LanguageCatalog::subtitleLocaleCode(const QString &code) {
+    for (const auto &entry : languages()) {
+        if (!entry.subtitleCode.isEmpty() && entry.subtitleCode == code)
+            return entry.code.toLower();
+    }
+    return {};
+}
 bool LanguageCatalog::supportsSubtitleCode(const QString &code) {
     return !code.isEmpty() && std::any_of(languages().cbegin(), languages().cend(),
                                         [&code](const Language &entry) { return entry.subtitleCode == code; });

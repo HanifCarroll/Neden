@@ -2,6 +2,7 @@
 #include "cues.h"
 #include "app_settings.h"
 #include "ai_client.h"
+#include "subtitle_catalog.h"
 #include <QPointer>
 class SubtitleService : public QObject {
     Q_OBJECT
@@ -20,8 +21,9 @@ public:
         subtitleLoginReader = std::move(credentialReader);
     }
     void cancel();
+    Q_INVOKABLE void clearSearch();
     Q_INVOKABLE void findSubtitles(const QString &language, bool autoDownload = false,
-                                   const QString &query = {}, int season = 0, int episode = 0);
+                                   const QString &query = {}, int season = 0, int episode = 0, const QString &provider = "opensubtitles");
     Q_INVOKABLE void downloadSubtitle(int index);
     static QString movieHash(const QString &path);
 signals:
@@ -33,12 +35,14 @@ private:
         statusText = message;
         emit changed();
     }
+    void storeSubtitle(const QByteArray &bytes);
     QNetworkRequest authenticatedRequest(const QUrl &url);
     void fetchSubtitle(const QUrl &url, quint64 requestGenerationAtStart);
     void requestSubtitleDownload(int index, quint64 requestGenerationAtStart);
     QString storage, subtitleEndpoint, mediaPath, statusText;
     AppSettings &settings;
     AiClient::CredentialReader readCredential;
+    SubtitleCatalog catalog;
     QNetworkAccessManager networkAccessManager;
     QPointer<QNetworkReply> subtitleReply;
     std::function<QByteArray()> subtitleLoginReader;

@@ -123,7 +123,7 @@ QVariantList AppSettings::primaryProviders() const {
     return choices(primaryIds, {"Configured AI", "GPT-6 Luna"});
 }
 QVariantList AppSettings::credentialServices() const {
-    return choices({"ai", "luna", "subtitles"}, {"Configured AI", "GPT-6 Luna", "OpenSubtitles"});
+    return choices({"ai", "luna", "subtitles", "subdl"}, {"Configured AI", "GPT-6 Luna", "OpenSubtitles", "SubDL"});
 }
 
 QUrl AppSettings::buildDictionaryUrl(const QString &pattern, const QString &term) {
@@ -156,6 +156,8 @@ QString AppSettings::credentialService(const QString &service) const {
         return connectionValues.endpoint;
     if (service == "luna")
         return "https://api.openai.com/v1";
+    if (service == "subdl")
+        return "https://api.subdl.com";
     if (service == "subtitles")
         return QString("https://api.opensubtitles.com/api/v1");
     return {};

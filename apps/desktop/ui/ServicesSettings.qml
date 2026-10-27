@@ -211,7 +211,7 @@ ColumnLayout {
             Layout.fillWidth: true
         }
         Label {
-            text: "Uses your OpenSubtitles key and download allowance. Cloud does not include subtitle downloads yet. Changes apply to the next video."
+            text: "Automatic fingerprint matching uses OpenSubtitles. Search also offers Subvault without a key, and SubDL with your free account key. Each source has its own limits."
             color: Theme.muted
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
@@ -220,6 +220,12 @@ ColumnLayout {
             Layout.fillWidth: true
             settings: pane.settings
             service: "subtitles"
+        }
+        Label { text: "SubDL"; color: Theme.ink }
+        ServiceCredentials {
+            Layout.fillWidth: true
+            settings: pane.settings
+            service: "subdl"
         }
     }
     ActionButton {

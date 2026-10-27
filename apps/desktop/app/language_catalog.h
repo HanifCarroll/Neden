@@ -10,5 +10,6 @@ QString systemLanguage();
 QVariantList options(bool includeAutomatic = false);
 QVariantList subtitleOptions();
 QString subtitleCode(const QString &nameOrCode);
+QString subtitleLocaleCode(const QString &code);
 bool supportsSubtitleCode(const QString &code);
 } // namespace LanguageCatalog

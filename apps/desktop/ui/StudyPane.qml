@@ -152,15 +152,26 @@ Rectangle {
                 }
             }
             ColumnLayout {
+                ChoiceBox {
+                    id: subtitleProvider
+                    objectName: "subtitleSearchProviderChoice"
+                    Layout.fillWidth: true
+                    model: [{id: "subvault", name: "Subvault · TV episodes"}, {id: "subdl", name: "SubDL · Movies and TV"}, {id: "opensubtitles", name: "OpenSubtitles · Fingerprint search"}]
+                    textRole: "name"
+                    valueRole: "id"
+                    Accessible.name: "Subtitle source"
+                    onActivated: pane.studyServices.subtitles.clearSearch()
+                }
                 Label {
-                    text: "Search by fingerprint, or enter a title and season/episode (0 means any). Check the release and timing before using a match."
+                    text: subtitleProvider.currentValue === "opensubtitles" ? "Search by fingerprint, or enter a title and season/episode (0 means any)." : "Enter the title and choose a matching release. For TV, include the season and episode."
                     color: Theme.muted
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
                 SearchField {
                     id: subtitleTitle
-                    placeholderText: "Title (optional; empty uses video fingerprint)"
+                    objectName: "subtitleSearchTitle"
+                    placeholderText: subtitleProvider.currentValue === "opensubtitles" ? "Title (optional; empty uses video fingerprint)" : "Movie or show title"
                     Accessible.name: "Subtitle search title"
                     Layout.fillWidth: true
                 }
@@ -171,6 +182,7 @@ Rectangle {
                     }
                     SpinBox {
                         id: subtitleSeason
+                        objectName: "subtitleSearchSeason"
                         from: 0
                         to: 1000
                         editable: true
@@ -182,6 +194,7 @@ Rectangle {
                     }
                     SpinBox {
                         id: subtitleEpisode
+                        objectName: "subtitleSearchEpisode"
                         from: 0
                         to: 10000
                         editable: true
@@ -206,11 +219,13 @@ Rectangle {
                         }
                         displayText: currentIndex < 0 ? "Choose language…" : currentText
                         Accessible.name: "Subtitle search language"
+                        onActivated: pane.studyServices.subtitles.clearSearch()
                     }
                     ActionButton {
                         text: "Find subtitles"
+                        objectName: "subtitleSearchButton"
                         enabled: subtitleLanguage.currentIndex >= 0
-                        onClicked: pane.studyServices.subtitles.findSubtitles(subtitleLanguage.currentValue, false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value)
+                        onClicked: pane.studyServices.subtitles.findSubtitles(subtitleLanguage.currentValue, false, subtitleTitle.text, subtitleSeason.value, subtitleEpisode.value, subtitleProvider.currentValue)
                     }
                 }
                 ListView {
@@ -224,7 +239,7 @@ Rectangle {
                         required property var modelData
                         required property int index
                         width: resultsList.width
-                        text: (modelData.exact ? "Hash match · " : "Check release · ") + modelData.release
+                        text: (modelData.kind === "title" ? "Choose title · " : modelData.exact ? "Hash match · " : "Load release · ") + modelData.release + (modelData.year > 0 ? " (" + modelData.year + ")" : "")
                         contentItem: Label {
                             text: result.text
                             textFormat: Text.PlainText
@@ -235,7 +250,7 @@ Rectangle {
                     }
                 }
                 Label {
-                    text: "Choosing a result downloads and loads the source track. Load a second local SRT using Subtitles → Load secondary track."
+                    text: "Choose a title, then a release to load as the primary track. Adjust timing with the subtitle controls."
                     color: Theme.muted
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true

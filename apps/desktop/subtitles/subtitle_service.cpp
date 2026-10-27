@@ -23,7 +23,13 @@ SubtitleService::SubtitleService(QString directory, AppSettings &preferences,
                                  AiClient::CredentialReader credentialReader, QObject *parent,
                                  QString endpoint)
     : QObject(parent), storage(std::move(directory)), subtitleEndpoint(std::move(endpoint)),
-      settings(preferences), readCredential(std::move(credentialReader)) {
+      settings(preferences), readCredential(std::move(credentialReader)), catalog(readCredential, this) {
+    connect(&catalog, &SubtitleCatalog::messageChanged, this, &SubtitleService::setMessage);
+    connect(&catalog, &SubtitleCatalog::resultsReady, this, [this](QVariantList entries, const QString &message) {
+        results = std::move(entries);
+        setMessage(message);
+    });
+    connect(&catalog, &SubtitleCatalog::fileReady, this, &SubtitleService::storeSubtitle);
     if (!AiClient::allowedEndpoint(QUrl(subtitleEndpoint)))
         throw std::invalid_argument("Invalid subtitle API endpoint.");
 }
@@ -81,6 +87,7 @@ QString SubtitleService::movieHash(const QString &path) {
 
 void SubtitleService::cancel() {
     requestGeneration++;
+    catalog.cancel();
     if (!subtitleReply)
         return;
     subtitleReply->disconnect(this);
@@ -89,8 +96,14 @@ void SubtitleService::cancel() {
     subtitleReply = nullptr;
 }
 
+void SubtitleService::clearSearch() {
+    cancel();
+    results.clear();
+    setMessage({});
+}
+
 void SubtitleService::findSubtitles(const QString &language, bool autoDownload, const QString &title,
-                                    int season, int episode) {
+                                    int season, int episode, const QString &provider) {
 
     // 1. Cancel the previous lookup and fingerprint the current media.
     cancel();
@@ -99,6 +112,11 @@ void SubtitleService::findSubtitles(const QString &language, bool autoDownload, 
         season > 1000 || episode < 0 || episode > 10000 ||
         (title.trimmed().isEmpty() && (season || episode))) {
         setMessage("Open a local video and choose a subtitle language from the list.");
+        return;
+    }
+    if (provider != "opensubtitles") {
+        if (autoDownload) { setMessage("Choose a release before downloading from this source."); return; }
+        catalog.search(provider, title, language, season, episode);
         return;
     }
     try {
@@ -191,7 +209,12 @@ void SubtitleService::findSubtitles(const QString &language, bool autoDownload, 
 void SubtitleService::downloadSubtitle(int index) {
     if (index < 0 || index >= results.size())
         return;
+    const auto selected = results[index].toMap();
     cancel();
+    if (selected.contains("provider")) {
+        catalog.select(selected);
+        return;
+    }
     const auto requestGenerationAtStart = requestGeneration;
     if (!subtitleToken.isEmpty() || !subtitleLoginReader) {
         requestSubtitleDownload(index, requestGenerationAtStart);
@@ -316,35 +339,38 @@ void SubtitleService::fetchSubtitle(const QUrl &url, quint64 requestGenerationAt
                                       reply->error(), "Subtitle file download failed"));
             return;
         }
-        try {
-
-            // 2. Validate the complete subtitle file before storing it for future resumes.
-            QStringDecoder decoder(QStringDecoder::Utf8);
-            const QByteArray bytes = reply->readAll();
-            const QString text = decoder.decode(bytes);
-            if (decoder.hasError())
-                throw std::runtime_error("Invalid UTF-8 subtitles.");
-            const auto cues = parseSrt(text);
-
-            // 3. Commit an owner-readable local copy before publishing its stable path.
-            const QString directory = storage + "/subtitles";
-            const QString filename =
-                QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()) +
-                ".srt";
-            const QString path = directory + "/" + filename;
-            QSaveFile file(path);
-            if (!QDir().mkpath(directory) || !file.open(QIODevice::WriteOnly) ||
-                !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner) ||
-                file.write(bytes) != bytes.size() || !file.commit()) {
-                setMessage(
-                    "Downloaded subtitles could not be saved. Check free space and folder permissions.");
-                return;
-            }
-
-            emit subtitlesReady(cues, path);
-            setMessage("Downloaded subtitles loaded. Check their timing against the dialogue.");
-        } catch (...) {
-            setMessage("The download is not a supported SRT subtitle file.");
-        }
+        storeSubtitle(reply->readAll());
     });
+}
+
+void SubtitleService::storeSubtitle(const QByteArray &bytes) {
+    try {
+        if (bytes.size() > maximumResponse) throw std::runtime_error("Subtitle too large");
+        // Validate the complete subtitle file before storing it for future resumes.
+        QStringDecoder decoder(QStringDecoder::Utf8);
+        const QString text = decoder.decode(bytes);
+        if (decoder.hasError())
+            throw std::runtime_error("Invalid UTF-8 subtitles.");
+        const auto cues = parseSrt(text);
+
+        // Commit an owner-readable local copy before publishing its stable path.
+        const QString directory = storage + "/subtitles";
+        const QString filename =
+            QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()) +
+            ".srt";
+        const QString path = directory + "/" + filename;
+        QSaveFile file(path);
+        if (!QDir().mkpath(directory) || !file.open(QIODevice::WriteOnly) ||
+            !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner) ||
+            file.write(bytes) != bytes.size() || !file.commit()) {
+            setMessage(
+                "Downloaded subtitles could not be saved. Check free space and folder permissions.");
+            return;
+        }
+
+        emit subtitlesReady(cues, path);
+        setMessage("Downloaded subtitles loaded. Check their timing against the dialogue.");
+    } catch (...) {
+        setMessage("The download is not a supported SRT subtitle file.");
+    }
 }

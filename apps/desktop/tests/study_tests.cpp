@@ -12,9 +12,143 @@
 #include <memory>
 #include <QtTest>
 
+// A loopback server records the actual protocol without contacting providers.
+class CatalogServer : public QTcpServer {
+public:
+    QList<QByteArray> responses;
+    QList<QByteArray> requests;
+    QByteArray extraHeaders;
+    int status = 200;
+    int delay = 0;
+    CatalogServer() {
+        if (!listen(QHostAddress::LocalHost)) qFatal("Cannot start catalog test server");
+        connect(this, &QTcpServer::newConnection, this, [this] {
+            auto *socket = nextPendingConnection();
+            connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+            connect(socket, &QTcpSocket::readyRead, socket, [this, socket] {
+                const auto request = socket->property("request").toByteArray() + socket->readAll();
+                socket->setProperty("request", request);
+                if (!request.contains("\r\n\r\n") || socket->property("sent").toBool()) return;
+                socket->setProperty("sent", true);
+                requests.append(request);
+                const auto body = responses.isEmpty() ? QByteArray("{}") : responses.takeFirst();
+                const auto response = "HTTP/1.1 " + QByteArray::number(status) + " Response\r\nConnection: close\r\n"
+                    + extraHeaders + "Content-Length: " + QByteArray::number(body.size()) + "\r\n\r\n" + body;
+                QTimer::singleShot(delay, socket, [socket, response] {
+                    if (socket->state() != QAbstractSocket::ConnectedState) return;
+                    socket->write(response);
+                    socket->disconnectFromHost();
+                });
+            });
+        });
+    }
+    QString origin() const { return QString("http://127.0.0.1:%1").arg(serverPort()); }
+};
+
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void subtitleCatalogSubvaultChoosesTitleAndReleaseWithoutCredentials() {
+        CatalogServer server;
+        int credentialReads = 0;
+        SubtitleCatalog catalog([&](const QString &) { ++credentialReads; return QByteArray("secret"); }, nullptr,
+                                server.origin(), server.origin(), server.origin());
+        QSignalSpy results(&catalog, &SubtitleCatalog::resultsReady);
+        QSignalSpy files(&catalog, &SubtitleCatalog::fileReady);
+        server.responses = {
+            R"({"shows":[{"id":"show_1","name":"Example show"}]})",
+            R"({"matchingSubtitles":[{"completed":true,"release":"Web","downloadUri":"/subtitles/download/sp_entry-1"},{"completed":false,"release":"Incomplete","downloadUri":"/subtitles/download/unfinished"}]})",
+            "1\n00:00:01,000 --> 00:00:02,000\nHello.\n"};
+        catalog.search("subvault", "Example show", "fr", 2, 3);
+        QTRY_COMPARE(results.count(), 1);
+        auto titles = results.last().at(0).toList();
+        QCOMPARE(titles.size(), 1);
+        catalog.select(titles.first().toMap());
+        QTRY_COMPARE(results.count(), 3); // Clear titles, then publish releases.
+        auto releases = results.last().at(0).toList();
+        QCOMPARE(releases.size(), 1);
+        catalog.select(releases.first().toMap());
+        QTRY_COMPARE(files.count(), 1);
+        QVERIFY(files.first().at(0).toByteArray().contains("Hello."));
+        QCOMPARE(credentialReads, 0);
+        QCOMPARE(server.requests.size(), 3);
+        QVERIFY(server.requests.at(1).startsWith("GET /subtitles/get/show_1/2/3/fr "));
+        for (const auto &request : server.requests) QVERIFY(!request.toLower().contains("api-key"));
+    }
+
+    void subtitleCatalogSubdlFiltersPacksAndKeepsKeysOutOfUrls() {
+        CatalogServer server;
+        QStringList credentialOrigins;
+        SubtitleCatalog catalog([&](const QString &origin) { credentialOrigins.append(origin); return QByteArray("test-secret"); }, nullptr,
+                                server.origin(), server.origin(), server.origin());
+        QSignalSpy results(&catalog, &SubtitleCatalog::resultsReady);
+        QSignalSpy files(&catalog, &SubtitleCatalog::fileReady);
+        server.responses = {
+            R"({"results":[{"sd_id":123,"name":"Example","type":"tv","year":2024}]})",
+            R"({"subtitles":[{"full_season":true,"unpack_files":[{"season":2,"episode":3,"release_name":"Correct","url":"/subtitle/abc/episode3?api_key=leaked"},{"season":2,"episode":4,"release_name":"Wrong episode","url":"/subtitle/abc/episode4"},{"season":2,"episode":3,"release_name":"External","url":"https://attacker.invalid/subtitle/abc"}]}]})",
+            "1\n00:00:01,000 --> 00:00:02,000\nBonjour.\n"};
+        catalog.search("subdl", "Example", "fr", 2, 3);
+        QTRY_COMPARE(results.count(), 1);
+        catalog.select(results.last().at(0).toList().first().toMap());
+        QTRY_COMPARE(results.count(), 3);
+        const auto releases = results.last().at(0).toList();
+        QCOMPARE(releases.size(), 1);
+        const auto release = releases.first().toMap();
+        QCOMPARE(release.value("release").toString(), QString("Correct"));
+        QVERIFY(!release.value("download").toString().contains("api_key"));
+        catalog.select(release);
+        QTRY_COMPARE(files.count(), 1);
+        QCOMPARE(credentialOrigins, QStringList({server.origin(), server.origin(), server.origin()}));
+        QVERIFY(server.requests.at(1).contains("unpack=1"));
+        QVERIFY(server.requests.at(2).startsWith("GET /subtitle/abc/episode3 HTTP"));
+        for (const auto &request : server.requests) {
+            QVERIFY(request.toLower().contains("x-api-key: test-secret"));
+            QVERIFY(!request.contains("leaked"));
+            QVERIFY(!request.split('\n').first().contains("test-secret"));
+        }
+    }
+
+    void subtitleCatalogMissingKeyAndRateLimitsAreActionable() {
+        CatalogServer server;
+        SubtitleCatalog catalog([](const QString &) { return QByteArray(); }, nullptr,
+                                server.origin(), server.origin(), server.origin());
+        QSignalSpy messages(&catalog, &SubtitleCatalog::messageChanged);
+        catalog.search("subdl", "Example", "en", 0, 0);
+        QVERIFY(messages.last().first().toString().contains("SubDL key"));
+        QVERIFY(server.requests.isEmpty());
+        server.status = 429;
+        server.responses = {"{}"};
+        catalog.search("subvault", "Example", "en", 1, 1);
+        QTRY_VERIFY(messages.last().first().toString().contains("rate limit"));
+        server.status = 423;
+        server.responses = {"{}"};
+        catalog.search("subvault", "Example", "en", 1, 1);
+        QTRY_VERIFY(messages.last().first().toString().contains("refreshing"));
+    }
+
+    void subtitleCatalogCancellationAndRedirectsNeverLeakCredentials() {
+        CatalogServer server;
+        SubtitleCatalog catalog([](const QString &) { return QByteArray("private"); }, nullptr,
+                                server.origin(), server.origin(), server.origin());
+        QSignalSpy results(&catalog, &SubtitleCatalog::resultsReady);
+        QSignalSpy messages(&catalog, &SubtitleCatalog::messageChanged);
+        server.responses = {R"({"results":[{"sd_id":1,"name":"Old"}]})"};
+        server.delay = 100;
+        catalog.search("subdl", "Example", "en", 0, 0);
+        QTRY_COMPARE(server.requests.size(), 1);
+        catalog.cancel();
+        QTest::qWait(150);
+        QVERIFY(results.isEmpty());
+        server.delay = 0;
+        server.status = 302;
+        server.extraHeaders = "Location: https://attacker.invalid/collect\r\n";
+        server.responses = {"{}"};
+        catalog.search("subdl", "Example", "en", 0, 0);
+        QTRY_VERIFY(messages.last().first().toString().contains("failed"));
+        QCOMPARE(server.requests.size(), 2);
+        QVERIFY(results.isEmpty());
+    }
+
     void languagePreferencesUseValidatedChoicesAndNeutralDefaults() {
         QTemporaryDir directory;
         ProfileStore profile(directory.path());
@@ -41,6 +175,10 @@ private slots:
         QCOMPARE(LanguageCatalog::subtitleCode("Azerbaijani"), QString("az-az"));
         QCOMPARE(LanguageCatalog::subtitleCode("auto"), QString());
         QVERIFY(!LanguageCatalog::supportsSubtitleCode("anything"));
+        QCOMPARE(LanguageCatalog::subtitleLocaleCode("pt-pt"), QString("pt"));
+        QCOMPARE(LanguageCatalog::subtitleLocaleCode("az-az"), QString("az"));
+        QCOMPARE(LanguageCatalog::subtitleLocaleCode("ma"), QString("mni"));
+        QCOMPARE(LanguageCatalog::subtitleLocaleCode("pt-br"), QString("pt-br"));
     }
 
     void legacyFreeTextLanguagesMigrateWithoutLosingOtherPreferences() {
@@ -478,7 +616,7 @@ private slots:
             QVERIFY(settings->fallbackEnabled());
             QVERIFY(!settings->includeSecondary());
             QCOMPARE(settings->wordProviders().size(), 2);
-            QCOMPARE(settings->credentialServices().size(), 3);
+            QCOMPARE(settings->credentialServices().size(), 4);
             bool credentialWritten = false;
             settings->setCredentialWriter([&](const QString &, QByteArray, AppSettings::CredentialCompletion completed) {
                 credentialWritten = true;

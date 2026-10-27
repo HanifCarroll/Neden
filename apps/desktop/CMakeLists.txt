@@ -37,7 +37,7 @@ set(NEDEN_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/app" "${CMAKE_CURRENT_SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/subtitles" "${CMAKE_CURRENT_SOURCE_DIR}/playback"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform" "${CMAKE_CURRENT_SOURCE_DIR}/account")
 include_directories(${NEDEN_INCLUDE_DIRS})
-set(NEDEN_STUDY_SOURCES subtitles/subtitle_document.cpp subtitles/subtitle_tools.cpp subtitles/subtitle_tools.h subtitles/subtitle_translation.cpp subtitles/subtitle_translation.h account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h app/language_catalog.cpp app/language_catalog.h study/ai_client.cpp study/ai_client.h
+set(NEDEN_STUDY_SOURCES subtitles/subtitle_catalog.cpp subtitles/subtitle_catalog.h subtitles/subtitle_document.cpp subtitles/subtitle_tools.cpp subtitles/subtitle_tools.h subtitles/subtitle_translation.cpp subtitles/subtitle_translation.h account/hosted_account.cpp account/hosted_account.h app/profile_store.cpp app/profile_store.h app/app_settings.cpp app/app_settings.h app/language_catalog.cpp app/language_catalog.h study/ai_client.cpp study/ai_client.h
     study/flashcard_deck.cpp study/flashcard_deck.h study/explanation_session.cpp study/explanation_session.h subtitles/subtitle_service.cpp subtitles/subtitle_service.h
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/conversation.cpp study/conversation.h study/study_target.h)
 set(NEDEN_SESSION_SOURCES app/media_history.cpp app/media_history.h playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
@@ -77,6 +77,10 @@ add_test(NAME shortcut_map_tests COMMAND shortcut_map_tests)
 qt_add_executable(support_tests tests/support_tests.cpp app/release_check.cpp app/release_check.h app/support_diagnostics.cpp app/support_diagnostics.h)
 target_link_libraries(support_tests PRIVATE Qt6::Test Qt6::Gui Qt6::Network Qt6::Qml)
 add_test(NAME support_tests COMMAND support_tests)
+qt_add_executable(subtitle_catalog_check EXCLUDE_FROM_ALL tests/subtitle_catalog_check.cpp
+    subtitles/subtitle_catalog.cpp subtitles/subtitle_catalog.h subtitles/cues.cpp
+    study/ai_client.cpp study/conversation.cpp app/language_catalog.cpp account/hosted_account.cpp account/hosted_account.h)
+target_link_libraries(subtitle_catalog_check PRIVATE Qt6::Qml Qt6::Network)
 qt_add_executable(subtitle_processing_check EXCLUDE_FROM_ALL tests/subtitle_processing_check.cpp ${NEDEN_STUDY_SOURCES} subtitles/cues.cpp subtitles/subtitle_timeline.cpp)
 target_link_libraries(subtitle_processing_check PRIVATE neden_word_boundaries Qt6::Qml Qt6::Network)
 qt_add_executable(subtitle_tools_tests tests/subtitle_tools_tests.cpp ${NEDEN_STUDY_SOURCES} subtitles/cues.cpp subtitles/subtitle_timeline.cpp)
@@ -143,12 +147,12 @@ if(APPLE)
     set_source_files_properties(platform/motion_preferences_mac.mm platform/fullscreen_controller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_source_files_properties(platform/platform_media_session_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_source_files_properties(platform/credentials_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-    target_link_libraries(NedenQt PRIVATE neden_word_boundaries "-framework MediaPlayer" "-framework IOKit" "-framework CoreAudio" "-framework AppKit" "-framework Security" "-framework Foundation" "-framework LocalAuthentication")
+    target_link_libraries(NedenQt PRIVATE "-framework MediaPlayer" "-framework IOKit" "-framework CoreAudio" "-framework AppKit" "-framework Security" "-framework Foundation" "-framework LocalAuthentication")
 endif()
 if(WIN32)
-    target_link_libraries(NedenQt PRIVATE neden_word_boundaries windowsapp)
+    target_link_libraries(NedenQt PRIVATE windowsapp)
 elseif(UNIX AND NOT APPLE)
-    target_link_libraries(NedenQt PRIVATE neden_word_boundaries Qt6::DBus)
+    target_link_libraries(NedenQt PRIVATE Qt6::DBus)
 endif()
 set(NEDEN_MPV_FRAMEWORKS "" CACHE PATH "Path to reviewed LGPL macOS playback frameworks")
 if(APPLE AND NEDEN_MPV_FRAMEWORKS)
@@ -173,7 +177,7 @@ else()
     message(FATAL_ERROR "Provide NEDEN_MPV_FRAMEWORKS on macOS or AUDITED_MPV_PREFIX on Linux/Windows; do not fall back to system mpv.")
 endif()
 include(cmake/SubtitleDecoder.cmake)
-target_link_libraries(NedenQt PRIVATE neden_word_boundaries "${REVIEWED_MPV_LIBRARY}" neden_subtitle_decoder)
+target_link_libraries(NedenQt PRIVATE "${REVIEWED_MPV_LIBRARY}" neden_subtitle_decoder)
 qt_add_executable(mpv_playback_tests tests/mpv_playback_tests.cpp playback/mpv_playback.cpp playback/mpv_playback.h playback/playback_engine.h)
 target_include_directories(mpv_playback_tests PRIVATE ${MPV_INCLUDE_DIR})
 target_link_libraries(mpv_playback_tests PRIVATE Qt6::Test Qt6::Qml Qt6::Gui "${REVIEWED_MPV_LIBRARY}")
@@ -235,7 +239,7 @@ if(NEDEN_NATIVE_UI_CHECKS)
         Qt6::QuickControls2 Qt6::OpenGL Qt6::WebView "${REVIEWED_MPV_LIBRARY}" neden_subtitle_decoder)
     set_target_properties(NedenNativeChecks PROPERTIES BUILD_RPATH "${REVIEWED_MPV_RPATH}")
     if(APPLE)
-        target_link_libraries(NedenNativeChecks PRIVATE neden_word_boundaries "-framework AppKit" "-framework Security"
+        target_link_libraries(NedenNativeChecks PRIVATE "-framework AppKit" "-framework Security"
             "-framework Foundation" "-framework LocalAuthentication")
     endif()
 endif()

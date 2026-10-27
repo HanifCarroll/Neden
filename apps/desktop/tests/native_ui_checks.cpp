@@ -309,7 +309,9 @@ private slots:
     }
 
     void init() {
-        const QStringList headlessChecks{"subtitleToolsRequireExplicitApply",
+        const QStringList headlessChecks{
+            "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
+            "subtitleToolsRequireExplicitApply",
                                          "helpDialogsKeepShortcutsIsolated",
                                          "wordCardSeparatesSensesFormsAndUses",
                                          "menusOpenOwnedDialogsAndBlockShortcuts",
@@ -626,7 +628,7 @@ private slots:
         QVERIFY(endpoint && model && provider && save);
         QCOMPARE(provider->property("currentValue").toString(), QString("ai"));
         QCOMPARE(provider->property("count").toInt(), 2);
-        QCOMPARE(study->settings()->credentialServices().size(), 3);
+        QCOMPARE(study->settings()->credentialServices().size(), 4);
         const auto original = study->settings()->endpoint();
         QVERIFY(endpoint->setProperty("text", QString("https://example.org/v1")));
         QVERIFY(model->setProperty("text", QString("draft-model")));
@@ -726,6 +728,28 @@ private slots:
         QVERIFY(!automatic->isEnabled());
         QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
         QTRY_VERIFY(!dialog->property("opened").toBool());
+    }
+
+    void subtitleCatalogUiOffersSourcesAndValidatedLanguages() {
+        QVERIFY(QMetaObject::invokeMethod(window, "openStudy", Q_ARG(QVariant, 2)));
+        auto *provider = visualItem(window->contentItem(), "subtitleSearchProviderChoice");
+        QTRY_VERIFY(provider && provider->isVisible());
+        auto *language = visualItem(window->contentItem(), "subtitleSearchLanguageChoice");
+        auto *title = visualItem(window->contentItem(), "subtitleSearchTitle");
+        auto *search = visualItem(window->contentItem(), "subtitleSearchButton");
+        QVERIFY(language && title && search);
+        QCOMPARE(provider->property("count").toInt(), 3);
+        QCOMPARE(provider->property("currentValue").toString(), QString("subvault"));
+        QVERIFY(!language->property("editable").toBool());
+        QVERIFY(language->property("count").toInt() > 50);
+        QVERIFY(provider->setProperty("currentIndex", 1));
+        QCOMPARE(provider->property("currentValue").toString(), QString("subdl"));
+        QVERIFY(title->property("placeholderText").toString().contains("title"));
+        QVERIFY(provider->setProperty("currentIndex", 2));
+        QCOMPARE(provider->property("currentValue").toString(), QString("opensubtitles"));
+        QVERIFY(title->property("placeholderText").toString().contains("fingerprint"));
+        QVERIFY(provider->setProperty("currentIndex", 0));
+        QVERIFY(search->height() >= 24);
     }
 
     void playbackOptionsPresentGroupedControlsAndReadableDetails() {

@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 CHECKS = [
+    "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
     "subtitleToolsRequireExplicitApply",
     "helpDialogsKeepShortcutsIsolated",
     "menusOpenOwnedDialogsAndBlockShortcuts",
