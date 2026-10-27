@@ -72,8 +72,11 @@ bool isWhite(COLORREF pixel) {
 }
 
 int main(int argc, char **argv) try {
-    if (argc != 4)
-        throw std::runtime_error("Usage: reference.exe MPV_DLL OPENGL_DLL WHITE_VIDEO");
+    if (argc != 5)
+        throw std::runtime_error("Usage: reference.exe MPV_DLL OPENGL_DLL WHITE_VIDEO MODE");
+    const std::string mode = argv[4];
+    if (mode != "default" && mode != "rgb" && mode != "simple")
+        throw std::runtime_error("Unknown reference mode");
     GraphicsLibrary graphics{std::filesystem::path(argv[2])};
     auto playbackLibrary = LoadLibraryA(argv[1]);
     if (!playbackLibrary)
@@ -177,6 +180,13 @@ int main(int argc, char **argv) try {
         if (setOption(playback, name, value) < 0)
             throw std::runtime_error("Could not set playback option");
     }
+    // Isolate color conversion from intermediate shader passes. These options
+    // are diagnostic only and never change the installed application's settings.
+    if (mode == "rgb" && setOption(playback, "vf", "format=fmt=rgba") < 0)
+        throw std::runtime_error("Could not request CPU color conversion");
+    if (mode == "simple" && setOption(playback, "gpu-dumb-mode", "yes") < 0)
+        throw std::runtime_error("Could not request single-pass rendering");
+    std::printf("Reference mode: %s\n", mode.c_str());
     if (initialize(playback) < 0)
         throw std::runtime_error("Could not initialize playback");
     mpv_opengl_init_params graphicsParameters{GraphicsLibrary::resolve, &graphics};

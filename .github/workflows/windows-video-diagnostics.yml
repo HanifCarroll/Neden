@@ -25,6 +25,11 @@ on:
         description: Test installed libraries without Qt or Neden UI
         type: boolean
         default: false
+      reference_mode:
+        description: Isolate shader stages in standalone reference
+        type: choice
+        default: default
+        options: [default, rgb, simple]
       attempts:
         description: Fresh launches per driver and render loop (1–10)
         type: number
@@ -90,6 +95,7 @@ jobs:
           ATTEMPTS: ${{ inputs.attempts }}
           GL_VERSION: ${{ inputs.gl_version }}
           REFERENCE_ONLY: ${{ inputs.reference_only }}
+          REFERENCE_MODE: ${{ inputs.reference_mode }}
         run: |
           $attempts = [int]$env:ATTEMPTS
           if ($attempts -lt 1 -or $attempts -gt 10) { throw 'Expected 1–10 attempts' }
@@ -120,7 +126,7 @@ jobs:
                   $library = @(Get-ChildItem "$env:RUNNER_TEMP/installed-neden/bin/*mpv*.dll")
                   if ($library.Count -ne 1) { throw 'Expected one installed mpv DLL' }
                   $graphics = if ($driver -eq 'modern') { "$driverDirectory/opengl32.dll" } else { "$env:RUNNER_TEMP/installed-neden/bin/opengl32sw.dll" }
-                  $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/render-reference.exe" -ArgumentList @($library[0].FullName, $graphics, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -RedirectStandardOutput "$profile/reference.log" -PassThru
+                  $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/render-reference.exe" -ArgumentList @($library[0].FullName, $graphics, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4", $env:REFERENCE_MODE) -RedirectStandardError "$profile/render.log" -RedirectStandardOutput "$profile/reference.log" -PassThru
                 } else {
                   $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', $profile, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -PassThru
                 }
