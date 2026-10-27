@@ -2502,6 +2502,11 @@ private slots:
         auto *tools = study->subtitleTools();
         QVERIFY(!tools->busy());
         QCOMPARE(tools->lineCount(), 2);
+        auto *firstPreview = window->findChild<QObject *>("firstMatchingLinePreview");
+        auto *secondPreview = window->findChild<QObject *>("secondMatchingLinePreview");
+        QVERIFY(firstPreview && secondPreview);
+        QTRY_VERIFY(firstPreview->property("text").toString().contains("Hello, world."));
+        QTRY_VERIFY(secondPreview->property("text").toString().contains("Hello, world."));
         QSignalSpy published(tools, &SubtitleTools::trackReady);
         tools->matchLines(0, 1.5);
         QVERIFY(tools->hasRepair());

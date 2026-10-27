@@ -65,7 +65,7 @@ ScrollView {
                     TextField { id: firstTime; placeholderText: "Video seconds"; Layout.fillWidth: true; inputMethodHints: Qt.ImhFormattedNumbersOnly; Accessible.name: "First matching video time in seconds" }
                     ActionButton { text: "Use current"; onClicked: firstTime.text = pane.session.position.toFixed(3) }
                 }
-                Label { text: pane.tools.lineText(firstLine.value - 1); color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Label { objectName: "firstMatchingLinePreview"; text: pane.tools.lineCount > 0 ? pane.tools.lineText(firstLine.value - 1) : ""; color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 CheckBox { id: correctDrift; text: "Correct drift with a second match" }
                 RowLayout {
                     visible: correctDrift.checked
@@ -74,7 +74,7 @@ ScrollView {
                     TextField { id: secondTime; placeholderText: "Video seconds"; Layout.fillWidth: true; inputMethodHints: Qt.ImhFormattedNumbersOnly; Accessible.name: "Second matching video time in seconds" }
                     ActionButton { text: "Use current"; onClicked: secondTime.text = pane.session.position.toFixed(3) }
                 }
-                Label { visible: correctDrift.checked; text: pane.tools.lineText(secondLine.value - 1); color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Label { objectName: "secondMatchingLinePreview"; visible: correctDrift.checked; text: pane.tools.lineCount > 0 ? pane.tools.lineText(secondLine.value - 1) : ""; color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 ActionButton {
                     text: "Preview correction"
                     enabled: !pane.tools.busy && pane.tools.lineCount > 0 && firstTime.text.trim().length > 0 && (!correctDrift.checked || secondTime.text.trim().length > 0)
