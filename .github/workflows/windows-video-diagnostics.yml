@@ -1,0 +1,77 @@
+name: Windows video driver comparison
+on:
+  workflow_dispatch:
+    inputs:
+      package_run:
+        description: Desktop packages run containing windows-smoke-failure
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  compare:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Fetch the previously tested installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_RUN: ${{ inputs.package_run }}
+        run: |
+          if ($env:PACKAGE_RUN -notmatch '^\d+$') { throw 'Expected a numeric workflow run ID' }
+          gh run download $env:PACKAGE_RUN --name windows-smoke-failure --dir "$env:RUNNER_TEMP/package"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $setup = Get-ChildItem "$env:RUNNER_TEMP/package" -Recurse -Filter '*setup.exe' | Select-Object -First 1
+          if (!$setup) { throw 'Installer artifact is missing' }
+          $install = Start-Process $setup.FullName -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$env:RUNNER_TEMP/installed-neden") -Wait -PassThru
+          if ($install.ExitCode) { throw "Installer failed: $($install.ExitCode)" }
+      - name: Fetch a pinned comparison driver
+        shell: pwsh
+        run: |
+          $archive = "$env:RUNNER_TEMP/mesa.7z"
+          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') { throw 'Mesa archive checksum mismatch' }
+          7z x $archive "-o$env:RUNNER_TEMP/mesa" -y
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Compare visible video with both drivers
+        shell: pwsh
+        run: |
+          $env:QT_OPENGL = 'software'
+          $env:QT_FORCE_STDERR_LOGGING = '1'
+          $env:QT_LOGGING_RULES = 'neden.video.debug=true'
+          $env:QSG_INFO = '1'
+          $env:GALLIUM_DRIVER = 'llvmpipe'
+          $driverDirectory = "$env:RUNNER_TEMP/mesa/x64"
+          $results = @()
+          foreach ($driver in @('bundled', 'modern')) {
+            if ($driver -eq 'modern') {
+              $env:QT_OPENGL_DLL = "$driverDirectory/opengl32.dll"
+              $env:PATH = "$driverDirectory;$env:WINDIR/System32;$env:WINDIR"
+            } else {
+              Remove-Item Env:QT_OPENGL_DLL -ErrorAction SilentlyContinue
+              $env:PATH = "$env:WINDIR/System32;$env:WINDIR"
+            }
+            foreach ($loop in @('threaded', 'basic')) {
+              $env:QSG_RENDER_LOOP = $loop
+              $profile = "$env:RUNNER_TEMP/diagnostics/$driver-$loop"
+              New-Item $profile -ItemType Directory -Force | Out-Null
+              $app = Start-Process "$env:RUNNER_TEMP/installed-neden/bin/Neden.exe" -ArgumentList @('--smoke-test', '--smoke-test-white-frame', '--profile', $profile, "$env:GITHUB_WORKSPACE/apps/desktop/tests/fixtures/white-smoke.mp4") -RedirectStandardError "$profile/render.log" -PassThru
+              if (!$app.WaitForExit(45000)) { $app.Kill(); throw "Timed out: $driver $loop" }
+              $app.Refresh()
+              Get-Content "$profile/render.log"
+              $results += [PSCustomObject]@{ driver = $driver; loop = $loop; exitCode = $app.ExitCode }
+            }
+          }
+          $results | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/diagnostics/results.json"
+          $results | Format-Table
+          if ($results.Where({ $_.driver -eq 'modern' -and $_.exitCode -ne 0 }).Count) { throw 'Modern driver still fails visible video checks' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-driver-comparison
+          path: ${{ runner.temp }}/diagnostics
