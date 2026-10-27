@@ -245,3 +245,21 @@ using [Mesa's documented `LP_NUM_THREADS=0`](https://docs.mesa3d.org/envvars.htm
 These are explicit diagnostic inputs, not application defaults. The installed
 package gate now requires ten fresh successful starts, failing on the first bad
 start rather than retrying until a passing result is obtained.
+
+### Resize and threading controls
+
+- [Standalone default renderer with app-sized resize](https://github.com/HanifCarroll/Neden/actions/runs/40528498725): **18/20 passed**.
+- [Bilinear chroma with app-sized resize](https://github.com/HanifCarroll/Neden/actions/runs/40528491023): **19/20 passed**. The failed probe repeatedly read `(0, 0, 0)`, matching the application failure. This disproves the chroma-only workaround even without Qt.
+- [Installed app with LLVMpipe raster threading disabled](https://github.com/HanifCarroll/Neden/actions/runs/40528483762): **19/20 passed**. Disabling threading does not eliminate the failure and is not shipped.
+- [Restricted renderer with app-sized resize](https://github.com/HanifCarroll/Neden/actions/runs/40528854772): **20/20 passed**.
+- [CPU RGBA conversion with app-sized resize](https://github.com/HanifCarroll/Neden/actions/runs/40528862211): **20/20 passed**.
+
+The production experiment now replaces the insufficient chroma adjustment with
+mpv's documented `gpu-dumb-mode=yes`, still only for Windows LLVMpipe. This is a
+compatibility path for CPU graphics, not an upstream root-cause repair. As the
+[mpv manual explains](https://mpv.io/manual/stable/#options-gpu-dumb-mode), this
+restricted renderer disables advanced processing, including high-quality scalers
+and custom shaders. Hardware OpenGL and other platforms retain the usual pipeline.
+The option's future availability must be checked when upgrading mpv. The actual
+installed application must pass repeated visible-pixel checks before this can be
+accepted as a working fallback; standalone passes alone remain insufficient.

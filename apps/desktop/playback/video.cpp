@@ -111,15 +111,16 @@ private:
 #ifdef Q_OS_WIN
         const auto *renderer = QOpenGLContext::currentContext()->functions()->glGetString(GL_RENDERER);
         if (renderer && QByteArray(reinterpret_cast<const char *>(renderer)).contains("llvmpipe")) {
-            // Windows LLVMpipe intermittently returns black video with mpv's
-            // multi-pass chroma scaler, including in the standalone reference.
-            // Keep luma scaling and other processing; simplify only chroma.
+            // Windows LLVMpipe intermittently returns black video through
+            // mpv's multi-pass renderer, also reproduced without Qt. Use mpv's
+            // restricted renderer for this CPU fallback; hardware keeps the
+            // normal high-quality pipeline. Simplifying chroma alone failed.
             // Configure before creating the render context or loading media.
-            const int result = mpv_set_property_string(playback->handle(), "cscale", "bilinear");
+            const int result = mpv_set_property_string(playback->handle(), "gpu-dumb-mode", "yes");
             if (result < 0)
-                qCWarning(videoRendering) << "Could not configure software chroma scaling:" << mpv_error_string(result);
+                qCWarning(videoRendering) << "Could not configure software compatibility rendering:" << mpv_error_string(result);
             else
-                qCDebug(videoRendering) << "Using bilinear chroma scaling with Windows LLVMpipe.";
+                qCDebug(videoRendering) << "Using compatibility rendering with Windows LLVMpipe.";
         }
 #endif
 
