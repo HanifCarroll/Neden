@@ -22,3 +22,10 @@ Both files were readable UTF-8 SRT. This verifies search, download and parsing f
 ## Recommendation
 
 Subvault is a promising free TV source for a later explicit integration, but the samples above are not enough to make it the sole automatic provider. Keep matching release/cut information visible, normalize provider IDs behind a common adapter, respect throttling, and require a successful local parse before replacing a track. Embedded text, user-provided SRT/VTT, timing repair and translation work independently of a subtitle download subscription.
+
+## Free API allowance recheck — 2026-10-27
+
+- **SubDL v2:** the [current developer documentation](https://subdl.com/developers) lists **2,000 searches/day and 50 downloads/day** on a free account API key. Its `/api/v2/me` endpoint reports each allowance separately. The older v1 documentation has different figures; use the current v2 limits when planning a new integration. These are published limits, not a newly validated account allocation. A shared Neden key would need an allocation suitable for all its users; this is not a per-customer unlimited-download plan.
+- **Subvault / Gestdown:** [official API documentation](https://github.com/Belphemur/AddictedProxy/blob/dev/docs/api-surface.md) says every endpoint is public without authentication and throttling is applied at the proxy/infrastructure layer. It documents 429 responses but does not publish a guaranteed numeric daily allowance. The prior unauthenticated sample checks demonstrate free access, not unlimited capacity or an SLA. No paid plan is required for those documented endpoints.
+
+Neither result justifies promising unlimited hosted subtitle downloads. Keep provider requests bounded, respect retry responses, and retain local/embedded subtitle paths when a community source is unavailable.

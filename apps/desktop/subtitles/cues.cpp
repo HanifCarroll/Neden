@@ -173,7 +173,7 @@ QString CueModel::searchKey(const QString &text) const {
 
     // 1. Treat composed and decomposed spellings as the same search text.
     QString normalized = text.normalized(QString::NormalizationForm_C);
-    if (language == Turkish) {
+    if (language == Turkic) {
         // Unicode's Turkic case-fold pairs; independent of the OS locale or ICU.
         normalized.replace(QChar(0x0049), QChar(0x0131));
         normalized.replace(QChar(0x0130), QChar(0x0069));
@@ -190,7 +190,7 @@ void CueModel::rebuildSearchKeys() {
     }
 }
 void CueModel::setSearchLanguage(SearchLanguage value) {
-    if (value == language || (value != Unicode && value != Turkish)) {
+    if (value == language || (value != Unicode && value != Turkic)) {
         return;
     }
 

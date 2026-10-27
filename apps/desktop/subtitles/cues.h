@@ -21,7 +21,7 @@ class CueModel : public QAbstractListModel {
     Q_PROPERTY(SearchLanguage searchLanguage READ searchLanguage WRITE setSearchLanguage NOTIFY
                    searchLanguageChanged)
 public:
-    enum SearchLanguage { Unicode, Turkish };
+    enum SearchLanguage { Unicode, Turkic };
     Q_ENUM(SearchLanguage)
     enum Roles { Text = Qt::UserRole + 1, Translation, Start, CueIndex };
     using QAbstractListModel::QAbstractListModel;

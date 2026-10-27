@@ -29,7 +29,7 @@ export const studyRequest = z
         .string()
         .min(1)
         .max(100)
-        .regex(/^[\p{L}\p{M}\p{N}]+$/u),
+        .regex(/^[\p{L}\p{M}\p{N}]+(?:['’\u200C\u200D-][\p{L}\p{M}\p{N}]+)*$/u),
       context,
     }),
     z.object({ operation: z.literal("explain"), context }),

@@ -5,6 +5,17 @@
 class ConversationTests : public QObject {
     Q_OBJECT
 private slots:
+    void languageContextSurvivesAcrossDifferentWritingSystems() {
+        for (const auto &context : QList<QJsonObject>{
+                 {{"selection", "你好"}, {"sourceLanguage", "Chinese"}, {"explanationLanguage", "Arabic"}},
+                 {{"selection", "مرحبًا"}, {"sourceLanguage", "Arabic"}, {"explanationLanguage", "French"}},
+                 {{"selection", "こんにちは"}, {"sourceLanguage", "Japanese"}, {"explanationLanguage", "Spanish"}}}) {
+            Conversation chat;
+            chat.begin(context);
+            const auto sent = QJsonDocument::fromJson(chat.messages()[1].toObject()["content"].toString().toUtf8());
+            QCOMPARE(sent.object(), context);
+        }
+    }
     void followUpsKeepFrozenContextAndCompletedHistory() {
         Conversation chat;
         QJsonObject context{{"selection", "dalmışım"},

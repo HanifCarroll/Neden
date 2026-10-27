@@ -329,6 +329,15 @@ private slots:
     void wordExtractionSupportsUnicode() {
         QCOMPARE(WordLookup::wordAt("Bir ışık gördüm.", 5), QString("ışık"));
         QCOMPARE(WordLookup::wordAt("日本語 العربية", 1), QString("日本語"));
+        QCOMPARE(WordLookup::wordAt("I don't know.", 5), QString("don't"));
+        QCOMPARE(WordLookup::wordAt("C'est l’homme.", 10), QString("l’homme"));
+        QCOMPARE(WordLookup::wordAt("un porte-monnaie", 9), QString("porte-monnaie"));
+        QCOMPARE(WordLookup::wordAt("می‌روم", 3), QString("می‌روم"));
+        QCOMPARE(WordLookup::wordAt("مرحبًا بالعالم", 2), QString("مرحبًا"));
+        QCOMPARE(WordLookup::wordAt("Привет мир", 2), QString("Привет"));
+        QCOMPARE(WordLookup::wordAt("नमस्ते दुनिया", 2), QString("नमस्ते"));
+        QCOMPARE(WordLookup::wordAt("—Hello!", 3), QString("Hello"));
+        QCOMPARE(WordLookup::wordAt("'Hello'", 3), QString("Hello"));
     }
     void learningSettingsWhitelistFieldsAndNeverPersistKeys() {
         QTemporaryDir directory;

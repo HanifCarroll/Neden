@@ -27,6 +27,28 @@ async function account(limit = 3) {
   return stub;
 }
 describe("request boundary", () => {
+  it("preserves language choices and words across scripts and internal joiners", () => {
+    for (const [word, sourceLanguage, explanationLanguage] of [
+      ["don't", "English", "Spanish"],
+      ["l’homme", "French", "Arabic"],
+      ["porte-monnaie", "French", "Japanese"],
+      ["می‌روم", "Persian", "German"],
+      ["مرحبًا", "Arabic", "Portuguese"],
+      ["日本語", "Japanese", "French"],
+      ["नमस्ते", "Hindi", "Korean"],
+    ]) {
+      const evidence = { clickedSubtitle: word, sourceLanguage, explanationLanguage };
+      const parsed = studyRequest.parse({ operation: "word", word, context: evidence });
+      const body = providerBody(parsed);
+      const sent = JSON.parse(body.messages[1].content);
+      expect(JSON.stringify(sent)).toContain(word);
+      expect(JSON.stringify(sent)).toContain(explanationLanguage);
+      expect(JSON.stringify(sent)).toContain(sourceLanguage);
+    }
+    for (const word of ["'word'", "-word", "word-", "two words", "word--word"]) {
+      expect(studyRequest.safeParse({ operation: "word", word, context }).success).toBe(false);
+    }
+  });
   it("translates bounded consecutive cues with server-owned instructions and JSON output", () => {
     const parsed = studyRequest.parse({
       operation: "translate",

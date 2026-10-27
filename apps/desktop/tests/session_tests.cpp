@@ -97,11 +97,11 @@ private slots:
         session.setStudyServices(&study);
         QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Unicode);
         QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "tr"}}));
-        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Turkish);
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Turkic);
         QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "es"}}));
         QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Unicode);
         QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "az"}}));
-        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Turkish);
+        QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Turkic);
         QVERIFY(study.settings()->configureLearning({{"sourceLanguage", "auto"}}));
         QCOMPARE(session.cueModel()->searchLanguage(), CueModel::Unicode);
     }

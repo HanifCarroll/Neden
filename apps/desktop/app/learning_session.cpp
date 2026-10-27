@@ -82,7 +82,7 @@ void LearningSession::setStudyServices(StudyServices *providedStudyServices) {
     const auto updateSearchLanguage = [this, providedStudyServices] {
         const auto language = providedStudyServices->settings()->sourceLanguageCode();
         cueModel()->setSearchLanguage(language == "tr" || language == "az" || language == "azb"
-                                         ? CueModel::Turkish : CueModel::Unicode);
+                                         ? CueModel::Turkic : CueModel::Unicode);
     };
     connect(providedStudyServices->settings(), &AppSettings::changed, this, updateSearchLanguage);
     updateSearchLanguage();

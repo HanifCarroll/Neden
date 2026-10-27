@@ -37,7 +37,7 @@ private slots:
         QFETCH(int, expectedCount);
         const QString original = "İstanbul, İzmir; ışık ve ılık çay. Çığ, göl, şüphe.";
         CueModel model;
-        model.setSearchLanguage(CueModel::Turkish);
+        model.setSearchLanguage(CueModel::Turkic);
         model.replace({{0, 1000, original, {}}});
         model.search(query);
         QCOMPARE(model.count(), expectedCount);
@@ -55,7 +55,7 @@ private slots:
         QFETCH(QString, query);
         QFETCH(QList<int>, expectedIndices);
         CueModel model;
-        model.setSearchLanguage(CueModel::Turkish);
+        model.setSearchLanguage(CueModel::Turkic);
         model.replace(
             {{0, 1000, "i", {}}, {1000, 2000, "İ", {}}, {2000, 3000, "ı", {}}, {3000, 4000, "I", {}}});
         model.search(query);
@@ -70,7 +70,7 @@ private slots:
         model.replace({{0, 1000, "First", {}}, {1000, 2000, "FIRST", {}}});
         model.search("first");
         QCOMPARE(model.count(), 2);
-        model.setSearchLanguage(CueModel::Turkish);
+        model.setSearchLanguage(CueModel::Turkic);
         QCOMPARE(model.count(), 1);
         model.setSearchLanguage(CueModel::Unicode);
         QCOMPARE(model.count(), 2);
@@ -95,7 +95,7 @@ private slots:
         QFETCH(QString, text);
         QFETCH(QString, query);
         CueModel model;
-        model.setSearchLanguage(CueModel::Turkish);
+        model.setSearchLanguage(CueModel::Turkic);
         model.replace({{0, 1000, text, {}}});
         model.search(query);
         QCOMPARE(model.count(), 1);
