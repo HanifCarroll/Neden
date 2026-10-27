@@ -40,14 +40,10 @@ Item {
         spacing: 0
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 60
+            Layout.preferredHeight: Theme.controlHeight
             Layout.leftMargin: Theme.space4
             Layout.rightMargin: Theme.space3
-            Label {
-                text: "Transcript"
-                color: Theme.ink
-                font.pixelSize: Theme.title
-                font.weight: Font.DemiBold
+            Item {
                 Layout.fillWidth: true
             }
             IconButton {
