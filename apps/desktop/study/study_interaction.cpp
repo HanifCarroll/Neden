@@ -90,7 +90,7 @@ void StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
             return; // A delayed gesture cannot attach to another cue.
         const bool resume = wordCardOpen ? resumeAfterWordCard : !playback.paused();
         emit started();
-        closeWordCard(false);
+        // WordLookup retains the in-flight batch when the cue context is unchanged.
         resumeAfterWordCard = resume;
         wordCardOpen = true;
         wordTarget = target;

@@ -1,5 +1,8 @@
 #pragma once
 #include "ai_client.h"
+#include "word_batch.h"
+#include <QCache>
+#include <QSet>
 #include <QNetworkReply>
 #include <QPointer>
 #include <QVariantMap>
@@ -12,6 +15,8 @@ class WordLookup : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Word lookup is supplied by study services")
+    Q_PROPERTY(QString detailsState READ detailsState NOTIFY changed)
+    Q_PROPERTY(QString detailsMessage READ detailsMessage NOTIFY changed)
     Q_PROPERTY(QString word READ word NOTIFY changed)
     Q_PROPERTY(QString state READ state NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
@@ -38,15 +43,38 @@ public:
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
                        const QString &model, bool noKeyRequired = false);
     void cancel();
+    Q_INVOKABLE void loadDetails();
+    QString detailsState() const { return detailState; }
+    QString detailsMessage() const { return detailMessage; }
     static QString wordAt(const QString &text, int offset);
     Q_INVOKABLE QVariantMap wordRangeAt(const QString &text, int offset) const;
     static QVariantMap parseContextMeaning(const QByteArray &body);
-    void setHostedAccount(HostedAccount *account) { aiClient.setHostedAccount(account); }
+    void setHostedAccount(HostedAccount *account);
 signals:
     void changed();
 
 private:
+    struct CachedLine {
+        QMap<QString, QVariantMap> cards;
+        QSet<QString> detailedWords;
+    };
     void observe(QNetworkReply *reply);
+    void consumeBatch();
+    void showSelectedCard();
+    void abortDetails();
+    void abortBatch();
+    void clearCard();
+    QCache<QString, CachedLine> cache{64};
+    QString cacheKey, providerEndpoint, providerModel;
+    QJsonObject selectedContext;
+    bool providerNeedsNoKey = false;
+    QString detailState = "idle", detailMessage;
+    QPointer<QNetworkReply> batchReply;
+    WordBatch batch;
+    QString batchError;
+
+    QMetaObject::Connection accountConnection;
+    bool accountConnected = false;
     AiClient aiClient;
     QPointer<QNetworkReply> reply;
     QString selectedWord;

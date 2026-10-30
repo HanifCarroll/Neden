@@ -13,6 +13,7 @@ CHECKS = [
     "trackDropdownsDisplayTheirNamedRolesAndReadableSelection",
     "subtitlePickersExcludeTheOtherSlotsTrack",
     "wordCardSeparatesSensesFormsAndUses",
+    "singleClickShowsContextualWordCardWithoutChangingTheSidebar",
     "followUpComposerGrowsWithoutMovingSendButton",
     "savingFlashcardShowsResultAndOpensCollection",
     "recentHistoryKeepsFinishedVideosAccessible",

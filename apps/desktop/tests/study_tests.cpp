@@ -386,96 +386,145 @@ private slots:
         QVERIFY_THROWS_EXCEPTION(std::runtime_error, WordLookup::parseContextMeaning(QByteArray(64001, 'x')));
     }
 
-    void contextualWordRequestsUseFrozenContextAndCancelWithoutRetry() {
+    void wordBatchStreamsOnlyCompleteValidatedEntries() {
+        const auto frame = [](const QByteArray &content, const QString &finish = {}) {
+            QJsonObject choice{{"delta", QJsonObject{{"content", QString::fromUtf8(content)}}}};
+            if (!finish.isEmpty()) choice.insert("finish_reason", finish);
+            return "data: " + QJsonDocument(QJsonObject{{"choices", QJsonArray{choice}}}).toJson(QJsonDocument::Compact) + "\n\n";
+        };
+        WordBatch batch;
+        batch.reset({"café", "你好"});
+        const auto first = frame("{\"entries\":[{\"word\":\"café\",\"partOfSpeech\":\"noun\",\"meaning\":\"coffee\"}");
+        for (char byte : first) batch.append(QByteArray(1, byte));
+        QCOMPARE(batch.entries().size(), 1);
+        QVERIFY(!batch.complete());
+        batch.append(frame(",{\"word\":\"你好\",\"partOfSpeech\":\"greeting\",\"meaning\":\"hello\"}]}"));
+        QCOMPARE(batch.entries().size(), 2);
+        batch.append(frame({}, "stop") + "data: [DONE]\n\n");
+        QVERIFY(batch.complete());
+        const QList<QByteArray> invalid{
+            "{\"entries\":[{\"word\":\"unknown\",\"meaning\":\"x\",\"partOfSpeech\":\"noun\"}]}",
+            "{\"entries\":[{\"word\":\"café\",\"meaning\":42,\"partOfSpeech\":\"noun\"}]}",
+            "{\"entries\":[{\"word\":\"café\",\"meaning\":\"x\",\"partOfSpeech\":\"noun\"},{\"word\":\"café\",\"meaning\":\"y\",\"partOfSpeech\":\"noun\"}]}"
+        };
+        for (const auto &content : invalid) {
+            batch.reset({"café"});
+            batch.append(frame(content));
+            QVERIFY_THROWS_EXCEPTION(std::runtime_error, batch.entries());
+        }
+        batch.reset({"café"});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, batch.append("data: nonsense\n"));
+        batch.reset({"café"});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, batch.append(frame({}, "length")));
+        batch.reset({"café"});
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error, batch.append(QByteArray(256001, 'x')));
+    }
+
+    void wordLookupsShareStreamingLineCacheAndFetchDetailsOnDemand() {
         QTemporaryDir directory;
         QTcpServer server;
         QVERIFY(server.listen(QHostAddress::LocalHost));
         int requests = 0;
-        QJsonObject submitted;
-        QByteArray headers;
+        bool truncate = false;
+        QList<QJsonObject> submitted;
+        const auto frame = [](const QByteArray &content, const QString &finish = {}) {
+            QJsonObject choice{{"delta", QJsonObject{{"content", QString::fromUtf8(content)}}}};
+            if (!finish.isEmpty()) choice.insert("finish_reason", finish);
+            return "data: " + QJsonDocument(QJsonObject{{"choices", QJsonArray{choice}}}).toJson(QJsonDocument::Compact) + "\n\n";
+        };
         connect(&server, &QTcpServer::newConnection, this, [&] {
             auto *socket = server.nextPendingConnection();
             auto bytes = std::make_shared<QByteArray>();
             connect(socket, &QTcpSocket::readyRead, socket, [&, socket, bytes] {
                 *bytes += socket->readAll();
                 const int split = bytes->indexOf("\r\n\r\n");
-                if (split < 0 || socket->property("sent").toBool())
-                    return;
+                if (split < 0 || socket->property("sent").toBool()) return;
                 int length = 0;
                 for (const auto &line : bytes->left(split).split('\n'))
-                    if (line.toLower().startsWith("content-length:"))
-                        length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
-                if (bytes->size() < split + 4 + length)
-                    return;
+                    if (line.toLower().startsWith("content-length:")) length = line.mid(line.indexOf(':') + 1).trimmed().toInt();
+                if (bytes->size() < split + 4 + length) return;
                 socket->setProperty("sent", true);
                 ++requests;
-                headers = bytes->left(split);
-                submitted = QJsonDocument::fromJson(bytes->mid(split + 4, length)).object();
-                const QString content =
-                    R"({"lemma":"dalmak","partOfSpeech":"verb","meaning":"I became absorbed","explanation":"Watching TV absorbed his attention.","formNote":"Dalmışım is an inflected form of dalmak.","otherSenses":[{"meaning":"to dive into water","example":"suya dalmak","translation":"to dive into the water","formNote":"Uses the infinitive dalmak."}],"otherUses":[]})";
-                const auto body =
-                    QJsonDocument(
-                        QJsonObject{{"choices", QJsonArray{QJsonObject{
-                                                    {"finish_reason", "stop"},
-                                                    {"message", QJsonObject{{"content", content}}}}}}})
-                        .toJson();
-                socket->write("HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(body.size()) +
-                              "\r\n\r\n" + body.left(10));
-                QTimer::singleShot(150, socket, [socket, body] {
-                    socket->write(body.mid(10));
-                    socket->disconnectFromHost();
-                });
+                const auto request = QJsonDocument::fromJson(bytes->mid(split + 4, length)).object();
+                submitted.append(request);
+                const auto data = QJsonDocument::fromJson(request.value("messages").toArray().last().toObject().value("content").toString().toUtf8()).object();
+                QByteArray first, rest;
+                if (request.value("stream").toBool()) {
+                    const auto words = data.value("words").toArray();
+                    for (int index = 0; index < words.size(); ++index) {
+                        if (truncate && index > 0) break;
+                        const auto card = QJsonDocument(QJsonObject{{"word", words[index]}, {"partOfSpeech", "verb"}, {"meaning", "meaning of " + words[index].toString()}}).toJson(QJsonDocument::Compact);
+                        if (index == 0) first = frame("{\"entries\":[" + card);
+                        else rest += frame("," + card);
+                    }
+                    rest += truncate ? frame({}, "length") : frame("]}") + frame({}, "stop") + "data: [DONE]\n\n";
+                } else {
+                    const auto card = QJsonDocument(QJsonObject{{"lemma", "dalmak"}, {"meaning", "absorbed"}, {"explanation", "Attention absorbed."}, {"formNote", "Past tense."}}).toJson(QJsonDocument::Compact);
+                    first = QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{{"finish_reason", "stop"}, {"message", QJsonObject{{"content", QString::fromUtf8(card)}}}}}}}).toJson(QJsonDocument::Compact);
+                }
+                socket->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: " + QByteArray::number(first.size() + rest.size()) + "\r\n\r\n" + first);
+                QTimer::singleShot(250, socket, [socket, rest] { socket->write(rest); socket->disconnectFromHost(); });
             });
         });
-        QString credentialEndpoint;
-        StudyServices study(directory.path(), [&](const QString &endpoint) {
-            credentialEndpoint = endpoint;
-            return QByteArray("synthetic-test-key");
-        });
+        WordLookup lookup([](const QString &) { return QByteArray(); });
         const auto endpoint = QString("http://127.0.0.1:%1").arg(server.serverPort());
-        QVERIFY(study.settings()->configure(endpoint, "mock", "https://example.org/%s", false));
-        QCOMPARE(study.settings()->learningSettings().value("wordProvider").toString(), QString("ai"));
-        const QJsonObject context{{"clickedSubtitle", "Ben televizyona dalmışım ya."},
-                                  {"before", QJsonArray{"Açık bile değil televizyon."}},
-                                  {"after", QJsonArray{"Öyle mi?"}},
-                                  {"secondary", QJsonArray{"I was watching TV."}},
-                                  {"explanationLanguage", "English"}};
-        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(),
-                                     study.settings()->model());
-        QTRY_COMPARE(study.words()->state(), QString("complete"));
+        QJsonObject context{{"clickedSubtitle", "Ben dalmışım."}, {"sourceCue", "Ben dalmışım."}, {"learningLanguage", "tr"}, {"explanationLanguage", "en"}};
+        lookup.lookupContext("dalmışım", context, endpoint, "local-test", true);
+        QTRY_COMPARE(lookup.state(), QString("complete"));
         QCOMPARE(requests, 1);
-        QCOMPARE(credentialEndpoint, endpoint);
-        QVERIFY(headers.contains("Bearer synthetic-test-key"));
-        QVERIFY(!QJsonDocument(submitted).toJson().contains("synthetic-test-key"));
-        QCOMPARE(submitted.value("stream").toBool(), false);
-        QCOMPARE(submitted.value("response_format").toObject().value("type").toString(),
-                 QString("json_object"));
-        const auto sentContext =
-            QJsonDocument::fromJson(
-                submitted.value("messages").toArray().last().toObject().value("content").toString().toUtf8())
-                .object();
-        QCOMPARE(sentContext.value("word").toString(), QString("dalmışım"));
-        QCOMPARE(sentContext.value("before"), context.value("before"));
-        QCOMPARE(sentContext.value("after"), context.value("after"));
-        QCOMPARE(sentContext.value("secondary"), context.value("secondary"));
-        QCOMPARE(study.words()->lemma(), QString("dalmak"));
-        QCOMPARE(study.words()->partOfSpeech(), QString("verb"));
-        QCOMPARE(study.words()->otherSenses().first().toMap().value("meaning").toString(), QString("to dive into water"));
-        study.words()->lookupContext("dalmışım", context, study.settings()->endpoint(),
-                                     study.settings()->model());
-        QTRY_COMPARE(requests, 2);
-        study.words()->cancel();
-        QTest::qWait(250);
-        QCOMPARE(study.words()->state(), QString("idle"));
-        QVERIFY(study.words()->otherSenses().isEmpty());
-        QVERIFY(study.words()->partOfSpeech().isEmpty());
-        QVERIFY(study.words()->formNote().isEmpty());
-        QVERIFY(study.words()->otherUses().isEmpty());
+        QVERIFY(submitted.first().value("stream").toBool());
+        QCOMPARE(lookup.detailsState(), QString("idle"));
+        QCOMPARE(lookup.formNote(), QString());
+        // The second word hasn't arrived; switching must keep the first request alive.
+        context.insert("selection", "Ben");
+        lookup.lookupContext("Ben", context, endpoint, "local-test", true);
+        QCOMPARE(lookup.state(), QString("loading"));
+        QTRY_COMPARE(lookup.state(), QString("complete"));
+        QCOMPARE(requests, 1);
+        lookup.cancel();
+        lookup.lookupContext("dalmışım", context, endpoint, "local-test", true);
+        QCOMPARE(lookup.state(), QString("complete"));
+        QCOMPARE(requests, 1);
+        lookup.loadDetails();
+        QTRY_COMPARE(lookup.detailsState(), QString("complete"));
         QCOMPARE(requests, 2);
-        study.words()->lookupContext("ışık", context, "https://key@invalid.example", "mock");
-        QCOMPARE(study.words()->state(), QString("failed"));
+        QVERIFY(!submitted.last().value("stream").toBool());
+        QCOMPARE(lookup.formNote(), QString("Past tense."));
+        QCOMPARE(lookup.meanings().first(), QString("meaning of dalmışım"));
+        lookup.lookupContext("Ben", context, endpoint, "local-test", true);
+        lookup.lookupContext("dalmışım", context, endpoint, "local-test", true);
+        lookup.loadDetails();
+        QCOMPARE(lookup.detailsState(), QString("complete"));
         QCOMPARE(requests, 2);
+        context.insert("explanationLanguage", "es");
+        lookup.lookupContext("dalmışım", context, endpoint, "local-test", true);
+        QTRY_COMPARE(requests, 3);
+        QTRY_COMPARE(lookup.state(), QString("complete"));
+        lookup.lookupContext("dalmışım", context, endpoint, "different-model", true);
+        QTRY_COMPARE(requests, 4);
+        lookup.cancel();
+        QTest::qWait(300);
+        QCOMPARE(lookup.state(), QString("idle"));
+        QCOMPARE(requests, 4);
+        // A partial response keeps completed cards; retry only requests missing words.
+        context.insert("clickedSubtitle", "One two.");
+        truncate = true;
+        lookup.lookupContext("One", context, endpoint, "local-test", true);
+        QTRY_COMPARE(lookup.state(), QString("complete"));
+        lookup.lookupContext("two", context, endpoint, "local-test", true);
+        QTRY_COMPARE(lookup.state(), QString("failed"));
+        QCOMPARE(requests, 5);
+        lookup.lookupContext("One", context, endpoint, "local-test", true);
+        QCOMPARE(lookup.state(), QString("complete"));
+        truncate = false;
+        lookup.lookupContext("two", context, endpoint, "local-test", true);
+        QTRY_COMPARE(lookup.state(), QString("complete"));
+        QCOMPARE(requests, 6);
+        const auto retryContext = QJsonDocument::fromJson(submitted.last().value("messages").toArray().last().toObject().value("content").toString().toUtf8()).object();
+        QCOMPARE(retryContext.value("words").toArray(), QJsonArray{"two"});
+        lookup.cancel();
     }
+
     void appearancePreviewsCanBeCancelledOrApplied() {
         QTemporaryDir directory;
         SubtitleAppearance style(directory.path());

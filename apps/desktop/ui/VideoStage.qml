@@ -234,6 +234,7 @@ Rectangle {
     Rectangle {
         id: wordCard
         property bool detailsExpanded: false
+        property string displayedWord: ""
         readonly property bool hasDetails: stage.session.study.words.formNote.length > 0
             || stage.session.study.words.contextNote.length > 0
             || stage.session.study.words.otherSenses.length > 0
@@ -241,8 +242,9 @@ Rectangle {
         Connections {
             target: stage.session.study.words
             function onChanged() {
-                if (stage.session.study.words.state !== "complete")
+                if (wordCard.displayedWord !== stage.session.study.words.word || stage.session.study.words.state !== "complete")
                     wordCard.detailsExpanded = false;
+                wordCard.displayedWord = stage.session.study.words.word;
             }
         }
         objectName: "wordMeaningCard"
@@ -318,16 +320,34 @@ Rectangle {
                 ActionButton {
                     objectName: "wordDetailsButton"
                     text: wordCard.detailsExpanded ? "Less" : "Details"
-                    visible: wordCard.hasDetails
+                    visible: stage.session.study.words.state === "complete"
                     checkable: true
                     checked: wordCard.detailsExpanded
                     Accessible.name: wordCard.detailsExpanded ? "Hide word details" : "Show word details"
-                    onClicked: wordCard.detailsExpanded = !wordCard.detailsExpanded
+                    onClicked: {
+                        wordCard.detailsExpanded = !wordCard.detailsExpanded;
+                        if (wordCard.detailsExpanded) stage.session.study.words.loadDetails();
+                    }
                 }
                 ColumnLayout {
                     visible: wordCard.detailsExpanded
                     Layout.fillWidth: true
                     spacing: Theme.space2
+                    Label {
+                        text: stage.session.study.words.detailsState === "loading" ? "Loading details…"
+                            : stage.session.study.words.detailsState === "failed" ? stage.session.study.words.detailsMessage
+                            : !wordCard.hasDetails ? "No additional details for this word." : ""
+                        visible: text.length > 0
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: Theme.muted
+                        Layout.fillWidth: true
+                    }
+                    ActionButton {
+                        text: "Try again"
+                        visible: stage.session.study.words.detailsState === "failed"
+                        onClicked: stage.session.study.words.loadDetails()
+                    }
                     Label {
                         objectName: "wordFormNote"
                         font.pixelSize: Theme.caption

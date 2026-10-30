@@ -68,7 +68,19 @@ public:
                 ++requests;
                 const auto request = QJsonDocument::fromJson(bytes->mid(boundary + 4, length)).object();
                 QByteArray answer;
-                if (!request.value("stream").toBool()) {
+                const auto data = QJsonDocument::fromJson(request.value("messages").toArray().last().toObject().value("content").toString().toUtf8()).object();
+                if (data.value("words").isArray()) {
+                    ++wordRequests;
+                    sentContext = data;
+                    const auto details = QJsonDocument::fromJson(wordCardResponse.toUtf8()).object();
+                    QJsonArray entries;
+                    for (const auto word : data.value("words").toArray())
+                        entries.append(QJsonObject{{"word", word}, {"meaning", details.value("meaning")}, {"partOfSpeech", details.value("partOfSpeech")}});
+                    const auto content = QString::fromUtf8(QJsonDocument(QJsonObject{{"entries", entries}}).toJson(QJsonDocument::Compact));
+                    answer = "data: " + QJsonDocument(QJsonObject{{"choices", QJsonArray{QJsonObject{
+                        {"delta", QJsonObject{{"content", content}}}, {"finish_reason", "stop"}}}}}).toJson(QJsonDocument::Compact)
+                        + "\n\ndata: [DONE]\n\n";
+                } else if (!request.value("stream").toBool()) {
                     ++wordRequests;
                     sentContext = QJsonDocument::fromJson(request.value("messages")
                                                               .toArray()
@@ -1437,7 +1449,7 @@ private slots:
         QVERIFY(card->height() < window->height());
         QVERIFY(!visualItem(card, "wordOtherSenses")->isVisible());
         click("wordDetailsButton");
-        QVERIFY(visualItem(card, "wordOtherSenses")->isVisible());
+        QTRY_VERIFY(visualItem(card, "wordOtherSenses")->isVisible());
         QVERIFY(!visualItem(card, "wordOtherUses")->isVisible());
         auto *explainButton = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
         QVERIFY(explainButton);
@@ -1447,8 +1459,8 @@ private slots:
         QTRY_COMPARE(study->explanation()->state(), QString("complete"));
         QCOMPARE(study->explanation()->subject(), cue);
         QCOMPARE(study->words()->state(), QString("idle"));
-        QCOMPARE(requests, 2);
-        QCOMPARE(wordRequests, 1);
+        QCOMPARE(requests, 3);
+        QCOMPARE(wordRequests, 2);
         session->closeDefinition();
         // Opening an explanation changes the picture width. Wait for the
         // sidebar transition, then locate the word in its current layout.
@@ -1459,6 +1471,9 @@ private slots:
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QCOMPARE(requests, 3);
+        QCOMPARE(wordRequests, 2);
+        session->lookupWordAt(cue, cue.indexOf("televizyona"));
+        QCOMPARE(study->words()->state(), QString("complete"));
         QCOMPARE(wordRequests, 2);
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         if (!artifacts.isEmpty())
@@ -1524,16 +1539,22 @@ private slots:
             QTest::qWait(100);
             QVERIFY(window->grabWindow().save(artifacts + "/word-related-use.png"));
         }
-        // A later card with no extra distinctions must remove all optional sections.
+        // A different scene has its own cache; details remain opt-in even when empty.
         server.wordCardResponse = R"({"lemma":"uzak","partOfSpeech":"adverb","meaning":"from a distance","explanation":"","formNote":"","otherSenses":[],"otherUses":[]})";
         session->closeWordCard(false);
-        session->lookupWordAt(cue, cue.indexOf("uzaktan"));
+        const QString nextCue = "Ben uzaktan baktım.";
+        session->replaceCues({{0, 7200000, nextCue, {}}});
+        session->lookupWordAt(nextCue, nextCue.indexOf("uzaktan"));
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QVERIFY(!senses->isVisible());
         QVERIFY(!uses->isVisible());
         QVERIFY(!form->isVisible());
-        QVERIFY(!details->isVisible());
+        QVERIFY(details->isVisible());
         QVERIFY(!card->property("detailsExpanded").toBool());
+        QVERIFY(QMetaObject::invokeMethod(details, "clicked"));
+        QTRY_COMPARE(study->words()->detailsState(), QString("complete"));
+        QVERIFY(!uses->isVisible());
+        QVERIFY(!form->isVisible());
         session->closeWordCard(false);
     }
 
