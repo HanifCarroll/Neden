@@ -6,6 +6,7 @@ import type { Env } from "./environment";
 export function providerBody(request: StudyRequest) {
   const wordLine = request.operation === "word" && request.wordFormat === "line";
   const aligned = request.operation === "explain" && request.explanationFormat === "aligned";
+  const {selection, ...surroundingContext} = request.operation === "translate" ? {} : request.context;
   const jsonResponse = request.operation === "word" || request.operation === "translate" || aligned;
   const streaming = wordLine || request.operation === "explain" || request.operation === "followup";
   const messages: { role: string; content: string }[] = [
@@ -25,7 +26,7 @@ export function providerBody(request: StudyRequest) {
           ? request
           : request.operation === "word"
             ? { ...request.context, word: request.word, ...(wordLine ? {words: request.words} : {}) }
-            : request.context,
+            : aligned ? {selection, context: surroundingContext} : request.context,
       ),
     },
   ];

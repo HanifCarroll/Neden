@@ -13,8 +13,23 @@ private slots:
             Conversation chat;
             chat.begin(context);
             const auto sent = QJsonDocument::fromJson(chat.messages()[1].toObject()["content"].toString().toUtf8());
-            QCOMPARE(sent.object(), context);
+            QCOMPARE(sent.object().value("selection"), context.value("selection"));
+            auto evidence = context;
+            evidence.remove("selection");
+            QCOMPARE(sent.object().value("context").toObject(), evidence);
         }
+    }
+    void partialSelectionIsSeparatedFromTheFullCue() {
+        Conversation chat;
+        const QString selection = "manyak mısın be adam dedi";
+        const QString fullCue = "Biraz delirdin mi sen acaba, salak mısın sen dedi, manyak mısın be adam dedi.";
+        chat.begin({{"selection", selection}, {"sourceCue", fullCue}, {"sourceLanguage", "Turkish"}, {"explanationLanguage", "English"}});
+        const auto sent = QJsonDocument::fromJson(chat.messages()[1].toObject()["content"].toString().toUtf8()).object();
+        QCOMPARE(sent.value("selection").toString(), selection);
+        QCOMPARE(sent.value("context").toObject().value("sourceCue").toString(), fullCue);
+        QVERIFY(!sent.value("context").toObject().contains("selection"));
+        QCOMPARE(chat.hostedRequest().value("context").toObject().value("selection").toString(), selection);
+        QVERIFY(chat.messages()[0].toObject()["content"].toString().contains("selection defines the complete scope"));
     }
     void followUpsKeepFrozenContextAndCompletedHistory() {
         Conversation chat;

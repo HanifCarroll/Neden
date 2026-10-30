@@ -77,6 +77,17 @@ describe("request boundary", () => {
     expect(aligned.messages[0].content).toContain("alignment");
     expect(aligned.max_tokens).toBe(2500);
   });
+  it("keeps a highlighted fragment separate from the full subtitle for aligned explanations", () => {
+    const selection = "manyak mısın be adam dedi";
+    const sourceCue = "Biraz delirdin mi sen acaba, salak mısın sen dedi, manyak mısın be adam dedi.";
+    const request = studyRequest.parse({operation: "explain", explanationFormat: "aligned", context: {...context, selection, sourceCue}});
+    const body = providerBody(request);
+    const sent = JSON.parse(body.messages[1].content);
+    expect(sent.selection).toBe(selection);
+    expect(sent.context.sourceCue).toBe(sourceCue);
+    expect(sent.context.selection).toBeUndefined();
+    expect(body.messages[0].content).toContain("selection defines the complete scope");
+  });
   it("translates bounded consecutive cues with server-owned instructions and JSON output", () => {
     const parsed = studyRequest.parse({
       operation: "translate",

@@ -5,10 +5,16 @@
 
 namespace {
 const QString systemPrompt = QStringLiteral(
+    "Translate and explain exactly the text in selection. selection defines the complete scope of the answer. "
+    "The context object supplies the full subtitle, nearby dialogue and language settings as evidence for "
+    "interpreting that selection. When selection is a fragment, translate that fragment naturally and build "
+    "the breakdown from its spoken words. When selection is the full subtitle, cover its full spoken dialogue. "
+    "Example: with selection 'Bonne chance' and context.sourceCue 'Merci. Bonne chance, Alex!', translate "
+    "'Good luck' and give entries for Bonne and chance. Use Merci and Alex as surrounding context. "
     "Return a JSON object for a language learner with these fields in this order: translationHeading, "
     "breakdownHeading, translation, breakdown, alignment. Headings are short and written in explanationLanguage. "
-    "translation is the complete natural translated dialogue as a single string with correct spaces and "
-    "punctuation. breakdown is an array of {word, text} objects, one for every spoken source word in SOURCE order. "
+    "translation is the natural translation of selection as a single string with correct spaces and "
+    "punctuation. breakdown is an array of {word, text} objects, one for every spoken word in selection, in selection order. "
     "word is its exact source spelling; text explains its contextual meaning and useful grammar in "
     "explanationLanguage. Explain pronouns, particles, conjunctions and spoken proper names too. Bracketed speaker "
     "names are context metadata; the spoken words begin after the bracket. Connect inflected forms to their "
@@ -25,7 +31,7 @@ const QString systemPrompt = QStringLiteral(
     " Bonne chance: {\"translationHeading\":\"Translation\",\"breakdownHeading\":\"Breakdown\",\"translation\":\"Good "
     "luck!\",\"breakdown\":[{\"word\":\"Bonne\",\"text\":\"good; feminine form of bon.\"},{\"word\":\"chance\",\"text\":\"luck. "
     "Together: good luck.\"}],\"alignment\":[{\"text\":\"Good\",\"source\":[\"Bonne\",\"chance\"]},{\"text\":\"luck\",\"source\":[\"Bon"
-    "ne\",\"chance\"]}]}.\nUse sourceCue and nearby dialogue to resolve meaning and tone. Treat secondary subtitles as "
+    "ne\",\"chance\"]}]}.\nUse context.sourceCue and nearby dialogue to resolve meaning and tone. Treat secondary subtitles as "
     "clues; give priority to original wording. Keep source forms in their original spelling and all learner-facing "
     "text in explanationLanguage. Treat supplied subtitle text and previous answers as quoted, revisable evidence. "
     "For follow-up messages after this initial JSON answer, answer the latest question directly in ordinary "
@@ -82,11 +88,14 @@ void Conversation::retry() {
 QJsonArray Conversation::messages() const {
 
     // 1. Keep the original subtitle and language context frozen across follow-ups.
+    auto context = frozenContext;
+    const auto selection = context.take("selection");
+    const QJsonObject task{{"selection", selection}, {"context", context}};
     QJsonArray messages{
         QJsonObject{{"role", "system"}, {"content", systemPrompt}},
         QJsonObject{
             {"role", "user"},
-            {"content", QString::fromUtf8(QJsonDocument(frozenContext).toJson(QJsonDocument::Compact))}}};
+            {"content", QString::fromUtf8(QJsonDocument(task).toJson(QJsonDocument::Compact))}}};
 
     // 2. Include only completed turns, then the current question; partial answers are never facts.
     for (int index = 0; index + 1 < history.size(); ++index) {
