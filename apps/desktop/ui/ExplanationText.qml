@@ -5,10 +5,19 @@ import Neden
 
 TextArea {
     id: answer
+    property var seekKeyHandler: null
     property string markdown: ""
     property bool scrolling: false
     property string activeReference: ""
     readonly property string breakdownText: ExplanationFormat.breakdown(markdown, activeReference)
+    Keys.onShortcutOverride: event => {
+        if (answer.seekKeyHandler && answer.seekKeyHandler(event, false))
+            event.accepted = true;
+    }
+    Keys.onPressed: event => {
+        if (answer.seekKeyHandler && answer.seekKeyHandler(event, true))
+            event.accepted = true;
+    }
     readOnly: true
     hoverEnabled: true
     selectByMouse: true

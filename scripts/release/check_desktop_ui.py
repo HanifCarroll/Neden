@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 CHECKS = [
+    "seekShortcutsSurviveSubtitleAndMouseControlFocus",
     "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
     "subtitleToolsRequireExplicitApply",
     "helpDialogsKeepShortcutsIsolated",

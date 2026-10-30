@@ -10,6 +10,7 @@ Item {
     property int pixelSize: 28
     property bool selectable: true
     property color textColor: appearance.textColor
+    property var seekKeyHandler: null
     property alias editor: textEditor
     signal selectionChanged(string selection)
     signal selectionCommitted
@@ -163,6 +164,14 @@ Item {
                 if (!active && textEditor.selectedText.length)
                     Qt.callLater(line.selectionCommitted);
             }
+        }
+        Keys.onShortcutOverride: event => {
+            if (line.seekKeyHandler && line.seekKeyHandler(event, false))
+                event.accepted = true;
+        }
+        Keys.onPressed: event => {
+            if (line.seekKeyHandler && line.seekKeyHandler(event, true))
+                event.accepted = true;
         }
         Keys.onReleased: event => {
             if (event.key === Qt.Key_Shift && textEditor.selectedText.length)

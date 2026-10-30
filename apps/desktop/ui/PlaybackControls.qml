@@ -71,6 +71,7 @@ Rectangle {
         }
         ControlSlider {
             id: timeline
+            focusPolicy: Qt.TabFocus
             objectName: "timelineSlider"
             Layout.fillWidth: true
             Layout.minimumWidth: 80
@@ -153,6 +154,7 @@ Rectangle {
         }
         ControlSlider {
             id: volume
+            focusPolicy: Qt.TabFocus
             visible: !controls.compact
             objectName: "volumeSlider"
             Layout.preferredWidth: Math.min(140, controls.width * 0.1)
@@ -174,6 +176,7 @@ Rectangle {
         }
         ChoiceBox {
             id: speed
+            focusPolicy: Qt.TabFocus
             objectName: "speedChoice"
             model: ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×", "1.75×", "2.0×"]
             displayText: controls.session.playbackSpeed.toFixed(2).replace(/0$/, "") + "×"

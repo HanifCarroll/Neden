@@ -25,6 +25,7 @@ public:
     bool recording() const { return !recordingId.isEmpty(); }
     QString recordingLabel() const;
     QString candidateLabel() const;
+    Q_INVOKABLE bool matches(const QString &id, int key, int modifiers) const;
     Q_INVOKABLE bool assign(const QString &id, const QString &sequence);
     Q_INVOKABLE bool reset(const QString &id);
     Q_INVOKABLE bool resetAll();

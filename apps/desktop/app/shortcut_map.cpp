@@ -80,6 +80,16 @@ QVariantMap ShortcutMap::bindings() const {
         values.insert(command.id, overrides.value(command.id, command.shortcut));
     return values;
 }
+bool ShortcutMap::matches(const QString &id, int key, int modifiers) const {
+    const auto sequence = bindings().value(id).toString();
+    if (sequence.isEmpty())
+        return false;
+    const auto keys = Qt::KeyboardModifiers(modifiers) &
+                      (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    return QKeySequence(sequence, QKeySequence::PortableText) ==
+           QKeySequence(QKeyCombination(keys, static_cast<Qt::Key>(key)));
+}
+
 QVariantList ShortcutMap::commands() const {
     QVariantList rows;
     for (const auto &command : ::commands) {

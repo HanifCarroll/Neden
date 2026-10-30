@@ -230,14 +230,15 @@ ApplicationWindow {
         onActivated: root.escapeLayer()
     }
     PlayerShortcuts {
+        id: playerShortcuts
         session: root.session
-        bindings: root.keymap.bindings
+        keymap: root.keymap
         onExplainSubtitleRequested: root.session.explainCue(root.session.subtitle.length === 0)
         onInstantFullscreenRequested: root.fullscreenController.toggleInstant()
         available: !root.shortcutsBlocked && !root.showRecent
         textEntryActive: root.textEntryActive
         controlKeysActive: playbackControls.editing
-        subtitleSelectionActive: stage.editing
+        subtitleDragActive: stage.selecting
     }
     DropArea {
         anchors.fill: parent
@@ -305,6 +306,7 @@ ApplicationWindow {
                 anchors.bottomMargin: root.fullscreenController.active ? 0 : playbackControls.height
                 VideoStage {
                     id: stage
+                    seekKeyHandler: playerShortcuts.handleSeekKey
                     anchors.fill: parent
                     anchors.rightMargin: inspector.reservedWidth
                     session: root.session
@@ -392,6 +394,7 @@ ApplicationWindow {
                                 objectName: "explanationLoader"
                                 active: root.inspectorTab === 1
                                 sourceComponent: ExplanationPane {
+                                    seekKeyHandler: playerShortcuts.handleSeekKey
                                     session: root.session
                                     onFlashcardsRequested: root.openStudy(1)
                                 }

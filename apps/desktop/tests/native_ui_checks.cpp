@@ -1,4 +1,5 @@
 #include "embedded_subtitles.h"
+#include "shortcut_map.h"
 #include "playback_environment.h"
 #include "subtitle_appearance.h"
 #include "playback_pointer.h"
@@ -322,6 +323,7 @@ private slots:
 
     void init() {
         const QStringList headlessChecks{
+            "seekShortcutsSurviveSubtitleAndMouseControlFocus",
             "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
             "subtitleToolsRequireExplicitApply",
                                          "helpDialogsKeepShortcutsIsolated",
@@ -448,6 +450,74 @@ private slots:
         QTRY_VERIFY(!settings->property("opened").toBool());
         QTest::keyClick(window, Qt::Key_L, Qt::ControlModifier);
         QVERIFY(window->property("showRecent").toBool());
+    }
+
+    void seekShortcutsSurviveSubtitleAndMouseControlFocus() {
+        window->setProperty("showRecent", false);
+        session->replaceCues({{0, 7200000, "A simple subtitle.", {}}});
+        auto *forward = window->findChild<QObject *>("seekForwardShortcut");
+        auto *backward = window->findChild<QObject *>("seekBackwardShortcut");
+        QVERIFY(forward && backward);
+        QSignalSpy forwardActivated(forward, SIGNAL(activated()));
+        QSignalSpy backwardActivated(backward, SIGNAL(activated()));
+        auto *subtitle = visualItem(window->contentItem(), "primarySubtitleText");
+        QVERIFY(subtitle);
+        auto *editor = subtitle->property("editor").value<QQuickItem *>();
+        QVERIFY(editor);
+        editor->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(forwardActivated.count(), 1);
+        QTest::keyClick(window, Qt::Key_Left);
+        QCOMPARE(backwardActivated.count(), 1);
+        QVERIFY(QMetaObject::invokeMethod(editor, "selectAll"));
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(forwardActivated.count(), 2);
+
+        // Mouse adjustments leave playback shortcuts available; Tab still accesses controls.
+        window->contentItem()->forceActiveFocus();
+        click("volumeSlider");
+        auto *volume = visualItem(window->contentItem(), "volumeSlider");
+        QVERIFY(volume && !volume->hasActiveFocus());
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(forwardActivated.count(), 3);
+        volume->forceActiveFocus(Qt::TabFocusReason);
+        const double previousVolume = session->volumeLevel();
+        QTest::keyClick(window, Qt::Key_Left);
+        QCOMPARE(backwardActivated.count(), 1);
+        QVERIFY(session->volumeLevel() < previousVolume);
+
+        click("transcriptSearchButton");
+        auto *search = visualItem(window->contentItem(), "transcriptSearchField");
+        QVERIFY(search && search->hasActiveFocus());
+        search->setProperty("text", "search");
+        search->setProperty("cursorPosition", 3);
+        QTest::keyClick(window, Qt::Key_Left);
+        QCOMPARE(search->property("cursorPosition").toInt(), 2);
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(search->property("cursorPosition").toInt(), 3);
+        QCOMPARE(forwardActivated.count(), 3);
+        QCOMPARE(backwardActivated.count(), 1);
+        click("transcriptSearchButton");
+
+        // Custom bindings use the same routing through read-only text.
+        editor->forceActiveFocus();
+        auto *keymap = window->property("keymap").value<ShortcutMap *>();
+        QVERIFY(keymap);
+        QVERIFY(!keymap->matches("seekForward", Qt::Key_Right, Qt::ShiftModifier));
+        QVERIFY(keymap->assign("seekForward", "J"));
+        QTest::keyClick(window, Qt::Key_J);
+        QCOMPARE(forwardActivated.count(), 4);
+        QTest::keyClick(window, Qt::Key_Right);
+        QCOMPARE(forwardActivated.count(), 4);
+        QVERIFY(keymap->reset("seekForward"));
+
+        StudyResponseServer server;
+        prepareCompletedExplanation(server);
+        auto *answer = visualItem(window->contentItem(), "explanationAnswerText");
+        QVERIFY(answer);
+        answer->forceActiveFocus();
+        QTest::keyClick(window, Qt::Key_Left);
+        QCOMPARE(backwardActivated.count(), 2);
     }
 
     void speedSelectionPreservesPlayerShortcutsAndTextInput() {

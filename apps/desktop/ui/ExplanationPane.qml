@@ -6,6 +6,7 @@ import Neden
 
 Item {
     id: pane
+    property var seekKeyHandler: null
     required property LearningSession session
     readonly property ExplanationSession explanation: session.study.explanation
     readonly property bool busy: explanation.state === "loading" || explanation.state === "streaming"
@@ -167,6 +168,7 @@ Item {
                         Layout.fillWidth: true
                     }
                     ExplanationText {
+                        seekKeyHandler: pane.seekKeyHandler
                         objectName: "explanationAnswerText"
                         Layout.preferredHeight: contentHeight
                         Layout.minimumHeight: contentHeight

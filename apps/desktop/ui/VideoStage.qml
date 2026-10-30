@@ -9,6 +9,7 @@ Rectangle {
     required property LearningSession session
     required property MpvPlayback playback
     required property SubtitleAppearance appearance
+    property var seekKeyHandler: null
     property bool capturing: false
     readonly property bool wordCardOpen: wordCard.visible
     property real bottomOverlayHeight: 0
@@ -34,7 +35,6 @@ Rectangle {
     signal videoClicked
     signal fullscreenRequested
     signal moveWindowRequested
-    readonly property bool editing: subtitle.editor.activeFocus || translation.editor.activeFocus
     color: "#080b0c"
     radius: 0
     clip: true
@@ -115,6 +115,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: stage.session.subtitle
                 appearance: stage.appearance
+                seekKeyHandler: stage.seekKeyHandler
                 wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.primarySize
                 selectable: stage.appearance.selectable
@@ -129,6 +130,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: stage.session.translation
                 appearance: stage.appearance
+                seekKeyHandler: stage.seekKeyHandler
                 wordLookup: stage.session.study.words
                 pixelSize: stage.appearance.secondarySize
                 selectable: stage.appearance.selectable
