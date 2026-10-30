@@ -2,6 +2,7 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { studyRequest } from "../src/contracts";
+import { study } from "../src/study";
 import { callProvider, providerBody } from "../src/provider";
 import type { Env } from "../src/environment";
 const bindings = env as unknown as Env;
@@ -48,6 +49,23 @@ describe("request boundary", () => {
     for (const word of ["'word'", "-word", "word-", "two words", "word--word"]) {
       expect(studyRequest.safeParse({ operation: "word", word, context }).success).toBe(false);
     }
+  });
+  it("streams bounded line lookups and leaves legacy details unchanged", () => {
+    const request = {operation: "word", word: "Hola", wordFormat: "line", words: ["Hola", "amigo"], context: {...context, clickedSubtitle: "Hola amigo"}};
+    const body = providerBody(studyRequest.parse(request));
+    expect(body.stream).toBe(true);
+    expect(body.stream_options).toEqual({include_usage: true});
+    expect(body.thinking).toEqual({type: "disabled"});
+    expect(body.max_tokens).toBe(6000);
+    expect(body.response_format).toEqual({type: "json_object"});
+    expect(JSON.parse(body.messages[1].content).words).toEqual(request.words);
+    const legacy = providerBody(studyRequest.parse({operation: "word", word: "Hola", context: request.context}));
+    expect(legacy.stream).toBe(false);
+    expect(legacy.max_tokens).toBe(900);
+    for (const words of [[], ["amigo", "Hola"], ["Hola", "Hola"], ["Hola", "absent"], Array(65).fill("Hola")])
+      expect(studyRequest.safeParse({...request, words}).success).toBe(false);
+    expect(studyRequest.safeParse({...request, words: undefined}).success).toBe(false);
+    expect(studyRequest.safeParse({...request, wordFormat: undefined}).success).toBe(false);
   });
   it("opts new clients into aligned explanations while preserving legacy Markdown", () => {
     const legacy = providerBody(studyRequest.parse({operation: "explain", context: {...context, selection: "Bonne chance"}}));
@@ -262,5 +280,30 @@ describe("hosted provider transport", () => {
     );
     expect(response.ok).toBe(false);
     expect(mocked).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("line word streaming relay", () => {
+  afterEach(() => vi.restoreAllMocks());
+  it("returns SSE and records the streamed token usage once", async () => {
+    const finish = vi.fn().mockResolvedValue({});
+    const usage = {reserve: vi.fn().mockResolvedValue({ok: true}), finish, globalBudget: vi.fn().mockResolvedValue(true)};
+    const testEnv = {...bindings, AI_ENABLED: "true", DEEPSEEK_API_KEY: "test-key",
+      ACCOUNT_USAGE: {idFromName: (name: string) => name, get: () => usage}} as unknown as Env;
+    const content = JSON.stringify({entries: [{word: "Hola", partOfSpeech: "interjection", meaning: "hello"}]});
+    const event = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+    const wire = event({choices: [{delta: {content}, finish_reason: "stop"}]})
+      + event({choices: [], usage: {prompt_tokens: 123, completion_tokens: 45}}) + "data: [DONE]\n\n";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(wire));
+    const pending: Promise<unknown>[] = [];
+    const response = await study(new Request("https://api.example.test/v1/study", {
+      method: "POST", headers: {"Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID()},
+      body: JSON.stringify({operation: "word", word: "Hola", wordFormat: "line", words: ["Hola"], context: {...context, clickedSubtitle: "Hola"}}),
+    }), testEnv, "account-test", {waitUntil: promise => {pending.push(promise);}});
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(await response.text()).toBe(wire);
+    await Promise.all(pending);
+    expect(finish).toHaveBeenCalledOnce();
+    expect(finish).toHaveBeenCalledWith(expect.any(String), 123, 45);
   });
 });

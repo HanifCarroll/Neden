@@ -25,6 +25,8 @@ export const studyRequest = z
   .discriminatedUnion("operation", [
     z.object({
       operation: z.literal("word"),
+      wordFormat: z.literal("line").optional(),
+      words: z.array(z.string().min(1).max(100).regex(/^[\p{L}\p{M}\p{N}]+(?:['’\u200C\u200D-][\p{L}\p{M}\p{N}]+)*$/u)).min(1).max(64).optional(),
       word: z
         .string()
         .min(1)
@@ -85,6 +87,13 @@ export const studyRequest = z
         code: "custom",
         message: "Select subtitle text first.",
       });
+    if (value.operation === "word" && value.wordFormat === "line") {
+      if (!value.words || value.words[0] !== value.word || new Set(value.words).size !== value.words.length ||
+          value.words.some(word => !value.context.clickedSubtitle?.includes(word)))
+        check.addIssue({ code: "custom", message: "Choose distinct words from the subtitle, with the clicked word first." });
+    } else if (value.operation === "word" && value.words) {
+      check.addIssue({ code: "custom", message: "A word list requires line lookup." });
+    }
     if (JSON.stringify(value).length > 32000)
       check.addIssue({
         code: "custom",

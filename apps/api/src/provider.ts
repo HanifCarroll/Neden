@@ -1,12 +1,13 @@
 import type { StudyRequest } from "./contracts";
 import { ServiceError } from "./contracts";
-import { wordPrompt, explanationPrompt, legacyExplanationPrompt, translationPrompt } from "./prompts";
+import { wordLinePrompt, wordPrompt, explanationPrompt, legacyExplanationPrompt, translationPrompt } from "./prompts";
 import type { Env } from "./environment";
 
 export function providerBody(request: StudyRequest) {
+  const wordLine = request.operation === "word" && request.wordFormat === "line";
   const aligned = request.operation === "explain" && request.explanationFormat === "aligned";
   const jsonResponse = request.operation === "word" || request.operation === "translate" || aligned;
-  const streaming = request.operation === "explain" || request.operation === "followup";
+  const streaming = wordLine || request.operation === "explain" || request.operation === "followup";
   const messages: { role: string; content: string }[] = [
     {
       role: "system",
@@ -14,7 +15,7 @@ export function providerBody(request: StudyRequest) {
         request.operation === "translate"
           ? translationPrompt
           : request.operation === "word"
-            ? wordPrompt
+            ? wordLine ? wordLinePrompt : wordPrompt
             : aligned ? explanationPrompt : legacyExplanationPrompt,
     },
     {
@@ -23,7 +24,7 @@ export function providerBody(request: StudyRequest) {
         request.operation === "translate"
           ? request
           : request.operation === "word"
-            ? { ...request.context, word: request.word }
+            ? { ...request.context, word: request.word, ...(wordLine ? {words: request.words} : {}) }
             : request.context,
       ),
     },
@@ -44,7 +45,7 @@ export function providerBody(request: StudyRequest) {
       request.operation === "translate"
         ? 4096
         : request.operation === "word"
-          ? 900
+          ? wordLine ? 6000 : 900
           : aligned ? 2500 : 1600,
     stream: streaming,
     ...(jsonResponse ? { response_format: { type: "json_object" } } : {}),
