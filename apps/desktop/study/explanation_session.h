@@ -1,6 +1,7 @@
 #pragma once
 #include "conversation.h"
 #include "explanation_response.h"
+#include "explanation_stream.h"
 #include "study_target.h"
 #include <optional>
 #include "app_settings.h"
@@ -53,10 +54,11 @@ private:
     QString alternateEndpoint;
     QPointer<QNetworkReply> aiReply;
     QByteArray pendingEvents;
+    ExplanationStream stream;
     QString answerText, subjectText, subjectContext, requestState = "idle",
                                                      statusText = "Select a subtitle to study.";
     Conversation conversation;
     std::optional<StudyTarget> activeTarget;
-    bool fallbackWaiting = false, sawDone = false, truncated = false;
+    bool fallbackWaiting = false;
     quint64 requestGeneration = 0;
 };

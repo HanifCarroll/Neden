@@ -1,0 +1,48 @@
+name: Subtitle fuzzing
+on:
+  push:
+    branches: [main]
+    paths: ['apps/desktop/**', 'scripts/fuzz_subtitles.sh', '.github/workflows/fuzz.yml']
+  pull_request:
+    paths: ['apps/desktop/**', 'scripts/fuzz_subtitles.sh', '.github/workflows/fuzz.yml']
+  schedule:
+    - cron: '31 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  subtitles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEDEN_FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '600' || '30' }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Install Clang and portable Qt dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-rt-18-dev cmake qt6-base-dev qt6-declarative-dev
+      - name: Replay corpus and fuzz with ASan and UBSan
+        shell: bash
+        run: |
+          set -o pipefail
+          if [[ "${{ github.event_name }}" == schedule || "${{ github.event_name }}" == workflow_dispatch ]]; then
+            export NEDEN_FUZZ_SEED=$(( ${{ github.run_id }} % 2147483647 ))
+          fi
+          sh scripts/fuzz_subtitles.sh 2>&1 | tee fuzz.log
+      - name: Preserve reproductions and generated corpus
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: subtitle-fuzz-${{ github.run_id }}
+          path: |
+            fuzz.log
+            build/subtitle-fuzz/artifacts/
+            build/subtitle-fuzz/corpus/
+          retention-days: 14

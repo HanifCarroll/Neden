@@ -96,8 +96,7 @@ void ExplanationSession::launchConversation(bool fallback) {
 
         // 2. Bind chunks, completion and cancellation to this exact network reply.
         pendingEvents.clear();
-        sawDone = false;
-        truncated = false;
+        stream = {};
         requestState = "loading";
         statusText = "Requesting explanation…";
         auto *reply = aiClient.post(request);
@@ -116,7 +115,7 @@ void ExplanationSession::launchConversation(bool fallback) {
             if (reply->error() != QNetworkReply::NoError || code != 200) {
                 requestState = answerText.isEmpty() ? "failed" : "incomplete";
                 statusText = hostedFailureMessage(reply, pendingEvents, networkFailureMessage(code, reply->error(), "Explanation failed"));
-            } else if (!sawDone || truncated || answerText.isEmpty() ||
+            } else if (!stream.complete() || answerText.isEmpty() ||
                        (conversation.turns().size() == 1 && !ExplanationResponse::isComplete(answerText))) {
                 requestState = "incomplete";
                 statusText = "The response ended before a complete answer arrived.";
@@ -159,45 +158,22 @@ void ExplanationSession::consumeEvents() {
     if (!aiReply)
         return;
 
-    // 1. Buffer complete SSE lines; UTF-8 sequences may cross network chunks.
-    pendingEvents += aiReply->readAll();
-    if (pendingEvents.size() + answerText.size() * 4 > maximumResponse) {
-        stop();
-        setMessage("The response exceeded the size limit; the answer is incomplete.");
+    const auto *replyAtStart = aiReply.data();
+    const auto generationAtStart = requestGeneration;
+    const auto bytes = aiReply->readAll();
+    if (aiReply->property("nedenHosted").toBool() &&
+        aiReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() >= 400) {
+        if (bytes.size() > maximumResponse - pendingEvents.size()) {
+            stop();
+            setMessage("The response exceeded the size limit; the answer is incomplete.");
+        } else {
+            pendingEvents += bytes; // Keep the bounded hosted error for the completion handler.
+        }
         return;
     }
 
-    if (aiReply->property("nedenHosted").toBool() &&
-        aiReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() >= 400)
-        return; // Keep the bounded JSON error for the completion handler.
-
-    // 2. Accept only the protocol's text deltas and explicit end marker.
-    while (pendingEvents.contains('\n')) {
-        const auto end = pendingEvents.indexOf('\n');
-        const auto line = pendingEvents.left(end).trimmed();
-        pendingEvents.remove(0, end + 1);
-        if (!line.startsWith("data:"))
-            continue;
-        const auto data = line.mid(5).trimmed();
-        if (data == "[DONE]") {
-            sawDone = true;
-            continue;
-        }
-        QJsonParseError error;
-        const auto document = QJsonDocument::fromJson(data, &error);
-        if (error.error != QJsonParseError::NoError || !document.isObject() ||
-            document.object().contains("error")) {
-            stop();
-            setMessage("The provider returned an invalid stream; any partial answer is incomplete.");
-            return;
-        }
-        const auto choices = document.object().value("choices").toArray();
-        if (choices.isEmpty())
-            continue;
-        const auto reason = choices.first().toObject().value("finish_reason").toString();
-        if (reason == "length" || reason == "content_filter")
-            truncated = true;
-        const auto text = choices.first().toObject().value("delta").toObject().value("content").toString();
+    // Complete lines are decoded identically regardless of the network's byte boundaries.
+    for (const auto &text : stream.append(bytes)) {
         try {
             conversation.append(text);
         } catch (const std::exception &error) {
@@ -210,6 +186,13 @@ void ExplanationSession::consumeEvents() {
             fallbackWaiting = false;
         requestState = "streaming";
         emit changed();
+        // A direct signal handler may stop or replace this request while deltas remain decoded.
+        if (aiReply != replyAtStart || requestGeneration != generationAtStart)
+            return;
+    }
+    if (!stream.error().isEmpty()) {
+        stop();
+        setMessage(stream.error());
     }
 }
 

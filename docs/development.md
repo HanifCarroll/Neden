@@ -34,6 +34,9 @@ Window/media, conversation, and request ownership reject stale callbacks. Stop, 
 
 ## Verification
 
+[Property and fuzz testing](desktop/GENERATED_TESTING.md) describes generated subtitle,
+streaming, session, and profile checks, reproducible seeds, and the isolated sanitizer fuzz target.
+
 The [root README](../README.md) lists desktop build/test commands and the plugin's `bun run release:check` gate. Pure logic and DOM/bridge checks use controlled mocks; streaming tests demonstrate incremental delivery and cancellation against controlled endpoints. Actual IINA is needed to establish Keychain behavior, subtitle coexistence/restoration, native close, fullscreen, focus, packaging, and the full selection/conversation/resume loop. Mocks do not establish native behavior. Record tested runtimes, observed results, and checks that could not run separately from portable verification.
 
 Generated artifacts, comparison results, alternate desktop implementations, and post drafts stay outside the tracked source tree. Local installation, source verification, public releases, artifact uploads, and live/billable API calls are distinct delivery steps; a local check does not establish a published release. [Release documentation](iina-plugin/RELEASE.md) and [the eval plan](iina-plugin/EVAL_PLAN.md) cover plugin distribution and language-quality evidence.

@@ -2,6 +2,7 @@
 #include <QRegularExpression>
 #include <algorithm>
 #include <stdexcept>
+#include <limits>
 
 QString subtitlePlainText(const QString &input) {
     // SRT presentation tags do not belong in selections, search, or model context.
@@ -60,13 +61,19 @@ QVector<Cue> parseSrt(const QString &input) {
         auto milliseconds = [](QString value) -> qint64 {
             value.replace(',', '.');
             const auto components = value.split(':');
-            const int minutes = components[components.size() - 2].toInt();
-            const double seconds = components.last().toDouble();
-            if (minutes > 59 || seconds >= 60)
+            bool minutesOk = false, secondsOk = false, fractionOk = false, hoursOk = true;
+            const int minutes = components[components.size() - 2].toInt(&minutesOk);
+            const auto secondParts = components.last().split('.');
+            const int seconds = secondParts.first().toInt(&secondsOk);
+            const int fraction = secondParts.last().toInt(&fractionOk);
+            if (!minutesOk || !secondsOk || !fractionOk || minutes > 59 || seconds >= 60)
                 throw std::runtime_error("Invalid timestamp component.");
 
-            const qint64 hours = components.size() == 3 ? components.first().toLongLong() : 0;
-            return (hours * 3600 + minutes * 60) * 1000 + qRound64(seconds * 1000);
+            const qint64 hours = components.size() == 3 ? components.first().toLongLong(&hoursOk) : 0;
+            const qint64 remainder = (minutes * 60 + seconds) * 1000 + fraction;
+            if (!hoursOk || hours < 0 || hours > (std::numeric_limits<qint64>::max() - remainder) / 3600000)
+                throw std::runtime_error("Subtitle timestamp is out of range.");
+            return hours * 3600000 + remainder;
         };
         Cue cue{milliseconds(match.captured(1)),
                 milliseconds(match.captured(2)),

@@ -32,7 +32,10 @@ QByteArray SubtitleDocument::serialize(const QVector<Cue> &cues) {
         QStringList lines;
         for (const auto &line : cue.text.split('\n'))
             if (!line.trimmed().isEmpty())
-                lines.append(line.trimmed());
+                // Cue text is already plain text. Escape it so importing the generated SRT
+                // cannot interpret literal tags or decode an entity a second time.
+                lines.append(
+                    QString(line.trimmed()).replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"));
         output += QString::number(++index) + '\n' + timestamp(cue.startMs) + " --> " + timestamp(cue.endMs) +
                   '\n' + lines.join('\n') + "\n\n";
     }
