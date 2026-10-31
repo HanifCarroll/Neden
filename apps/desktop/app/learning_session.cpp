@@ -616,6 +616,10 @@ void LearningSession::lookupWordAt(const QString &text, int offset, bool seconda
     studyInteraction.lookupWordAt(text, offset, secondary);
 }
 
+bool LearningSession::lookupCachedWordAt(const QString &text, int offset, bool secondary) {
+    return studyInteraction.lookupWordAt(text, offset, secondary, true);
+}
+
 void LearningSession::closeWordCard(bool resume) {
     studyInteraction.closeWordCard(resume);
 }

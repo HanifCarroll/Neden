@@ -42,6 +42,8 @@ public:
     QVariantList otherUses() const { return relatedUses; }
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
                        const QString &model, bool noKeyRequired = false);
+    bool hasCachedMeaning(const QString &word, const QJsonObject &context, const QString &endpoint,
+                          const QString &model, bool noKeyRequired) const;
     void cancel();
     Q_INVOKABLE void loadDetails();
     QString detailsState() const { return detailState; }
@@ -58,6 +60,8 @@ private:
         QMap<QString, QVariantMap> cards;
         QSet<QString> detailedWords;
     };
+    QString contextCacheKey(const QJsonObject &context, const QString &endpoint,
+                            const QString &model, bool noKeyRequired) const;
     void observe(QNetworkReply *reply);
     void consumeBatch();
     void showSelectedCard();

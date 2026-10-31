@@ -17,7 +17,7 @@ public:
     void explainSelection();
     void explainCue(bool secondary = false);
     bool followUp(const QString &question);
-    void lookupWordAt(const QString &text, int offset, bool secondary = false);
+    bool lookupWordAt(const QString &text, int offset, bool secondary = false, bool cachedOnly = false);
     void closeWordCard(bool resume = true);
     void retryWordLookup();
     void closeDefinition();

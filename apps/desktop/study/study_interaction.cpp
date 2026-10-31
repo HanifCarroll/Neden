@@ -14,8 +14,17 @@ StudyTarget StudyInteraction::capture(const QString &text, SubtitleRole role) co
 }
 void StudyInteraction::select(const QString &text, bool secondary) {
     const auto role = secondary ? SubtitleRole::Secondary : SubtitleRole::Primary;
-    if (text.trimmed().isEmpty() || (selectedText == text.trimmed() && role == selectedRole))
+    if (text.trimmed().isEmpty())
         return;
+    if (selectedText == text.trimmed() && role == selectedRole) {
+        // A cached single click can reopen a card before the second click
+        // selects the same word again. Keep the explanation, dismiss the card.
+        if (wordCardOpen) {
+            resumeAfterExplanation = resumeAfterWordCard;
+            closeWordCard(false);
+        }
+        return;
+    }
     const bool playing = !playback.paused();
     if (selectedText.isEmpty())
         resumeAfterExplanation = wordCardOpen ? resumeAfterWordCard : playing;
@@ -77,17 +86,21 @@ bool StudyInteraction::followUp(const QString &question) {
         playback.setPaused(true);
     return sent;
 }
-void StudyInteraction::lookupWordAt(const QString &text, int offset, bool secondary) {
+bool StudyInteraction::lookupWordAt(const QString &text, int offset, bool secondary, bool cachedOnly) {
     if (!studyServices ||
         studyServices->settings()->learning().wordProvider == LearningSettings::WordProvider::Off)
-        return;
+        return false;
     const auto word = WordLookup::wordAt(text, offset);
     if (word.isEmpty())
-        return;
+        return false;
     try {
         auto target = capture(word, secondary ? SubtitleRole::Secondary : SubtitleRole::Primary);
         if (target.sourceCue != text)
-            return; // A delayed gesture cannot attach to another cue.
+            return false; // A delayed gesture cannot attach to another cue.
+        const auto &settings = *studyServices->settings();
+        if (cachedOnly && !studyServices->words()->hasCachedMeaning(
+                word, target.json(), settings.endpoint(), settings.model(), settings.learning().noKeyRequired))
+            return false;
         const bool resume = wordCardOpen ? resumeAfterWordCard : !playback.paused();
         emit started();
         // WordLookup retains the in-flight batch when the cue context is unchanged.
@@ -95,12 +108,14 @@ void StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
         wordCardOpen = true;
         wordTarget = target;
         playback.setPaused(true);
-        const auto &settings = *studyServices->settings();
         studyServices->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
                                               settings.learning().noKeyRequired);
+        return true;
     } catch (const std::exception &exception) {
-        emit error(QString::fromUtf8(exception.what()));
+        if (!cachedOnly)
+            emit error(QString::fromUtf8(exception.what()));
     }
+    return false;
 }
 void StudyInteraction::closeWordCard(bool resume) {
     if (!wordCardOpen)

@@ -125,6 +125,25 @@ QVariantMap WordLookup::parseContextMeaning(const QByteArray &body) {
     return result;
 }
 
+QString WordLookup::contextCacheKey(const QJsonObject &context, const QString &endpoint,
+                                    const QString &model, bool noKeyRequired) const {
+    auto identity = context;
+    identity.remove("selection");
+    identity.remove("word");
+    identity.insert("endpoint", endpoint);
+    identity.insert("model", model);
+    identity.insert("noKeyRequired", noKeyRequired);
+    identity.insert("hosted", aiClient.usesHostedAccount());
+    return QString::fromLatin1(QCryptographicHash::hash(
+        QJsonDocument(identity).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+}
+
+bool WordLookup::hasCachedMeaning(const QString &word, const QJsonObject &context,
+                                  const QString &endpoint, const QString &model, bool noKeyRequired) const {
+    const auto *line = cache.object(contextCacheKey(context, endpoint, model, noKeyRequired));
+    return line && line->cards.contains(word);
+}
+
 void WordLookup::lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
                                const QString &model, bool noKeyRequired) {
     try {
@@ -133,15 +152,7 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
         const auto subtitle = context.value("clickedSubtitle").toString();
         if (subtitle.isEmpty() || !subtitle.contains(word) || subtitle.size() > 4000 || QJsonDocument(context).toJson().size() > 32000)
             throw std::runtime_error("This word needs a subtitle for context.");
-        auto identity = context;
-        identity.remove("selection");
-        identity.remove("word");
-        identity.insert("endpoint", endpoint);
-        identity.insert("model", model);
-        identity.insert("noKeyRequired", noKeyRequired);
-        identity.insert("hosted", aiClient.usesHostedAccount());
-        const auto key = QString::fromLatin1(QCryptographicHash::hash(
-            QJsonDocument(identity).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+        const auto key = contextCacheKey(context, endpoint, model, noKeyRequired);
         abortDetails();
         if (cacheKey != key) abortBatch();
         cacheKey = key;

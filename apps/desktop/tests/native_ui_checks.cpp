@@ -1497,6 +1497,9 @@ private slots:
         QCOMPARE(editor->cursor().shape(), Qt::IBeamCursor);
         QCOMPARE(editor->property("selectedText").toString(), QString());
         QCOMPARE(requests, 0); // Hover must never spend an API request.
+        QVERIFY(!session->lookupCachedWordAt(cue, cue.indexOf("dalmışım")));
+        QCOMPARE(study->words()->state(), QString("idle"));
+        QCOMPARE(requests, 0); // A cache miss must leave the normal click path untouched.
         QTest::mouseMove(window, subtitle->mapToScene(QPointF(2, subtitle->height() / 2)).toPoint());
         QTRY_VERIFY(!visualItem(subtitle, "subtitleWordHover"));
         QTest::mouseMove(window, point);
@@ -1542,8 +1545,13 @@ private slots:
         QTRY_COMPARE(study->words()->state(), QString("complete"));
         QCOMPARE(requests, 3);
         QCOMPARE(wordRequests, 2);
-        session->lookupWordAt(cue, cue.indexOf("televizyona"));
+        // Cached switches must finish before the 350ms minimum gesture delay.
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          wordPoint(subtitle, cue.indexOf("televizyona") + 2));
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->word(), QString("televizyona"), 150);
         QCOMPARE(study->words()->state(), QString("complete"));
+        QVERIFY(!session->lookupCachedWordAt("Another scene.", 2));
+        QCOMPARE(study->words()->word(), QString("televizyona"));
         QCOMPARE(wordRequests, 2);
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
         if (!artifacts.isEmpty())
@@ -1551,13 +1559,36 @@ private slots:
         click("closeWordCardButton");
         QTRY_COMPARE(study->words()->state(), QString("idle"));
         QVERIFY(session->paused());
-        // Double-click must produce a full explanation, without a second word-card charge.
+        // Even after the first click immediately opens a cached card, double-click
+        // selection must replace it with an explanation without another word charge.
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("complete"), 150);
         QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier, point);
         QTRY_COMPARE(study->explanation()->state(), QString("complete"));
         QTest::qWait(450);
         QCOMPARE(requests, 4);
         QCOMPARE(wordRequests, 2);
         QCOMPARE(study->explanation()->subject(), QString("dalmışım"));
+        // Repeating that gesture on an already-explained word dismisses the card too.
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("complete"), 150);
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("idle"), 150);
+        QCOMPARE(study->explanation()->subject(), QString("dalmışım"));
+        // Dragging after a cached lookup must still select a phrase and dismiss the card.
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          wordPoint(subtitle, cue.indexOf("televizyona") + 2));
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("complete"), 150);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier,
+                          wordPoint(subtitle, cue.indexOf("televizyona") + 1));
+        const auto dragEnd = wordPoint(subtitle, cue.indexOf("dalmışım") + 5);
+        QTest::mouseMove(window, dragEnd, 30);
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, dragEnd);
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
+        QVERIFY(study->explanation()->subject().contains("levizyona"));
+        QVERIFY(study->explanation()->subject().contains("dalm"));
+        QCOMPARE(study->words()->state(), QString("idle"));
+        QCOMPARE(wordRequests, 2);
         // A changed cue cancels a card, so it cannot explain a previous scene.
         session->lookupWordAt(cue, cue.indexOf("dalmışım"));
         session->replaceCues({{0, 7200000, "Başka bir sahne.", {}}});
