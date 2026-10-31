@@ -3,6 +3,7 @@
 #include "word_batch.h"
 #include <QCache>
 #include <QSet>
+#include <QTimer>
 #include <QNetworkReply>
 #include <QPointer>
 #include <QVariantMap>
@@ -41,9 +42,7 @@ public:
     QVariantList otherSenses() const { return alternativeSenses; }
     QVariantList otherUses() const { return relatedUses; }
     void lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
-                       const QString &model, bool noKeyRequired = false);
-    bool hasCachedMeaning(const QString &word, const QJsonObject &context, const QString &endpoint,
-                          const QString &model, bool noKeyRequired) const;
+                       const QString &model, bool noKeyRequired = false, int requestDelayMs = 0);
     void cancel();
     Q_INVOKABLE void loadDetails();
     QString detailsState() const { return detailState; }
@@ -73,6 +72,7 @@ private:
     QJsonObject selectedContext;
     bool providerNeedsNoKey = false;
     QString detailState = "idle", detailMessage;
+    QTimer requestStartTimer{this};
     QPointer<QNetworkReply> batchReply;
     WordBatch batch;
     QString batchError;

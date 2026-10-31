@@ -120,8 +120,8 @@ Rectangle {
                 pixelSize: stage.appearance.primarySize
                 selectable: stage.appearance.selectable
                 Layout.row: stage.appearance.reversed ? 1 : 0
-                cachedWordLookup: (text, offset) => stage.session.lookupCachedWordAt(text, offset, false)
-                onWordRequested: offset => stage.session.lookupWordAt(text, offset, false)
+                onWordRequested: offset => stage.session.lookupWordAt(text, offset, false,
+                    Math.max(350, Application.styleHints.mouseDoubleClickInterval + 25))
                 onSelectionChanged: selection => stage.session.select(selection)
                 onSelectionCommitted: stage.session.commitSelection(false)
             }
@@ -137,8 +137,8 @@ Rectangle {
                 selectable: stage.appearance.selectable
                 textColor: stage.appearance.secondaryColor
                 Layout.row: stage.appearance.reversed ? 0 : 1
-                cachedWordLookup: (text, offset) => stage.session.lookupCachedWordAt(text, offset, true)
-                onWordRequested: offset => stage.session.lookupWordAt(text, offset, true)
+                onWordRequested: offset => stage.session.lookupWordAt(text, offset, true,
+                    Math.max(350, Application.styleHints.mouseDoubleClickInterval + 25))
                 onSelectionChanged: selection => stage.session.select(selection, true)
                 onSelectionCommitted: stage.session.commitSelection(true)
             }

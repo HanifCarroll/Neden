@@ -11,7 +11,6 @@ Item {
     property bool selectable: true
     property color textColor: appearance.textColor
     property var seekKeyHandler: null
-    property var cachedWordLookup: null
     property alias editor: textEditor
     signal selectionChanged(string selection)
     signal selectionCommitted
@@ -136,7 +135,6 @@ Item {
             cursorShape: line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
         }
         onTextChanged: {
-            wordDelay.stop();
             Qt.callLater(line.refreshHitGeometry);
         }
         onWidthChanged: Qt.callLater(line.refreshHitGeometry)
@@ -145,7 +143,6 @@ Item {
         onContentWidthChanged: Qt.callLater(line.refreshHitGeometry)
         onSelectedTextChanged: {
             if (selectedText.length) {
-                wordDelay.stop();
                 line.selectionChanged(selectedText);
             }
         }
@@ -154,17 +151,13 @@ Item {
             acceptedButtons: Qt.LeftButton
             onActiveChanged: {
                 if (active) {
-                    wordDelay.stop();
                     line.wordText = textEditor.text;
                     line.wordOffset = textEditor.positionAt(point.position.x, point.position.y);
                 } else if (line.selectable && !textEditor.selectedText.length)
                     Qt.callLater(() => {
                         if (line.wordText !== textEditor.text || textEditor.selectedText.length)
                             return;
-                        // Cached cards need no double-click wait. A later selection
-                        // dismisses the card through the normal study gesture path.
-                        if (!line.cachedWordLookup || !line.cachedWordLookup(line.wordText, line.wordOffset))
-                            wordDelay.restart();
+                        line.wordRequested(line.wordOffset);
                     });
                 if (!active && textEditor.selectedText.length)
                     Qt.callLater(line.selectionCommitted);
@@ -181,14 +174,6 @@ Item {
         Keys.onReleased: event => {
             if (event.key === Qt.Key_Shift && textEditor.selectedText.length)
                 line.selectionCommitted();
-        }
-    }
-    Timer {
-        id: wordDelay
-        interval: Math.max(350, Application.styleHints.mouseDoubleClickInterval + 25)
-        onTriggered: {
-            if (!textEditor.selectedText.length)
-                line.wordRequested(line.wordOffset);
         }
     }
 }

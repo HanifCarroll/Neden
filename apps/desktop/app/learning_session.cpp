@@ -612,12 +612,8 @@ void LearningSession::clearTrack(bool secondary) {
     checkpoint();
 }
 
-void LearningSession::lookupWordAt(const QString &text, int offset, bool secondary) {
-    studyInteraction.lookupWordAt(text, offset, secondary);
-}
-
-bool LearningSession::lookupCachedWordAt(const QString &text, int offset, bool secondary) {
-    return studyInteraction.lookupWordAt(text, offset, secondary, true);
+void LearningSession::lookupWordAt(const QString &text, int offset, bool secondary, int requestDelayMs) {
+    studyInteraction.lookupWordAt(text, offset, secondary, requestDelayMs);
 }
 
 void LearningSession::closeWordCard(bool resume) {

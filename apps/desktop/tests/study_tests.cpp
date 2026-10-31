@@ -525,6 +525,41 @@ private slots:
         lookup.cancel();
     }
 
+    void deferredWordRequestsShowLoadingAndCancelCleanly() {
+        CatalogServer server;
+        server.status = 503;
+        WordLookup lookup([](const QString &) { return QByteArray(); });
+        const QJsonObject first{{"clickedSubtitle", "Hello."}};
+        const QJsonObject second{{"clickedSubtitle", "World."}};
+        lookup.lookupContext("Hello", first, server.origin(), "local-test", true, 100);
+        QCOMPARE(lookup.state(), QString("loading"));
+        QCOMPARE(lookup.word(), QString("Hello"));
+        QCOMPARE(server.requests.size(), 0);
+        lookup.cancel();
+        QTest::qWait(200);
+        QCOMPARE(lookup.state(), QString("idle"));
+        QCOMPARE(server.requests.size(), 0);
+
+        lookup.lookupContext("Hello", first, server.origin(), "local-test", true, 100);
+        lookup.lookupContext("World", second, server.origin(), "local-test", true, 20);
+        QCOMPARE(lookup.state(), QString("loading"));
+        QCOMPARE(lookup.word(), QString("World"));
+        QTRY_COMPARE(server.requests.size(), 1);
+        QTRY_COMPARE(lookup.state(), QString("failed"));
+        const auto request = server.requests.first();
+        const auto body = QJsonDocument::fromJson(request.mid(request.indexOf("\r\n\r\n") + 4)).object();
+        const auto context = QJsonDocument::fromJson(body.value("messages").toArray().last().toObject()
+            .value("content").toString().toUtf8()).object();
+        QCOMPARE(context.value("word").toString(), QString("World"));
+        // Retry shows loading immediately, even after a previous network failure.
+        lookup.lookupContext("World", second, server.origin(), "local-test", true, 100);
+        QCOMPARE(lookup.state(), QString("loading"));
+        QVERIFY(lookup.message().isEmpty());
+        lookup.cancel();
+        QTest::qWait(200);
+        QCOMPARE(server.requests.size(), 1);
+    }
+
     void appearancePreviewsCanBeCancelledOrApplied() {
         QTemporaryDir directory;
         SubtitleAppearance style(directory.path());

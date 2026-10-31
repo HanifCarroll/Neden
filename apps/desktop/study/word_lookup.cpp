@@ -10,7 +10,12 @@
 #include <stdexcept>
 
 WordLookup::WordLookup(CredentialReader credentialReader, QObject *parent)
-    : QObject(parent), aiClient(std::move(credentialReader)) {}
+    : QObject(parent), aiClient(std::move(credentialReader)) {
+    requestStartTimer.setSingleShot(true);
+    connect(&requestStartTimer, &QTimer::timeout, this, [this] {
+        lookupContext(selectedWord, selectedContext, providerEndpoint, providerModel, providerNeedsNoKey);
+    });
+}
 
 namespace {
 const QRegularExpression &lexicalWordPattern() {
@@ -138,14 +143,9 @@ QString WordLookup::contextCacheKey(const QJsonObject &context, const QString &e
         QJsonDocument(identity).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
 }
 
-bool WordLookup::hasCachedMeaning(const QString &word, const QJsonObject &context,
-                                  const QString &endpoint, const QString &model, bool noKeyRequired) const {
-    const auto *line = cache.object(contextCacheKey(context, endpoint, model, noKeyRequired));
-    return line && line->cards.contains(word);
-}
-
 void WordLookup::lookupContext(const QString &word, const QJsonObject &context, const QString &endpoint,
-                               const QString &model, bool noKeyRequired) {
+                               const QString &model, bool noKeyRequired, int requestDelayMs) {
+    requestStartTimer.stop();
     try {
         if (word.isEmpty() || word.size() > 100 || lexicalWordPattern().match(word).captured() != word)
             throw std::runtime_error("Select one word of at most 100 characters.");
@@ -162,8 +162,15 @@ void WordLookup::lookupContext(const QString &word, const QJsonObject &context, 
         providerNeedsNoKey = noKeyRequired;
         selectedWord = word;
         if (!cache.contains(key)) cache.insert(key, new CachedLine);
+        if (!batchReply) batchError.clear();
         showSelectedCard();
         if (requestState == "complete" || batchReply) return;
+        // Present the card now; only network work waits for gesture disambiguation.
+        // Cancel, selection, or a different lookup also cancels this pending request.
+        if (requestDelayMs > 0) {
+            requestStartTimer.start(requestDelayMs);
+            return;
+        }
 
         // Match the same word boundaries used by clicking, including scripts
         // without spaces. Bound unusually long cues; a later click fills misses.
@@ -394,6 +401,7 @@ void WordLookup::abortDetails() {
     detailMessage.clear();
 }
 void WordLookup::abortBatch() {
+    requestStartTimer.stop();
     if (batchReply) {
         auto *previous = batchReply.data();
         batchReply = nullptr;

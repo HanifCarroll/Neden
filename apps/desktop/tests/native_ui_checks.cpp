@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QStyleHints>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -1497,24 +1498,32 @@ private slots:
         QCOMPARE(editor->cursor().shape(), Qt::IBeamCursor);
         QCOMPARE(editor->property("selectedText").toString(), QString());
         QCOMPARE(requests, 0); // Hover must never spend an API request.
-        QVERIFY(!session->lookupCachedWordAt(cue, cue.indexOf("dalmışım")));
-        QCOMPARE(study->words()->state(), QString("idle"));
-        QCOMPARE(requests, 0); // A cache miss must leave the normal click path untouched.
         QTest::mouseMove(window, subtitle->mapToScene(QPointF(2, subtitle->height() / 2)).toPoint());
         QTRY_VERIFY(!visualItem(subtitle, "subtitleWordHover"));
         QTest::mouseMove(window, point);
         QTRY_VERIFY(visualItem(subtitle, "subtitleWordHover"));
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("loading"), 150);
+        auto *card = visualItem(window->contentItem(), "wordMeaningCard");
+        QVERIFY(card && card->isVisible());
+        QVERIFY(session->paused());
+        QCOMPARE(study->words()->word(), QString("dalmışım"));
+        QCOMPARE(requests, 0); // The overlay appears before the gesture wait or network.
+        click("closeWordCardButton");
+        QTRY_COMPARE(study->words()->state(), QString("idle"));
+        QTest::qWait(qMax(350, QGuiApplication::styleHints()->mouseDoubleClickInterval() + 25) + 100);
+        QCOMPARE(requests, 0); // Closing a loading card cancels its pending request.
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("loading"), 150);
         QTRY_COMPARE(study->words()->state(), QString("complete"));
-        QCOMPARE(wordRequested.count(), 1);
+        QCOMPARE(wordRequested.count(), 2);
         QCOMPARE(study->words()->word(), QString("dalmışım"));
         QCOMPARE(study->explanation()->subject(), originalSubject);
         QCOMPARE(requests, 1);
         QCOMPARE(wordRequests, 1);
         QCOMPARE(sentContext.value("clickedSubtitle").toString(), cue);
         QCOMPARE(sentContext.value("sourceCue").toString(), cue);
-        auto *card = visualItem(window->contentItem(), "wordMeaningCard");
-        QVERIFY(card && card->isVisible());
+        QVERIFY(card->isVisible());
         QVERIFY(!visualItem(card, "wordFullExplanationButton"));
         auto *grammar = visualItem(card, "wordGrammar");
         QVERIFY(grammar);
@@ -1550,7 +1559,7 @@ private slots:
                           wordPoint(subtitle, cue.indexOf("televizyona") + 2));
         QTRY_COMPARE_WITH_TIMEOUT(study->words()->word(), QString("televizyona"), 150);
         QCOMPARE(study->words()->state(), QString("complete"));
-        QVERIFY(!session->lookupCachedWordAt("Another scene.", 2));
+        session->lookupWordAt("Another scene.", 2);
         QCOMPARE(study->words()->word(), QString("televizyona"));
         QCOMPARE(wordRequests, 2);
         const auto artifacts = qEnvironmentVariable("NEDEN_CHECK_ARTIFACTS");
@@ -1595,6 +1604,17 @@ private slots:
         QTest::qWait(450);
         QCOMPARE(study->words()->state(), QString("idle"));
         QVERIFY(!card->isVisible());
+        // An uncached double-click cancels the waiting word request as well.
+        point = wordPoint(subtitle, 2);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE_WITH_TIMEOUT(study->words()->state(), QString("loading"), 150);
+        QVERIFY(card->isVisible());
+        QTest::mouseDClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        QTRY_COMPARE(study->explanation()->subject(), QString("Başka"));
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
+        QCOMPARE(study->words()->state(), QString("idle"));
+        QTest::qWait(qMax(350, QGuiApplication::styleHints()->mouseDoubleClickInterval() + 25) + 100);
+        QCOMPARE(wordRequests, 2);
     }
 
     void wordCardSeparatesSensesFormsAndUses() {

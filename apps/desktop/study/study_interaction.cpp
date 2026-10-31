@@ -86,21 +86,18 @@ bool StudyInteraction::followUp(const QString &question) {
         playback.setPaused(true);
     return sent;
 }
-bool StudyInteraction::lookupWordAt(const QString &text, int offset, bool secondary, bool cachedOnly) {
+void StudyInteraction::lookupWordAt(const QString &text, int offset, bool secondary, int requestDelayMs) {
     if (!studyServices ||
         studyServices->settings()->learning().wordProvider == LearningSettings::WordProvider::Off)
-        return false;
+        return;
     const auto word = WordLookup::wordAt(text, offset);
     if (word.isEmpty())
-        return false;
+        return;
     try {
         auto target = capture(word, secondary ? SubtitleRole::Secondary : SubtitleRole::Primary);
         if (target.sourceCue != text)
-            return false; // A delayed gesture cannot attach to another cue.
+            return; // A delayed gesture cannot attach to another cue.
         const auto &settings = *studyServices->settings();
-        if (cachedOnly && !studyServices->words()->hasCachedMeaning(
-                word, target.json(), settings.endpoint(), settings.model(), settings.learning().noKeyRequired))
-            return false;
         const bool resume = wordCardOpen ? resumeAfterWordCard : !playback.paused();
         emit started();
         // WordLookup retains the in-flight batch when the cue context is unchanged.
@@ -109,13 +106,10 @@ bool StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
         wordTarget = target;
         playback.setPaused(true);
         studyServices->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
-                                              settings.learning().noKeyRequired);
-        return true;
+                                              settings.learning().noKeyRequired, requestDelayMs);
     } catch (const std::exception &exception) {
-        if (!cachedOnly)
-            emit error(QString::fromUtf8(exception.what()));
+        emit error(QString::fromUtf8(exception.what()));
     }
-    return false;
 }
 void StudyInteraction::closeWordCard(bool resume) {
     if (!wordCardOpen)
