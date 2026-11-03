@@ -2466,7 +2466,7 @@ private slots:
         // answer.
         auto *input = visualItem(window->contentItem(), "followUpInput");
         QVERIFY(input);
-        input->forceActiveFocus();
+        QTRY_VERIFY(input->hasActiveFocus());
         QTest::keyClick(window, Qt::Key_W);
         QTest::keyClick(window, Qt::Key_H);
         QTest::keyClick(window, Qt::Key_Y);
@@ -2474,6 +2474,14 @@ private slots:
         QTest::keyClick(window, Qt::Key_M);
         QCOMPARE(input->property("text").toString(), QString("why m"));
         QVERIFY(session->paused());
+        QTest::keyClick(window, Qt::Key_B, Qt::ControlModifier);
+        QTRY_VERIFY(!window->property("transcriptOpen").toBool());
+        QVERIFY(!window->property("textEntryActive").toBool());
+        QVERIFY(QMetaObject::invokeMethod(window, "openExplanation"));
+        input = visualItem(window->contentItem(), "followUpInput");
+        QVERIFY(input);
+        QTRY_VERIFY(input->hasActiveFocus());
+        input->setProperty("text", "why m");
         click("sendFollowUpButton");
         QTRY_COMPARE(study->explanation()->state(), QString("complete"));
         QCOMPARE(requests, 2);
@@ -2531,7 +2539,7 @@ private slots:
         const auto secondaryContext =
             QJsonDocument::fromJson(submittedMessages[1].toObject().value("content").toString().toUtf8())
                 .object();
-        QCOMPARE(secondaryContext.value("selectedTrack").toString(), QString("secondary"));
+        QCOMPARE(secondaryContext.value("context").toObject().value("selectedTrack").toString(), QString("secondary"));
         click("transcriptTab");
         QCOMPARE(study->explanation()->turns().size(), 1);
     }

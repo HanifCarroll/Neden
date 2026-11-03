@@ -21,6 +21,9 @@ Item {
         font: question.font
     }
 
+    function focusQuestion() {
+        question.forceActiveFocus();
+    }
     function sendQuestion() {
         if (!busy && question.text.trim().length && question.text.length <= 2000 && session.followUp(question.text)) {
             question.text = "";

@@ -10,6 +10,7 @@ MenuBar {
     required property ShortcutMap keymap
     required property FullscreenController fullscreenController
     property bool commandShortcutsEnabled: false
+    property bool sidebarShortcutEnabled: false
     property bool floatingMode: false
     property bool transcriptOpen: false
     signal openVideoRequested(bool append)
@@ -334,8 +335,8 @@ MenuBar {
         title: "View"
         MenuAction {
             text: playerMenu.transcriptOpen ? "Hide sidebar" : "Show sidebar"
-            shortcut: playerMenu.commandShortcutsEnabled ? playerMenu.keymap.bindings.toggleSidebar : ""
-            onTriggered: if (playerMenu.commandShortcutsEnabled)
+            shortcut: playerMenu.sidebarShortcutEnabled ? playerMenu.keymap.bindings.toggleSidebar : ""
+            onTriggered: if (playerMenu.sidebarShortcutEnabled)
                 playerMenu.sidebarRequested()
         }
         MenuAction {

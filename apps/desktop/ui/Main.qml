@@ -116,6 +116,7 @@ ApplicationWindow {
         keymap: root.keymap
         fullscreenController: root.fullscreenController
         commandShortcutsEnabled: root.commandShortcutsEnabled
+        sidebarShortcutEnabled: !root.shortcutsBlocked
         floatingMode: root.floatingMode
         transcriptOpen: root.transcriptOpen
         onGettingStartedRequested: dialogs.openGuide()
@@ -135,7 +136,10 @@ ApplicationWindow {
         onFloatingRequested: root.toggleFloating()
         onCloseRequested: root.close()
         onRecentVideosRequested: root.showRecent = true
-        onSidebarRequested: root.inspectorMode = root.transcriptOpen ? Main.Hidden : Main.Transcript
+        onSidebarRequested: {
+            root.closeSelection();
+            root.inspectorMode = root.transcriptOpen ? Main.Hidden : Main.Transcript;
+        }
     }
     Connections {
         target: root.session
@@ -152,6 +156,10 @@ ApplicationWindow {
     }
     function openExplanation() {
         inspectorMode = Main.Explanation;
+        Qt.callLater(function() {
+            if (root.inspectorMode === Main.Explanation && explanationLoader.item)
+                (explanationLoader.item as ExplanationPane).focusQuestion();
+        });
     }
     function toggleTranscript() {
         if (transcriptOpen && inspectorTab === 0 && !dictionaryOpen) {
