@@ -19,6 +19,7 @@ struct LearningSettings {
     WordProvider wordProvider = WordProvider::ContextualAi;
     PrimaryProvider primaryProvider = PrimaryProvider::Configured;
     bool includeSecondary = true, noKeyRequired = false, fallbackEnabled = false;
+    bool lookupHistoryEnabled = false;
     QJsonObject json() const;
     static LearningSettings parse(const QVariantMap &values);
 };

@@ -53,6 +53,9 @@ public:
     void setHostedAccount(HostedAccount *account);
 signals:
     void changed();
+    void cardReady(QString word, QVariantMap card);
+    void detailsOpened();
+    void detailsReady(QVariantMap card);
 
 private:
     struct CachedLine {

@@ -7,6 +7,7 @@
 #include "subtitle_tools.h"
 #include "word_lookup.h"
 #include "hosted_account.h"
+#include "lookup_history.h"
 class StudyServices : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -26,7 +27,7 @@ public:
         : QObject(parent), profile(directory), preferences(profile, this), flashcards(profile, this),
           explanations(preferences, reader, this, alternateApi),
           subtitleAcquisition(directory, preferences, reader, this, subtitleApi), wordLookup(reader, this),
-          trackTools(directory, preferences, reader, this) {
+          trackTools(directory, preferences, reader, this), lookupHistory(directory, preferences) {
         connect(&preferences, &AppSettings::changed, &wordLookup, &WordLookup::cancel);
         explanations.setHostedAccount(&hostedAccount);
         wordLookup.setHostedAccount(&hostedAccount);
@@ -47,6 +48,7 @@ public:
     FlashcardDeck *deck() { return &flashcards; }
     SubtitleTools *subtitleTools() { return &trackTools; }
     WordLookup *words() { return &wordLookup; }
+    LookupHistory *history() { return &lookupHistory; }
 
 private:
     HostedAccount hostedAccount;
@@ -58,4 +60,5 @@ private:
     SubtitleService subtitleAcquisition;
     WordLookup wordLookup;
     SubtitleTools trackTools;
+    LookupHistory lookupHistory;
 };

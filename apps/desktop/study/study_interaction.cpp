@@ -1,6 +1,64 @@
 #include "study_interaction.h"
 #include <QFileInfo>
 #include <stdexcept>
+#include <QJsonDocument>
+void StudyInteraction::setServices(StudyServices *value) {
+    for (const auto &connection : historyConnections)
+        disconnect(connection);
+    historyConnections.clear();
+    pendingWords.clear();
+    pendingDetails = {};
+    pendingExplanation = {};
+    studyServices = value;
+    if (!studyServices)
+        return;
+    historyConnections.append(connect(
+        value->words(), &WordLookup::cardReady, this, [this](const QString &word, const QVariantMap &card) {
+            for (auto event = pendingWords.begin(); event != pendingWords.end();) {
+                if (event->value("selection").toString() != word) {
+                    ++event;
+                    continue;
+                }
+                auto result = QJsonObject::fromVariantMap(card);
+                result.insert("word", word);
+                studyServices->history()->complete(*event, result);
+                event = pendingWords.erase(event);
+            }
+        }));
+    historyConnections.append(connect(value->words(), &WordLookup::detailsOpened, this, [this] {
+        pendingDetails = wordTarget ? studyServices->history()->begin("details", *wordTarget) : QJsonObject();
+    }));
+    historyConnections.append(
+        connect(value->words(), &WordLookup::detailsReady, this, [this](const QVariantMap &card) {
+            studyServices->history()->complete(pendingDetails, QJsonObject::fromVariantMap(card));
+            pendingDetails = {};
+        }));
+    historyConnections.append(connect(
+        value->explanation(), &ExplanationSession::responseCompleted, this, [this](const QString &response) {
+            QJsonObject result;
+            if (pendingExplanation.value("kind") == "followup") {
+                result = {{"question", followupQuestion}, {"answer", response}};
+            } else {
+                const auto document = QJsonDocument::fromJson(response.toUtf8());
+                auto fields = document.object();
+                const auto translation = fields.take("translation").toString();
+                const auto breakdown =
+                    !document.isObject()
+                        ? response
+                        : ExplanationResponse::markdown(
+                              QString::fromUtf8(QJsonDocument(fields).toJson(QJsonDocument::Compact)), false);
+                result = {{"translation", translation}, {"breakdown", breakdown}};
+            }
+            studyServices->history()->complete(pendingExplanation, result);
+            pendingExplanation = {};
+        }));
+    historyConnections.append(connect(value->settings(), &AppSettings::changed, this, [this] {
+        pendingWords.clear();
+        pendingDetails = {};
+        pendingExplanation = {};
+    }));
+}
+
 StudyTarget StudyInteraction::capture(const QString &text, SubtitleRole role) const {
     const auto &settings = *studyServices->settings();
     StudyTarget target;
@@ -10,6 +68,9 @@ StudyTarget StudyInteraction::capture(const QString &text, SubtitleRole role) co
     target.mediaPath = mediaPath;
     target.sourceLanguage = settings.sourceLanguage();
     target.explanationLanguage = settings.explanationLanguage();
+    target.historyCueText = timeline.text(target.positionMs, SubtitleRole::Primary);
+    const auto otherRole = role == SubtitleRole::Primary ? SubtitleRole::Secondary : SubtitleRole::Primary;
+    target.historySecondaryText = timeline.text(target.positionMs, otherRole);
     return timeline.capture(std::move(target), settings.includeSecondary());
 }
 void StudyInteraction::select(const QString &text, bool secondary) {
@@ -39,6 +100,7 @@ void StudyInteraction::select(const QString &text, bool secondary) {
     playback.setPaused(true);
 }
 void StudyInteraction::requestExplanation(const StudyTarget &target) {
+    pendingExplanation = studyServices->history()->begin("line", target);
     studyServices->explanation()->explainTarget(target);
     emit explanationRequested();
 }
@@ -81,7 +143,16 @@ bool StudyInteraction::followUp(const QString &question) {
         return false;
     const auto &target = studyServices->explanation()->target();
     select(studyServices->explanation()->subject(), target && target->role == SubtitleRole::Secondary);
+    const auto previousEvent = pendingExplanation;
+    const auto previousQuestion = followupQuestion;
+    if (target)
+        pendingExplanation = studyServices->history()->begin("followup", *target);
+    followupQuestion = question.trimmed();
     const bool sent = studyServices->explanation()->followUp(question);
+    if (!sent) {
+        pendingExplanation = previousEvent;
+        followupQuestion = previousQuestion;
+    }
     if (sent)
         playback.setPaused(true);
     return sent;
@@ -103,7 +174,21 @@ void StudyInteraction::lookupWordAt(const QString &text, int offset, bool second
         // WordLookup retains the in-flight batch when the cue context is unchanged.
         resumeAfterWordCard = resume;
         wordCardOpen = true;
+        auto sameCue = [](StudyTarget left, StudyTarget right) {
+            left.selection.clear();
+            right.selection.clear();
+            return left.mediaPath == right.mediaPath && left.json() == right.json();
+        };
+        if (!wordTarget || !sameCue(*wordTarget, target))
+            pendingWords.clear();
+        pendingDetails = {};
         wordTarget = target;
+        const auto event = studyServices->history()->begin("word", target, offset);
+        if (!event.isEmpty()) {
+            if (pendingWords.size() >= 256)
+                pendingWords.removeFirst();
+            pendingWords.append(event);
+        }
         playback.setPaused(true);
         studyServices->words()->lookupContext(word, target.json(), settings.endpoint(), settings.model(),
                                               settings.learning().noKeyRequired, requestDelayMs);
@@ -118,6 +203,8 @@ void StudyInteraction::closeWordCard(bool resume) {
     wordCardOpen = false;
     resumeAfterWordCard = false;
     wordTarget.reset();
+    pendingWords.clear();
+    pendingDetails = {};
     if (studyServices)
         studyServices->words()->cancel();
     if (play)
@@ -149,6 +236,7 @@ void StudyInteraction::dismiss() {
     reset(true);
 }
 void StudyInteraction::reset(bool clear) {
+    pendingExplanation = {};
     closeWordCard(false);
     if (studyServices) {
         if (clear)
@@ -169,15 +257,22 @@ FlashcardSaveResult StudyInteraction::saveCard() {
     // A displayed explanation always saves its original target, even after playback seeks elsewhere.
     if (explanation.target()) {
         const auto &target = *explanation.target();
-        return studyServices->deck()->saveCard(
+        const auto event = studyServices->history()->begin("save", target);
+        const auto saved = studyServices->deck()->saveCard(
             target.selection, target.sourceCue,
             explanation.state() == "complete" ? explanation.answer() : target.translation,
             target.positionMs / 1000.0, target.mediaPath);
+        studyServices->history()->complete(event, {{"success", saved.success}});
+        return saved;
     } else {
         try {
             const auto target = capture(selectedText, selectedRole);
-            return studyServices->deck()->saveCard(target.selection, target.sourceCue, target.translation,
-                                                   target.positionMs / 1000.0, target.mediaPath);
+            const auto event = studyServices->history()->begin("save", target);
+            const auto saved =
+                studyServices->deck()->saveCard(target.selection, target.sourceCue, target.translation,
+                                                target.positionMs / 1000.0, target.mediaPath);
+            studyServices->history()->complete(event, {{"success", saved.success}});
+            return saved;
         } catch (const std::exception &exception) {
             return {false, QString::fromUtf8(exception.what())};
         }

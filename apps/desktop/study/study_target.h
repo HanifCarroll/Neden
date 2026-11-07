@@ -7,6 +7,8 @@ enum class SubtitleRole { Primary, Secondary };
 // A value snapshot. Its media identity stays local; requests contain language context only.
 struct StudyTarget {
     QString mediaPath, selection, sourceCue, translation, sourceLanguage, explanationLanguage;
+    // Frozen local history context; deliberately excluded from json() and AI requests.
+    QString historyCueText, historySecondaryText;
     QStringList before, after, secondary;
     SubtitleRole role = SubtitleRole::Primary;
     int cueIndex = -1;

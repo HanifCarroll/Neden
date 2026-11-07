@@ -56,7 +56,7 @@ set(NEDEN_STUDY_SOURCES subtitles/subtitle_catalog.cpp subtitles/subtitle_catalo
     app/study_services.h study/word_lookup.cpp study/word_lookup.h study/word_batch.cpp study/word_batch.h study/conversation.cpp study/conversation.h study/study_target.h)
 set(NEDEN_SESSION_SOURCES app/media_history.cpp app/media_history.h playback/media_queue.cpp playback/media_queue.h playback/player_preferences.cpp playback/player_preferences.h app/learning_session.cpp app/learning_session.h study/study_interaction.cpp study/study_interaction.h
     subtitles/subtitle_timeline.cpp subtitles/subtitle_timeline.h app/recent_videos.cpp app/recent_videos.h playback/playback_engine.h subtitles/cues.cpp subtitles/cues.h)
-list(APPEND NEDEN_STUDY_SOURCES study/explanation_stream.cpp)
+list(APPEND NEDEN_STUDY_SOURCES study/explanation_stream.cpp study/lookup_history.cpp study/lookup_history.h)
 
 qt_add_executable(subtitle_property_tests tests/subtitle_property_tests.cpp subtitles/cues.cpp subtitles/subtitle_document.cpp)
 target_link_libraries(subtitle_property_tests PRIVATE Qt6::Test Qt6::Qml)
@@ -92,6 +92,9 @@ add_test(NAME session_tests COMMAND session_tests)
 qt_add_executable(recent_videos_tests tests/recent_videos_tests.cpp app/recent_videos.cpp app/recent_videos.h)
 target_link_libraries(recent_videos_tests PRIVATE Qt6::Test Qt6::Qml)
 add_test(NAME recent_videos_tests COMMAND recent_videos_tests)
+qt_add_executable(lookup_history_tests tests/lookup_history_tests.cpp ${NEDEN_STUDY_SOURCES} ${NEDEN_SESSION_SOURCES})
+target_link_libraries(lookup_history_tests PRIVATE neden_word_boundaries Qt6::Test Qt6::Qml Qt6::Network Qt6::Gui)
+add_test(NAME lookup_history_tests COMMAND lookup_history_tests)
 qt_add_executable(study_tests tests/study_tests.cpp ${NEDEN_STUDY_SOURCES} app/subtitle_appearance.cpp app/subtitle_appearance.h subtitles/cues.cpp subtitles/cues.h)
 target_link_libraries(study_tests PRIVATE neden_word_boundaries Qt6::Test Qt6::Qml Qt6::Network)
 add_test(NAME study_tests COMMAND study_tests)

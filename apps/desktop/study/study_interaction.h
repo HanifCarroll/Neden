@@ -9,7 +9,7 @@ class StudyInteraction : public QObject {
 public:
     StudyInteraction(PlaybackEngine &playback, SubtitleTimeline &timeline, QObject *parent = nullptr)
         : QObject(parent), playback(playback), timeline(timeline) {}
-    void setServices(StudyServices *value) { studyServices = value; }
+    void setServices(StudyServices *value);
     void setMedia(const QString &value) { mediaPath = value; }
     QString selection() const { return selectedText; }
     void select(const QString &text, bool secondary = false);
@@ -37,6 +37,10 @@ private:
     SubtitleRole selectedRole = SubtitleRole::Primary;
     bool resumeAfterExplanation = false, wordCardOpen = false, resumeAfterWordCard = false;
     std::optional<StudyTarget> wordTarget;
+    QList<QMetaObject::Connection> historyConnections;
+    QList<QJsonObject> pendingWords;
+    QJsonObject pendingDetails, pendingExplanation;
+    QString followupQuestion;
 signals:
     void selectionChanged();
     void started();

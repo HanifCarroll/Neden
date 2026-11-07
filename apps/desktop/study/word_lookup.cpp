@@ -239,7 +239,10 @@ void WordLookup::consumeBatch() {
             const bool alreadyAvailable = line->cards.contains(selectedWord);
             const auto entries = batch.entries();
             for (auto entry = entries.begin(); entry != entries.end(); ++entry)
-                if (!line->cards.contains(entry.key())) line->cards.insert(entry.key(), entry.value());
+                if (!line->cards.contains(entry.key())) {
+                    line->cards.insert(entry.key(), entry.value());
+                    emit cardReady(entry.key(), entry.value());
+                }
             selectedCardArrived = !alreadyAvailable && line->cards.contains(selectedWord);
         }
         if (selectedCardArrived) showSelectedCard();
@@ -273,6 +276,7 @@ void WordLookup::showSelectedCard() {
         if (line->detailedWords.contains(selectedWord)) detailState = "complete";
         requestState = "complete";
         statusText.clear();
+        emit cardReady(selectedWord, answer);
     } else {
         requestState = batchReply || batchError.isEmpty() ? "loading" : "failed";
         statusText = batchError;
@@ -281,7 +285,13 @@ void WordLookup::showSelectedCard() {
 }
 void WordLookup::loadDetails() {
     const auto *line = cache.object(cacheKey);
-    if (selectedWord.isEmpty() || requestState != "complete" || reply || !line || line->detailedWords.contains(selectedWord)) return;
+    if (selectedWord.isEmpty() || requestState != "complete" || reply || !line)
+        return;
+    emit detailsOpened();
+    if (line->detailedWords.contains(selectedWord)) {
+        emit detailsReady(line->cards.value(selectedWord));
+        return;
+    }
     const auto word = selectedWord;
     const auto context = selectedContext;
     const auto endpoint = providerEndpoint;
@@ -379,6 +389,7 @@ void WordLookup::observe(QNetworkReply *networkReply) {
                 line->detailedWords.insert(selectedWord);
             }
             detailState = "complete";
+            emit detailsReady(answer);
             showSelectedCard();
         } catch (const std::exception &error) {
             detailState = "failed";

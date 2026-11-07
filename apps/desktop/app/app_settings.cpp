@@ -18,6 +18,7 @@ QJsonObject LearningSettings::json() const {
             {"includeSecondary", includeSecondary},
             {"noKeyRequired", noKeyRequired},
             {"fallbackEnabled", fallbackEnabled},
+            {"lookupHistoryEnabled", lookupHistoryEnabled},
             {"primaryProvider", primaryIds[static_cast<int>(primaryProvider)]},
             {"wordProvider", wordIds[static_cast<int>(wordProvider)]}};
 }
@@ -37,6 +38,7 @@ LearningSettings LearningSettings::parse(const QVariantMap &values) {
     next.includeSecondary = values.value("includeSecondary", true).toBool();
     next.noKeyRequired = values.value("noKeyRequired", false).toBool();
     next.fallbackEnabled = values.value("fallbackEnabled", false).toBool();
+    next.lookupHistoryEnabled = values.value("lookupHistoryEnabled", false).toBool();
     return next;
 }
 AppSettings::AppSettings(ProfileStore &profile, QObject *parent) : QObject(parent), store(profile) {

@@ -40,6 +40,7 @@ public:
 signals:
     void changed();
     void replyStarted();
+    void responseCompleted(QString response);
 
 private:
     void begin(const StudyTarget &target, const QJsonObject &context);

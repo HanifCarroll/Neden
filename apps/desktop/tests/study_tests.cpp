@@ -48,6 +48,19 @@ public:
 class StudyTests : public QObject {
     Q_OBJECT
 private slots:
+    void lookupHistorySettingIsOptInAndPersists() {
+        QTemporaryDir directory;
+        ProfileStore profile(directory.path());
+        AppSettings settings(profile);
+        QVERIFY(!settings.learningJson().value("lookupHistoryEnabled").toBool());
+        auto learning = settings.learningSettings();
+        learning.insert("lookupHistoryEnabled", true);
+        QVERIFY(settings.configureLearning(learning));
+        QCOMPARE(settings.learningJson().value("lookupHistoryEnabled"), QJsonValue(true));
+        ProfileStore reopened(directory.path());
+        AppSettings restored(reopened);
+        QCOMPARE(restored.learningJson().value("lookupHistoryEnabled"), QJsonValue(true));
+    }
     void alignedExplanationKeepsReadableCardsAndNormalFollowUps() {
         QTemporaryDir directory;
         CatalogServer server;

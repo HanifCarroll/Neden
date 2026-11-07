@@ -27,6 +27,7 @@ ColumnLayout {
             noKeyRequired: noKeyRequired.checked,
             primaryProvider: primaryProvider.currentValue,
             fallbackEnabled: fallbackEnabled.checked,
+            lookupHistoryEnabled: lookupHistoryEnabled.checked,
             wordProvider: wordProvider.currentValue
         });
     }
@@ -191,6 +192,19 @@ ColumnLayout {
             text: "Use overlapping secondary subtitles as context"
             checked: pane.settings.includeSecondary
         }
+    }
+    CheckBox {
+        id: lookupHistoryEnabled
+        objectName: "lookupHistoryEnabledCheck"
+        text: "Keep a local lookup history (for spaced-repetition tools)"
+        checked: pane.settings.learningSettings.lookupHistoryEnabled === true
+        Layout.fillWidth: true
+    }
+    Label {
+        text: "Saved only on this device. Includes subtitle text, answers, and local media paths."
+        color: Theme.muted
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
     }
     SettingsDisclosure {
         objectName: "subtitleDownloadSettings"

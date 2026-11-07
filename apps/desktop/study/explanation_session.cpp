@@ -133,6 +133,8 @@ void ExplanationSession::launchConversation(bool fallback) {
             }
             aiReply = nullptr;
             reply->deleteLater();
+            if (requestState == "complete")
+                emit responseCompleted(answerText);
             emit changed();
         });
         QTimer::singleShot(120000, reply, [this, reply] {
