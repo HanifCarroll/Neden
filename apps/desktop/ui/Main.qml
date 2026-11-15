@@ -23,7 +23,7 @@ ApplicationWindow {
         Explanation,
         Dictionary
     }
-    property int inspectorMode: Main.Transcript
+    property int inspectorMode: Main.Hidden
     readonly property bool dictionaryOpen: inspectorMode === Main.Dictionary
     readonly property bool transcriptOpen: inspectorMode !== Main.Hidden
     readonly property int inspectorTab: inspectorMode === Main.Explanation ? 1 : 0
@@ -150,6 +150,7 @@ ApplicationWindow {
             root.openExplanation();
         }
         function onMediaChanged() {
+            root.inspectorMode = Main.Hidden;
             root.revealPlaybackControls();
             root.showRecent = false;
         }

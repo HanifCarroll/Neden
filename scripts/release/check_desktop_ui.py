@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 CHECKS = [
+    "openingMediaStartsWithSidebarClosed",
     "seekShortcutsSurviveSubtitleAndMouseControlFocus",
     "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
     "subtitleToolsRequireExplicitApply",

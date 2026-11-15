@@ -194,6 +194,9 @@ private:
         auto *item = visualItem(window->contentItem(), QString::fromUtf8(name));
         QVERIFY2(item, name);
         QVERIFY(item->isVisible());
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        if (sidebar && sidebar->isAncestorOf(item))
+            QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
         QCoreApplication::processEvents();
@@ -324,6 +327,7 @@ private slots:
 
     void init() {
         const QStringList headlessChecks{
+            "openingMediaStartsWithSidebarClosed",
             "seekShortcutsSurviveSubtitleAndMouseControlFocus",
             "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
             "subtitleToolsRequireExplicitApply",
@@ -455,6 +459,7 @@ private slots:
 
     void seekShortcutsSurviveSubtitleAndMouseControlFocus() {
         window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 1);
         session->replaceCues({{0, 7200000, "A simple subtitle.", {}}});
         auto *forward = window->findChild<QObject *>("seekForwardShortcut");
         auto *backward = window->findChild<QObject *>("seekBackwardShortcut");
@@ -1893,6 +1898,34 @@ private slots:
         answer->setProperty("scrolling", false);
         answer->setProperty("markdown", "### Translation\nOld saved answer\n### Breakdown\n- **Old** — readable.");
         QVERIFY(!answer->property("text").toString().contains("href="));
+    }
+
+    void openingMediaStartsWithSidebarClosed() {
+        destroyWindow();
+        createWindow();
+        QCOMPARE(window->property("inspectorMode").toInt(), 0);
+
+        QFile video(profile.filePath("sidebar-start.webm"));
+        QVERIFY(video.open(QIODevice::WriteOnly));
+        video.close();
+        const auto url = QUrl::fromLocalFile(video.fileName());
+
+        QVERIFY(QMetaObject::invokeMethod(window, "toggleTranscript"));
+        QVERIFY(window->property("transcriptOpen").toBool());
+        session->openVideo(url);
+        QVERIFY(!window->property("transcriptOpen").toBool());
+
+        QVERIFY(QMetaObject::invokeMethod(window, "openExplanation"));
+        QCOMPARE(window->property("inspectorMode").toInt(), 2);
+        session->setPaused(false);
+        session->setPaused(true);
+        QCOMPARE(window->property("inspectorMode").toInt(), 2);
+
+        // The recent-video resume action opens the same media through openVideo.
+        session->openVideo(url);
+        QVERIFY(!window->property("transcriptOpen").toBool());
+        QVERIFY(QMetaObject::invokeMethod(window, "toggleTranscript"));
+        QVERIFY(window->property("transcriptOpen").toBool());
     }
 
     void sidebarSlidesWithoutResizingVideoPerFrame() {
