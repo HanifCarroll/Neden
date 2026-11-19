@@ -340,6 +340,7 @@ private slots:
                                          "recentHistoryKeepsFinishedVideosAccessible",
                                          "sidebarSlidesWithoutResizingVideoPerFrame",
                                          "translatedWordsRevealTheirSourceBreakdown",
+                                         "clickingPictureAfterExplainLineResumesPlayback",
                                          "explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus",
                                          "explainHoverCoversBothTracksAndThePathToTheButton",
                                          "explainHoverSurvivesActiveSelections",
@@ -2207,6 +2208,70 @@ private slots:
         QTRY_VERIFY(!button->isVisible());
         session->replaceCues({{0, 7200000, "MMMMMMMMMMMMMMMM", {}}});
         QTRY_VERIFY(button->isVisible());
+    }
+
+    void clickingPictureAfterExplainLineResumesPlayback_data() {
+        QTest::addColumn<QString>("cue");
+        QTest::addColumn<bool>("besideSubtitle");
+        QTest::newRow("clear-picture") << QString("Bir ışık gördüm.") << false;
+        QTest::newRow("single-line-margin") << QString("Bir ışık gördüm.") << true;
+        QTest::newRow("shorter-line-margin") << QString("Bir ışık gördüm.\nIşık.") << true;
+    }
+
+    void clickingPictureAfterExplainLineResumesPlayback() {
+        QFETCH(QString, cue);
+        QFETCH(bool, besideSubtitle);
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS")) {
+            session->openVideo(QUrl::fromLocalFile(qEnvironmentVariable("NEDEN_CHECK_VIDEO")));
+            QTRY_VERIFY_WITH_TIMEOUT(session->duration() > 0, 15000);
+        }
+        StudyResponseServer server;
+        configureStudyResponses(server);
+        window->setProperty("showRecent", false);
+        window->setProperty("inspectorMode", 0);
+        session->clearTrack(true);
+        session->replaceCues({{0, 7200000, cue, {}}});
+        auto *caption = visualItem(window->contentItem(), "primarySubtitleText");
+        auto *button = visualItem(window->contentItem(), "primarySubtitleTextExplainButton");
+        auto *sidebar = visualItem(window->contentItem(), "learningInspector");
+        auto *video = visualItem(window->contentItem(), "videoSurface");
+        QVERIFY(caption && button && sidebar && video);
+        QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 0.0);
+        QTRY_VERIFY(caption->isVisible() && caption->height() > 0);
+        QTRY_VERIFY(caption->contains(caption->mapFromScene(wordPoint(caption))));
+        session->setPlaying();
+        QVERIFY(!session->paused());
+        QTest::mouseMove(window, wordPoint(caption));
+        QTRY_VERIFY(button->isVisible());
+        click("primarySubtitleTextExplainButton");
+        QTRY_COMPARE(study->explanation()->state(), QString("complete"));
+        QVERIFY(session->paused());
+        QTRY_COMPARE(sidebar->property("revealProgress").toDouble(), 1.0);
+        auto *input = visualItem(window->contentItem(), "followUpInput");
+        QVERIFY(input);
+        QTRY_VERIFY(input->hasActiveFocus());
+
+        QPoint picture = video->mapToScene(QPointF(40, video->height() / 3)).toPoint();
+        if (besideSubtitle) {
+            // In the two-line case, use an x that lands on text in the longer
+            // line but on bare picture beside the shorter one.
+            const auto lastLineStart = static_cast<int>(cue.lastIndexOf(u'\n') + 1);
+            const auto word = wordPoint(caption, lastLineStart);
+            const auto x =
+                lastLineStart > 0 ? wordPoint(caption).x() : caption->mapToScene(QPointF(8, 0)).toPoint().x();
+            picture = QPoint(x, word.y());
+            QVERIFY(picture.x() < word.x());
+            QVERIFY(caption->contains(caption->mapFromScene(picture)));
+        }
+        QTest::mouseMove(window, picture);
+        QTRY_VERIFY(!button->isVisible());
+        QSignalSpy wordRequests(caption, SIGNAL(wordRequested(int)));
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, picture);
+        QTRY_VERIFY_WITH_TIMEOUT(!session->paused(),
+                                 QGuiApplication::styleHints()->mouseDoubleClickInterval() + 1000);
+        QVERIFY(!window->property("transcriptOpen").toBool());
+        QCOMPARE(wordRequests.count(), 0);
+        QCOMPARE(server.requests, 1);
     }
 
     void explainHoverRejectsBlankMarginsEvenWithSelectionOrFocus() {

@@ -6,6 +6,7 @@ import sys
 
 CHECKS = [
     "openingMediaStartsWithSidebarClosed",
+    "clickingPictureAfterExplainLineResumesPlayback",
     "seekShortcutsSurviveSubtitleAndMouseControlFocus",
     "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
     "subtitleToolsRequireExplicitApply",

@@ -85,6 +85,11 @@ Item {
         id: fontMetrics
         font: textEditor.font
     }
+    HoverHandler {
+        id: wordHover
+        blocking: false
+        cursorShape: line.selectable && line.wordsHovered ? Qt.IBeamCursor : Qt.ArrowCursor
+    }
     Repeater {
         model: line.hoverRects
         delegate: Rectangle {
@@ -112,10 +117,23 @@ Item {
         color: line.textColor
         style: line.appearance.outline ? Text.Outline : Text.Normal
         styleColor: "#111111"
+        property var lineBounds: []
+        onLineLaidOut: metrics => {
+            if (metrics.number === 0)
+                lineBounds = [];
+            const left = metrics.x + (metrics.width - metrics.implicitWidth) / 2;
+            lineBounds.push(Qt.rect(left, metrics.y, metrics.implicitWidth, metrics.height));
+        }
     }
     TextEdit {
         id: textEditor
         anchors.fill: parent
+        // Keep blank margins on every centered row available to the picture gestures.
+        containmentMask: QtObject {
+            function contains(point: point): bool {
+                return outlineText.lineBounds.some(bounds => line.containsPoint(bounds, point));
+            }
+        }
         textFormat: TextEdit.PlainText
         readOnly: true
         selectByMouse: line.selectable
@@ -129,11 +147,6 @@ Item {
         color: "transparent"
         selectionColor: Theme.selection
         selectedTextColor: "white"
-        HoverHandler {
-            id: wordHover
-            blocking: false
-            cursorShape: line.selectable ? Qt.IBeamCursor : Qt.ArrowCursor
-        }
         onTextChanged: {
             Qt.callLater(line.refreshHitGeometry);
         }
