@@ -152,7 +152,7 @@ void LearningSession::checkpoint() {
 }
 
 void LearningSession::finishOpening(const QString &path) {
-    if (path != currentMediaPath)
+    if (mediaReady || path != currentMediaPath)
         return;
 
     // 1. Restore each track independently before checkpoints can replace its saved association.
@@ -178,6 +178,12 @@ void LearningSession::finishOpening(const QString &path) {
 
     // 3. Promote only successful opens, retaining the target until playback reaches it.
     mediaHistory.recordOpened(historySnapshot());
+
+    // A saved filename alone does not mean its track could be restored.
+    const bool hasPrimarySubtitle =
+        !subtitleTimeline.path(SubtitleRole::Primary).isEmpty() || !nativePrimary.isEmpty() ||
+        (usesNativeSubtitles(false) && QFileInfo(rememberedSourceSubtitlePath).isReadable());
+    emit mediaOpened(hasPrimarySubtitle);
 }
 
 QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {

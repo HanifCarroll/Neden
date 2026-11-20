@@ -327,7 +327,8 @@ private slots:
 
     void init() {
         const QStringList headlessChecks{
-            "openingMediaStartsWithSidebarClosed",
+            "openingMediaShowsTranscriptOnlyWithoutPrimarySubtitles",
+            "pausingAndResumingPreservesTheInspector",
             "seekShortcutsSurviveSubtitleAndMouseControlFocus",
             "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
             "subtitleToolsRequireExplicitApply",
@@ -1901,32 +1902,82 @@ private slots:
         QVERIFY(!answer->property("text").toString().contains("href="));
     }
 
-    void openingMediaStartsWithSidebarClosed() {
+    void openingMediaShowsTranscriptOnlyWithoutPrimarySubtitles_data() {
+        QTest::addColumn<QString>("savedPrimary");
+        QTest::addColumn<QString>("savedSecondary");
+        QTest::addColumn<int>("expectedInspectorMode");
+        QTest::newRow("no-subtitles") << QString() << QString() << 1;
+        QTest::newRow("restored-primary") << QString("sidebar-primary.srt") << QString() << 0;
+        QTest::newRow("missing-primary") << QString("unavailable.srt") << QString() << 1;
+        QTest::newRow("secondary-only") << QString() << QString("sidebar-primary.srt") << 1;
+    }
+
+    void openingMediaShowsTranscriptOnlyWithoutPrimarySubtitles() {
+        QFETCH(QString, savedPrimary);
+        QFETCH(QString, savedSecondary);
+        QFETCH(int, expectedInspectorMode);
         destroyWindow();
         createWindow();
         QCOMPARE(window->property("inspectorMode").toInt(), 0);
 
-        QFile video(profile.filePath("sidebar-start.webm"));
+        QFile video(profile.filePath(QString("sidebar-%1.webm").arg(QTest::currentDataTag())));
         QVERIFY(video.open(QIODevice::WriteOnly));
         video.close();
         const auto url = QUrl::fromLocalFile(video.fileName());
 
-        QVERIFY(QMetaObject::invokeMethod(window, "toggleTranscript"));
-        QVERIFY(window->property("transcriptOpen").toBool());
-        session->openVideo(url);
-        QVERIFY(!window->property("transcriptOpen").toBool());
+        QFile subtitles(profile.filePath("sidebar-primary.srt"));
+        QVERIFY(subtitles.open(QIODevice::WriteOnly));
+        const QByteArray cue = "1\n00:00:00,000 --> 00:00:05,000\nHello.\n";
+        QCOMPARE(subtitles.write(cue), cue.size());
+        subtitles.close();
+        if (!savedPrimary.isEmpty() || !savedSecondary.isEmpty()) {
+            RecentVideo saved{video.fileName(), 2, 10};
+            if (!savedPrimary.isEmpty())
+                saved.primarySubtitlePath = profile.filePath(savedPrimary);
+            if (!savedSecondary.isEmpty())
+                saved.secondarySubtitlePath = profile.filePath(savedSecondary);
+            QVERIFY(recent->recordOpened(saved));
+            destroyWindow();
+            createWindow();
+        }
 
+        QSignalSpy inspectorChanges(window, SIGNAL(inspectorModeChanged()));
+        QVERIFY(inspectorChanges.isValid());
+        session->openVideo(url);
+        QCOMPARE(window->property("inspectorMode").toInt(), 0);
+        QVERIFY(session->sourceSubtitleName().isEmpty());
+        // Complete the adapter load without decoding the placeholder video.
+        emit playback->loaded(session->mediaPath());
+
+        QCOMPARE(window->property("inspectorMode").toInt(), expectedInspectorMode);
+        QCOMPARE(session->sourceSubtitleName(), savedPrimary);
+        QCOMPARE(session->translationSubtitleName(), savedSecondary);
+        if (expectedInspectorMode == 0)
+            QVERIFY(inspectorChanges.isEmpty());
+        else
+            QVERIFY(QMetaObject::invokeMethod(window, "toggleTranscript"));
+
+        inspectorChanges.clear();
+        session->openSubtitles(QUrl::fromLocalFile(subtitles.fileName()));
+        session->clearTrack(false);
+        QVERIFY(session->sourceSubtitleName().isEmpty());
+        // A repeated load notification must not reopen a dismissed panel.
+        emit playback->loaded(session->mediaPath());
+        QVERIFY(inspectorChanges.isEmpty());
+        QCOMPARE(window->property("inspectorMode").toInt(), 0);
+    }
+
+    void pausingAndResumingPreservesTheInspector() {
+        session->setPaused(false);
+        QVERIFY(!session->paused());
         QVERIFY(QMetaObject::invokeMethod(window, "openExplanation"));
         QCOMPARE(window->property("inspectorMode").toInt(), 2);
-        session->setPaused(false);
         session->setPaused(true);
+        QVERIFY(session->paused());
         QCOMPARE(window->property("inspectorMode").toInt(), 2);
-
-        // The recent-video resume action opens the same media through openVideo.
-        session->openVideo(url);
-        QVERIFY(!window->property("transcriptOpen").toBool());
-        QVERIFY(QMetaObject::invokeMethod(window, "toggleTranscript"));
-        QVERIFY(window->property("transcriptOpen").toBool());
+        session->setPaused(false);
+        QVERIFY(!session->paused());
+        QCOMPARE(window->property("inspectorMode").toInt(), 2);
     }
 
     void sidebarSlidesWithoutResizingVideoPerFrame() {

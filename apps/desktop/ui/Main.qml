@@ -154,6 +154,10 @@ ApplicationWindow {
             root.revealPlaybackControls();
             root.showRecent = false;
         }
+        function onMediaOpened(hasPrimarySubtitle) {
+            if (!hasPrimarySubtitle && root.inspectorMode === Main.Hidden)
+                root.inspectorMode = Main.Transcript;
+        }
     }
     function openExplanation() {
         inspectorMode = Main.Explanation;

@@ -5,7 +5,8 @@ import subprocess
 import sys
 
 CHECKS = [
-    "openingMediaStartsWithSidebarClosed",
+    "openingMediaShowsTranscriptOnlyWithoutPrimarySubtitles",
+    "pausingAndResumingPreservesTheInspector",
     "clickingPictureAfterExplainLineResumesPlayback",
     "seekShortcutsSurviveSubtitleAndMouseControlFocus",
     "subtitleCatalogUiOffersSourcesAndValidatedLanguages",

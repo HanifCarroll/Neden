@@ -160,6 +160,7 @@ signals:
     void statusChanged();
     void replayingChanged();
     void mediaChanged();
+    void mediaOpened(bool hasPrimarySubtitle);
     void tracksChanged();
     void volumeChanged();
     void explanationRequested();
