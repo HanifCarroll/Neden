@@ -39,6 +39,10 @@ public:
         LoopEnd
     };
     enum class Command { FrameForward, FrameBackward, Stop };
+    enum class PrimarySubtitleSelection { None, Pending, Selected };
+    virtual PrimarySubtitleSelection primarySubtitleSelection() const {
+        return PrimarySubtitleSelection::None;
+    }
     virtual void configure(Option, const QVariant &) {}
     virtual void execute(Command) {}
     virtual void previewSeek(double seconds) { seek(seconds); }
@@ -64,6 +68,7 @@ signals:
     void finished();
     void outputDeviceRemoved();
     void operationFailed(QString message);
+    void primarySubtitleSelectionSettled();
     void screenshotSaved(QString path);
 
 protected:

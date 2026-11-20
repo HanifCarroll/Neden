@@ -6,6 +6,8 @@ import sys
 
 CHECKS = [
     "openingMediaShowsTranscriptOnlyWithoutPrimarySubtitles",
+    "openingWaitsForMpvPrimarySubtitleSelection",
+    "switchingVideosKeepsTheInspectorClosedForAnMpvSelectedTrack",
     "pausingAndResumingPreservesTheInspector",
     "clickingPictureAfterExplainLineResumesPlayback",
     "seekShortcutsSurviveSubtitleAndMouseControlFocus",

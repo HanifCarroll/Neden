@@ -6,6 +6,7 @@
 #include <QThreadPool>
 #include "media_path.h"
 #include "video_geometry.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -234,7 +235,9 @@ void MpvPlayback::drainEvents() {
             }
         }
         if (event->event_id == MPV_EVENT_COMMAND_REPLY) {
+            bool currentCommand = event->reply_userdata == 0;
             if (screenshotRequests.contains(event->reply_userdata)) {
+                currentCommand = true;
                 const auto path = screenshotRequests.take(event->reply_userdata);
                 const auto *reply = static_cast<const mpv_event_command *>(event->data);
                 if (event->error >= 0 && reply)
@@ -246,7 +249,8 @@ void MpvPlayback::drainEvents() {
                 const auto request = subtitleRequests.take(event->reply_userdata);
                 const auto currentGeneration =
                     request.secondary ? secondarySubtitleGeneration : primarySubtitleGeneration;
-                if (event->error >= 0 && request.generation == currentGeneration) {
+                currentCommand = request.generation == currentGeneration;
+                if (currentCommand && event->error >= 0) {
                     refreshMetadata();
                     // Match the requested file; another subtitle may have finished loading first.
                     for (auto entry = mediaTracks.crbegin(); entry != mediaTracks.crend(); ++entry) {
@@ -259,8 +263,10 @@ void MpvPlayback::drainEvents() {
                         }
                     }
                 }
+                if (currentCommand && !request.secondary)
+                    emit primarySubtitleSelectionSettled();
             }
-            if (event->error < 0)
+            if (currentCommand && event->error < 0)
                 emit operationFailed(QString::fromUtf8(mpv_error_string(event->error)));
         }
         if (event->event_id == MPV_EVENT_END_FILE) {
@@ -448,10 +454,14 @@ void MpvPlayback::configure(Option option, const QVariant &value) {
     case Option::AudioTrack:
         setPropertyValue("aid", value);
         break;
-    case Option::PrimarySubtitle:
+    case Option::PrimarySubtitle: {
+        const bool replacedPendingRequest = primarySubtitlePending();
         ++primarySubtitleGeneration;
         selectNativeSubtitle("sid", value);
+        if (replacedPendingRequest)
+            emit primarySubtitleSelectionSettled();
         break;
+    }
     case Option::SecondarySubtitle:
         ++secondarySubtitleGeneration;
         selectNativeSubtitle("secondary-sid", value);
@@ -513,6 +523,21 @@ void MpvPlayback::execute(Command action) {
         break;
     }
 }
+bool MpvPlayback::primarySubtitlePending() const {
+    return std::any_of(subtitleRequests.cbegin(), subtitleRequests.cend(), [this](const auto &request) {
+        return !request.secondary && request.generation == primarySubtitleGeneration;
+    });
+}
+
+PlaybackEngine::PrimarySubtitleSelection MpvPlayback::primarySubtitleSelection() const {
+    if (primarySubtitlePending())
+        return PrimarySubtitleSelection::Pending;
+
+    // sid is a selection preference; current-tracks identifies the track mpv actually uses.
+    const auto id = property("current-tracks/sub/id").toLongLong();
+    return id > 0 ? PrimarySubtitleSelection::Selected : PrimarySubtitleSelection::None;
+}
+
 void MpvPlayback::addSubtitle(const QString &path, bool secondary) {
     const auto encoded = path.toUtf8();
     const char *arguments[] = {"sub-add", encoded.constData(), "auto", nullptr};
@@ -524,6 +549,8 @@ void MpvPlayback::addSubtitle(const QString &path, bool secondary) {
     if (result < 0) {
         subtitleRequests.remove(request);
         emit operationFailed("This subtitle track could not be loaded.");
+        if (!secondary)
+            emit primarySubtitleSelectionSettled();
     }
 }
 void MpvPlayback::screenshot(const QString &path, bool subtitles) {

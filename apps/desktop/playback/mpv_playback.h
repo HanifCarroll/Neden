@@ -25,6 +25,7 @@ public:
     void configure(Option option, const QVariant &value) override;
     void execute(Command command) override;
     void previewSeek(double seconds) override;
+    PrimarySubtitleSelection primarySubtitleSelection() const override;
     void addSubtitle(const QString &path, bool secondary) override;
     void screenshot(const QString &path, bool subtitles) override;
     QSize sourceOutputSize() const { return sourceSize; }
@@ -44,6 +45,7 @@ private:
     QVariant property(const char *name) const;
     void setPropertyValue(const char *name, const QVariant &value);
     void selectNativeSubtitle(const char *propertyName, const QVariant &trackId);
+    bool primarySubtitlePending() const;
     QTimer seekTimer;
     double previewTarget = 0;
     bool completed = false;

@@ -154,6 +154,20 @@ private:
         QVERIFY(QTest::qWaitForWindowExposed(window));
     }
 
+    void createHeadlessPlaybackWindow() {
+        createWindow();
+        QCOMPARE(mpv_set_property_string(playback->handle(), "vo", "null"), 0);
+        playback->attachVideoRenderer();
+    }
+
+    int inspectorMode() const { return window->property("inspectorMode").toInt(); }
+
+    qint64 mpvPrimarySubtitleId() const {
+        int64_t id = 0;
+        mpv_get_property(playback->handle(), "current-tracks/sub/id", MPV_FORMAT_INT64, &id);
+        return id;
+    }
+
     void destroyWindow() {
         if (window)
             window->close();
@@ -328,6 +342,8 @@ private slots:
     void init() {
         const QStringList headlessChecks{
             "openingMediaShowsTranscriptOnlyWithoutPrimarySubtitles",
+            "openingWaitsForMpvPrimarySubtitleSelection",
+            "switchingVideosKeepsTheInspectorClosedForAnMpvSelectedTrack",
             "pausingAndResumingPreservesTheInspector",
             "seekShortcutsSurviveSubtitleAndMouseControlFocus",
             "subtitleCatalogUiOffersSourcesAndValidatedLanguages",
@@ -1916,16 +1932,16 @@ private slots:
         QFETCH(QString, savedPrimary);
         QFETCH(QString, savedSecondary);
         QFETCH(int, expectedInspectorMode);
-        destroyWindow();
-        createWindow();
-        QCOMPARE(window->property("inspectorMode").toInt(), 0);
+        NativeUiChecks player;
+        player.createWindow();
+        QCOMPARE(player.inspectorMode(), 0);
 
-        QFile video(profile.filePath(QString("sidebar-%1.webm").arg(QTest::currentDataTag())));
+        QFile video(player.profile.filePath("sidebar.webm"));
         QVERIFY(video.open(QIODevice::WriteOnly));
         video.close();
         const auto url = QUrl::fromLocalFile(video.fileName());
 
-        QFile subtitles(profile.filePath("sidebar-primary.srt"));
+        QFile subtitles(player.profile.filePath("sidebar-primary.srt"));
         QVERIFY(subtitles.open(QIODevice::WriteOnly));
         const QByteArray cue = "1\n00:00:00,000 --> 00:00:05,000\nHello.\n";
         QCOMPARE(subtitles.write(cue), cue.size());
@@ -1933,38 +1949,132 @@ private slots:
         if (!savedPrimary.isEmpty() || !savedSecondary.isEmpty()) {
             RecentVideo saved{video.fileName(), 2, 10};
             if (!savedPrimary.isEmpty())
-                saved.primarySubtitlePath = profile.filePath(savedPrimary);
+                saved.primarySubtitlePath = player.profile.filePath(savedPrimary);
             if (!savedSecondary.isEmpty())
-                saved.secondarySubtitlePath = profile.filePath(savedSecondary);
-            QVERIFY(recent->recordOpened(saved));
-            destroyWindow();
-            createWindow();
+                saved.secondarySubtitlePath = player.profile.filePath(savedSecondary);
+            QVERIFY(player.recent->recordOpened(saved));
+            player.destroyWindow();
+            player.createWindow();
         }
 
-        QSignalSpy inspectorChanges(window, SIGNAL(inspectorModeChanged()));
+        QSignalSpy inspectorChanges(player.window, SIGNAL(inspectorModeChanged()));
         QVERIFY(inspectorChanges.isValid());
-        session->openVideo(url);
-        QCOMPARE(window->property("inspectorMode").toInt(), 0);
-        QVERIFY(session->sourceSubtitleName().isEmpty());
+        player.session->openVideo(url);
+        QCOMPARE(player.inspectorMode(), 0);
+        QVERIFY(player.session->sourceSubtitleName().isEmpty());
         // Complete the adapter load without decoding the placeholder video.
-        emit playback->loaded(session->mediaPath());
+        emit player.playback->loaded(player.session->mediaPath());
 
-        QCOMPARE(window->property("inspectorMode").toInt(), expectedInspectorMode);
-        QCOMPARE(session->sourceSubtitleName(), savedPrimary);
-        QCOMPARE(session->translationSubtitleName(), savedSecondary);
+        QCOMPARE(player.inspectorMode(), expectedInspectorMode);
+        QCOMPARE(player.session->sourceSubtitleName(), savedPrimary);
+        QCOMPARE(player.session->translationSubtitleName(), savedSecondary);
         if (expectedInspectorMode == 0)
             QVERIFY(inspectorChanges.isEmpty());
         else
-            QVERIFY(QMetaObject::invokeMethod(window, "toggleTranscript"));
+            QVERIFY(QMetaObject::invokeMethod(player.window, "toggleTranscript"));
 
         inspectorChanges.clear();
-        session->openSubtitles(QUrl::fromLocalFile(subtitles.fileName()));
-        session->clearTrack(false);
-        QVERIFY(session->sourceSubtitleName().isEmpty());
+        player.session->openSubtitles(QUrl::fromLocalFile(subtitles.fileName()));
+        player.session->clearTrack(false);
+        QVERIFY(player.session->sourceSubtitleName().isEmpty());
         // A repeated load notification must not reopen a dismissed panel.
-        emit playback->loaded(session->mediaPath());
+        emit player.playback->loaded(player.session->mediaPath());
         QVERIFY(inspectorChanges.isEmpty());
-        QCOMPARE(window->property("inspectorMode").toInt(), 0);
+        QCOMPARE(player.inspectorMode(), 0);
+    }
+
+    void openingWaitsForMpvPrimarySubtitleSelection_data() {
+        QTest::addColumn<bool>("validSubtitle");
+        QTest::addColumn<bool>("superseded");
+        QTest::newRow("rejected-idx") << false << false;
+        QTest::newRow("accepted-ass") << true << false;
+        QTest::newRow("late-rejection-from-previous-open") << false << true;
+    }
+
+    void openingWaitsForMpvPrimarySubtitleSelection() {
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS"))
+            QSKIP("This check uses offscreen Qt with mpv's null video output.", 0);
+        QFETCH(bool, validSubtitle);
+        QFETCH(bool, superseded);
+        NativeUiChecks player;
+        player.createHeadlessPlaybackWindow();
+
+        const auto fixture = QFINDTESTDATA("fixtures/subtitles/styled.mkv");
+        const auto firstPath = player.profile.filePath("first.mkv");
+        const auto secondPath = player.profile.filePath("second.mkv");
+        QVERIFY(QFile::copy(fixture, firstPath));
+        QVERIFY(QFile::copy(fixture, secondPath));
+        QFile rejected(player.profile.filePath("orphan.idx"));
+        QVERIFY(rejected.open(QIODevice::WriteOnly));
+        QVERIFY(rejected.write("# VobSub index file, v7\nid: en, index: 0\n"
+                               "timestamp: 00:00:01:000, filepos: 000000000\n") > 0);
+        rejected.close();
+        QFile accepted(player.profile.filePath("selected.ass"));
+        QVERIFY(accepted.open(QIODevice::WriteOnly));
+        QVERIFY(
+            accepted.write("[Script Info]\nScriptType: v4.00+\n[Events]\n"
+                           "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+                           "Dialogue: 0,0:00:00.00,0:00:03.00,Default,,0,0,0,,Hello\n") > 0);
+        accepted.close();
+        RecentVideo saved{firstPath};
+        saved.primarySubtitlePath = validSubtitle ? accepted.fileName() : rejected.fileName();
+        QVERIFY(player.recent->recordOpened(saved));
+        if (superseded) {
+            saved.path = secondPath;
+            saved.primarySubtitlePath = accepted.fileName();
+            QVERIFY(player.recent->recordOpened(saved));
+        }
+
+        QSignalSpy loaded(player.playback.get(), &PlaybackEngine::loaded);
+        QSignalSpy decisions(player.session.get(), &LearningSession::mediaOpened);
+        QSignalSpy errors(player.playback.get(), &PlaybackEngine::operationFailed);
+        QSignalSpy inspectorChanges(player.window, SIGNAL(inspectorModeChanged()));
+        QObject loadObserver;
+        connect(player.playback.get(), &PlaybackEngine::loaded, &loadObserver, [&] {
+            QCOMPARE(player.inspectorMode(), 0);
+            QVERIFY(decisions.isEmpty());
+            if (superseded && loaded.count() == 1)
+                player.session->openVideo(QUrl::fromLocalFile(secondPath));
+        });
+        player.session->openVideo(QUrl::fromLocalFile(firstPath));
+        QTRY_COMPARE_WITH_TIMEOUT(decisions.count(), 1, 5000);
+        QCOMPARE(loaded.count(), superseded ? 2 : 1);
+        QCOMPARE(decisions.first().first().toBool(), validSubtitle || superseded);
+        if (validSubtitle || superseded) {
+            QVERIFY(player.mpvPrimarySubtitleId() > 0);
+            QVERIFY(inspectorChanges.isEmpty());
+            QVERIFY(errors.isEmpty());
+        } else {
+            QCOMPARE(player.inspectorMode(), 1);
+            QCOMPARE(player.mpvPrimarySubtitleId(), 0);
+            QCOMPARE(inspectorChanges.count(), 1);
+            QCOMPARE(errors.count(), 1);
+        }
+    }
+
+    void switchingVideosKeepsTheInspectorClosedForAnMpvSelectedTrack() {
+        if (!qEnvironmentVariableIsSet("NEDEN_CHECK_HEADLESS"))
+            QSKIP("This check uses offscreen Qt with mpv's null video output.", 0);
+        NativeUiChecks player;
+        player.createHeadlessPlaybackWindow();
+        const auto fixture = QFINDTESTDATA("fixtures/subtitles/styled.mkv");
+        const auto firstPath = player.profile.filePath("episode-one.mkv");
+        const auto secondPath = player.profile.filePath("episode-two.mkv");
+        QVERIFY(QFile::copy(fixture, firstPath));
+        QVERIFY(QFile::copy(fixture, secondPath));
+
+        QSignalSpy loaded(player.playback.get(), &PlaybackEngine::loaded);
+        player.session->openVideo(QUrl::fromLocalFile(firstPath));
+        QTRY_COMPARE(loaded.count(), 1);
+        QCOMPARE(player.mpvPrimarySubtitleId(), 0);
+        QCOMPARE(player.inspectorMode(), 1);
+        player.session->selectNativeSubtitle("1", false);
+        QCOMPARE(player.mpvPrimarySubtitleId(), 1);
+
+        player.session->openVideo(QUrl::fromLocalFile(secondPath));
+        QTRY_COMPARE(loaded.count(), 2);
+        QCOMPARE(player.mpvPrimarySubtitleId(), 1);
+        QCOMPARE(player.inspectorMode(), 0);
     }
 
     void pausingAndResumingPreservesTheInspector() {

@@ -19,6 +19,9 @@ LearningSession::LearningSession(PlaybackEngine *playback, QObject *parent)
     connect(playbackEngine, &PlaybackEngine::pausedChanged, this, &LearningSession::pausedChanged);
     connect(playbackEngine, &PlaybackEngine::positionChanged, this, &LearningSession::syncPosition);
     connect(playbackEngine, &PlaybackEngine::loaded, this, &LearningSession::finishOpening);
+    // A replacement can settle synchronously while the session is still updating its tracks.
+    connect(playbackEngine, &PlaybackEngine::primarySubtitleSelectionSettled, this,
+            &LearningSession::publishMediaOpened, Qt::QueuedConnection);
     connect(&studyInteraction, &StudyInteraction::selectionChanged, this, &LearningSession::selectionChanged);
     connect(&studyInteraction, &StudyInteraction::started, this, &LearningSession::stopReplay);
     connect(&studyInteraction, &StudyInteraction::explanationRequested, this,
@@ -178,12 +181,19 @@ void LearningSession::finishOpening(const QString &path) {
 
     // 3. Promote only successful opens, retaining the target until playback reaches it.
     mediaHistory.recordOpened(historySnapshot());
+    mediaOpenedPending = true;
+    publishMediaOpened();
+}
 
-    // A saved filename alone does not mean its track could be restored.
-    const bool hasPrimarySubtitle =
-        !subtitleTimeline.path(SubtitleRole::Primary).isEmpty() || !nativePrimary.isEmpty() ||
-        (usesNativeSubtitles(false) && QFileInfo(rememberedSourceSubtitlePath).isReadable());
-    emit mediaOpened(hasPrimarySubtitle);
+void LearningSession::publishMediaOpened() {
+    if (!mediaOpenedPending)
+        return;
+    const auto nativeSelection = playbackEngine->primarySubtitleSelection();
+    if (nativeSelection == PlaybackEngine::PrimarySubtitleSelection::Pending)
+        return;
+    mediaOpenedPending = false;
+    emit mediaOpened(nativeSelection == PlaybackEngine::PrimarySubtitleSelection::Selected ||
+                     !subtitleTimeline.path(SubtitleRole::Primary).isEmpty());
 }
 
 QString LearningSession::restoreSubtitleTracks(const RecentVideo &saved) {
@@ -301,6 +311,7 @@ void LearningSession::openVideo(const QUrl &url) {
     // 2. Checkpoint the old video before clearing its interaction and subtitle state.
     checkpoint();
     mediaReady = false;
+    mediaOpenedPending = false;
     invalidateSubtitleTools();
     embeddedTrackPaths.clear();
     pendingDroppedSubtitles.clear();

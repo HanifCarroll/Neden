@@ -179,6 +179,7 @@ private:
     void syncPosition();
     void resetInteraction(bool clearConversation = false);
     void finishOpening(const QString &path);
+    void publishMediaOpened();
     QString restoreSubtitleTracks(const RecentVideo &saved);
     bool loadNativeSubtitle(const QUrl &url, bool secondary);
     bool usesNativeSubtitles(bool secondary) const;
@@ -205,6 +206,7 @@ private:
     double pendingSubtitleSeekSeconds = -1;
     int pendingSubtitleCueIndex = -1;
     bool mediaReady = false;
+    bool mediaOpenedPending = false;
     QList<QUrl> pendingDroppedSubtitles;
     int currentSecondaryCueIndex = -1;
     PlaybackEngine *playbackEngine;
